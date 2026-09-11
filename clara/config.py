@@ -41,7 +41,7 @@ class Config:
         if not self.settings_file.exists():
             self.save_settings({"model": "sonnet", "max_turns": 40, "task_timeout_minutes": 20,
                                 "read_roots": [], "browser_enabled": False,
-                                "desktop_enabled": False})
+                                "desktop_enabled": False, "max_budget_usd": None})
         for source in (PACKAGE / "starter_skills").glob("*"):
             target = self.skills / source.name
             if source.is_dir() and not target.exists():

@@ -40,6 +40,7 @@ def test_sdk_adapter_stream_session_and_error_state(tmp_path, monkeypatch, fail)
     monkeypatch.setattr('clara.agent.auth_status', auth)
     async def scenario():
         cfg=Config(tmp_path);cfg.initialize();store=Store(tmp_path/'test.sqlite')
+        cfg.save_settings({**cfg.settings(), 'max_budget_usd': 0.05})
         cid=store.create_conversation()['id'];job=store.create_job(cid,'hello','ask',[])
         manager=AgentManager(cfg,store)
         await manager.execute(job)
@@ -49,6 +50,8 @@ def test_sdk_adapter_stream_session_and_error_state(tmp_path, monkeypatch, fail)
         assert json.loads((cfg.data/'model-health.json').read_text())['needs_login'] is fail
         opts=captured['options']
         assert opts.fallback_model is None
+        assert opts.max_budget_usd == 0.05
+        assert 'Stop' in opts.hooks
         assert opts.strict_mcp_config is True
         assert opts.setting_sources==['project']
         assert opts.permission_mode=='default'

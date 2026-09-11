@@ -30,6 +30,15 @@ The screenshot also exposed a UI issue: downloads appeared only in the side pane
 
 The **30 Python tests** pass. One added real Chrome/API regression test verifies actual downloaded file contents, history reload, multiple files, association with the producing task, duplicate event handling, streaming response replacement, escaped filenames, mobile card bounds and conversation reset. It uses temporary synthetic data and makes no model requests. Desktop and mobile screenshots were visually inspected on the Mac. This does not establish live browser-agent or native Windows GUI readiness.
 
+## Release 0.1.4: usage reports and collected feedback
+
+- **43 Python tests pass.** New coverage includes all-model usage totals, independent follow-up costs, deduplicated partial input counts, missing/zero/crash results, budget-crossing usage, unknown model prices, fallback to reported model estimates, authenticated CSV export, CSV formula escaping, budget validation and runtime interruption persistence.
+- The real Chrome/API regression passes for usage cards beside their tasks, old saved records, conversation totals without duplication, actual CSV download, estimate-limit settings and mobile bounds, alongside the previous artifact tests. Desktop/mobile screenshots were inspected. Data and dollar values in this fixture are synthetic, not measured closeout costs.
+- No dependencies changed. Python compilation, JavaScript syntax and diff checks pass. The existing SDK supports the Stop hook and `max_budget_usd`; the latter is passed into each task's options and covered by the adapter test.
+- The user reported that the Softros LAN Messenger task worked after turning Chrome tools off and Windows desktop tools on. The reported file search also worked through Explorer, exposing the two feedback items.
+- File-tool preference is strengthened in the system instructions without overwriting imported/user-edited skills. The Explorer observer and one-time Stop review have unit coverage for candidate selection, preservation of preexisting windows, already-closed windows, inaccessible snapshots and avoiding loops. Native enumeration and the model's actual cleanup/strategy choices must be checked on the target Windows server. No Windows action was performed from the Mac for this update.
+- Actual cost and token consumption for a complete T1 closeout remain unmeasured. Reporting and an estimate limit do not reveal or guarantee the remaining Max allowance. See [usage interpretation](USAGE.md).
+
 ## Remaining target-environment validation
 
 | Area | Status | What establishes success |
@@ -39,11 +48,11 @@ The **30 Python tests** pass. One added real Chrome/API regression test verifies
 | Live follow-up | User screenshot shows a completed follow-up about the file | Broader continuation and recovery tasks remain to be tested |
 | Browser behavior | Discovery passed; actions pending | A harmless page task succeeds with live DOM evidence |
 | Portable Windows installer | Core and desktop setup/import checks passed on target | Standard full-Python installation path remains untested |
-| Windows desktop / RDP | Not tested | Notepad, popup, stop, lock and disconnect acceptance checks |
+| Windows desktop / RDP | Softros task passed per user report | New cleanup/search behavior, popup, stop, lock and disconnect acceptance checks |
 | TaxPrep / Profile | Not tested | Correct package from a test return under the firm's SOP |
 | PandaDoc / Google Drive | Not tested | Authorized test account operations with actual destination evidence |
 | Existing portal | Not integrated | Portal authentication, jobs, results and supported billing connected later |
-| File download UI | Chrome/API regression and desktop/mobile visual checks passed on Mac | Confirm updated UI on Windows; full accessibility audit remains outside this check |
+| File download and usage UI | Chrome/API regression and desktop/mobile visual checks passed on Mac | Confirm 0.1.4 usage cards on Windows; full accessibility audit remains outside this check |
 
 Do not interpret offline adapter tests, tool discovery or an HTTP 200 as evidence that an autonomous tax closeout works. The first Windows model task establishes basic file-tool execution; desktop and tax-workflow acceptance are the next milestones.
 

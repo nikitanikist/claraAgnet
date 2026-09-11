@@ -2,7 +2,7 @@
 
 Clara is a local chat application backed by the Claude Agent SDK. The model chooses tools and loads skills to work toward a requested outcome. It is independent of the existing fixed T1 pipeline.
 
-**Build status, 11 September 2026:** the portable core and desktop dependencies installed on the Windows RDP server. After native Claude login, the first live task created, read and published a text file; a follow-up also completed, as shown in the user's dashboard screenshot. Release 0.1.3 adds download cards directly beneath the producing task, including in existing conversations. Thirty Python tests and a real Chrome/API attachment regression test pass on the development Mac. Live Windows desktop actions, browser actions, TaxPrep, Profile, PandaDoc and Drive still need testing. Existing portal integration is deferred as requested.
+**Build status, 11 September 2026:** the portable core and desktop dependencies installed on the Windows RDP server. After native Claude login, the first live task created, read and published a text file; a follow-up also completed, as shown in the user's dashboard screenshot. Release 0.1.3 adds download cards directly beneath the producing task, including in existing conversations. Release 0.1.4 adds per-task usage/cost cards, conversation totals, CSV export, an optional SDK estimate limit, direct-search guidance and Explorer cleanup review. Forty-three Python tests and a real Chrome/API regression test pass on the development Mac. The user subsequently reported a successful Softros LAN Messenger desktop task. The new search/cleanup behavior, live browser actions, TaxPrep, Profile, PandaDoc and Drive still need testing. Existing portal integration is deferred as requested.
 
 ## Try it on this Mac
 
@@ -69,6 +69,8 @@ Read [the Windows acceptance checklist](docs/WINDOWS-ACCEPTANCE.md) before a rea
 - Skills library with editing, Markdown imports and ZIP imports with relative resources.
 - Four starter skills: finding client documents, office documents, live computer navigation, and a T1 closeout starter requiring the firm's actual SOP.
 - Chrome DevTools MCP integration with a dedicated profile and Windows-MCP configuration for live accessibility/screenshot/click/typing tools.
+- Per-task SDK token/cost reports, model and cache breakdowns, conversation totals, CSV export, and an optional task estimate limit.
+- Direct file-search guidance and a one-time review of temporary Explorer windows before finishing desktop tasks.
 - A single local executor, persisted event history, process-level workspace locking, and explicit interrupted state after restart. Interrupted tasks are not automatically replayed.
 - Native sign-in status, model error reporting, tool availability checks and Windows input-desktop checks.
 - A localhost dashboard with session cookies, origin/Host checks, request headers, upload limits and isolated output snapshots.
@@ -90,7 +92,7 @@ This prototype uses the official, unmodified Claude binary with the signed-in pe
 
 A stored sign-in is not proof that its session can still authenticate: an earlier Mac test failed authentication. Fresh native login on Windows was followed by a successful live task. The dashboard records model authentication failures and directs the user back to native login when needed.
 
-An SDK is not a separate cheaper model. It is the execution library. Account limits apply to subscription use; any extra-usage settings belong to the account. SDK-reported dollar estimates are not invoices or a measure of remaining Max allowance. Clara shows token counts and elapsed time. No billing fallback is configured, but the app cannot promise unlimited usage or independently override the user's provider-side extra-usage settings.
+An SDK is not a separate cheaper model. It is the execution library. Account limits apply to subscription use; any extra-usage settings belong to the account. SDK-reported dollar estimates are not invoices or a measure of remaining Max allowance. Clara shows tokens, SDK cost estimates, elapsed time and conversation totals. Read [how usage reporting works](docs/USAGE.md) before interpreting a closeout estimate. No billing fallback is configured, but the app cannot promise unlimited usage or independently override the user's provider-side extra-usage settings.
 
 The current official help article pauses the announced SDK credit changes and says qualifying usage continues to draw from subscription limits. Separately, Anthropic's SDK/product guidance restricts developers routing end-user requests through their own Max credentials. This **individual local prototype is not a proven billing plan for a shared Clearhouse portal**. Resolve that deployment distinction before integrating multiple employees.
 
@@ -115,7 +117,7 @@ node --check clara/static/app.js
 node --test tests/test_chat_artifacts.mjs
 ```
 
-The attachment test uses installed Chrome and Puppeteer bundled with the pinned browser connector (`npm ci`). It starts an isolated local API with synthetic history and no model calls. Set `CLARA_TEST_CHROME` or `CLARA_TEST_PYTHON` if their default executable paths differ. Screenshots are saved under ignored `runtime/ui-artifacts`.
+The attachment/usage test uses installed Chrome and Puppeteer bundled with the pinned browser connector (`npm ci`). It starts an isolated local API with synthetic history and no model calls. Set `CLARA_TEST_CHROME` or `CLARA_TEST_PYTHON` if their default executable paths differ. Screenshots are saved under ignored `runtime/ui-artifacts`.
 
 For a fresh Mac installation, set `CLARA_PYTHON` to a Python 3.12+ executable if needed and run `bash scripts/install-mac.sh`.
 

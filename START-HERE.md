@@ -2,7 +2,7 @@
 
 The real local app is in this folder. It includes chat, a Claude SDK executor, tools, skills, saved history, uploads/results, and Windows setup scripts. The existing Clearhouse portal and fixed T1 runner have not been modified.
 
-**Windows milestone:** portable setup and native Claude login succeeded. The user's dashboard shows Clara creating, reading and publishing `clara-first-test.txt`, followed by a completed follow-up. Release 0.1.3 displays downloads directly beneath the task in chat, including for saved conversations. A fresh installation still needs native Claude login.
+**Windows milestone:** portable setup and native Claude login succeeded. The user's dashboard shows Clara creating, reading and publishing `clara-first-test.txt`, followed by a completed follow-up. Release 0.1.4 adds per-task token/cost reports, CSV export, an optional task estimate limit, direct-search guidance and an Explorer cleanup review. A fresh installation still needs native Claude login.
 
 To update the existing GitHub installation on RDP, stop Clara with Ctrl+C in its server terminal, then run:
 
@@ -21,8 +21,10 @@ On this Mac:
 4. Then try: “Create a short Word document explaining the capabilities available on this computer. Attach the result.” Approve the document-generation command, or select autonomous mode for that task.
 5. Review **Skills library** and **Connections & settings**.
 
-30 local Python tests passed, including seven checks for the existing-runtime installer and dependency updates. A real Chrome/API test also verifies inline file downloads, history replay, task association, streaming, deduplication and mobile layout. Live browser actions and Windows desktop/TaxPrep behavior still need validation. This is an experimental build, not a completed production closeout system.
+43 local Python tests pass. A real Chrome/API test verifies inline downloads, per-task usage, conversation totals, legacy records, CSV download, estimate-limit settings, streaming and mobile layout. The user reported a successful Softros Windows test; the new search/cleanup behaviors and tax workflows still need live Windows validation. This is an experimental build, not a completed production closeout system.
 
-For RDP installation, use the GitHub instructions in **README.md**, or transfer **Clara-Agent-0.1.3.zip** to Windows and extract it to a persistent folder. If using the server's existing embeddable Python with no pip/venv, use **docs/PORTABLE-WINDOWS.md**. The package contains source/installers and downloads dependencies on the target machine. Your Mac virtual environment, local chat data and credentials are excluded.
+For RDP installation, use the GitHub instructions in **README.md**, or transfer **Clara-Agent-0.1.4.zip** to Windows and extract it to a persistent folder. If using the server's existing embeddable Python with no pip/venv, use **docs/PORTABLE-WINDOWS.md**. The package contains source/installers and downloads dependencies on the target machine. Your Mac virtual environment, local chat data and credentials are excluded.
 
-Next, enable the installed Windows desktop connector and complete a harmless desktop task before testing the firm's tax workflow. The browser connector remains pending on the current server because Node.js was not found during setup.
+Keep Chrome tools off while its connector is missing, and Windows desktop tools on for native application tests. Use a new conversation for each closeout so its usage total includes only that closeout and its follow-ups. The browser connector remains pending on the current server because Node.js was not found during setup.
+
+After each task, expand **Token breakdown & models** beneath the reply. Use **Download usage CSV** in the side panel to export the conversation’s tasks. In **Connections & settings**, an optional **Task estimate limit (USD)** can stop long runs based on the SDK estimate. It may be exceeded by the last model step and is not a cap on Max subscription usage.

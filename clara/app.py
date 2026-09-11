@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse, Response
 from pydantic import BaseModel, Field
 
 from . import __version__
@@ -16,6 +16,7 @@ from .config import PACKAGE, atomic_json
 from .connectors import connector_status, desktop_ready
 from .skills import list_skills, save_skill, import_skill, validate_name
 from .store import Store, new_id
+from .usage import job_usage, normalize_usage, conversation_usage, usage_csv
 
 
 class MessageInput(BaseModel):
@@ -36,6 +37,7 @@ class SettingsInput(BaseModel):
     model: str = "sonnet"
     max_turns: int = Field(default=40, ge=1, le=100)
     task_timeout_minutes: int = Field(default=20, ge=1, le=120)
+    max_budget_usd: float | None = Field(default=None, gt=0, le=1000, allow_inf_nan=False)
     read_roots: list[str] = Field(default_factory=list, max_length=20)
     browser_enabled: bool = False
     desktop_enabled: bool = False
@@ -157,10 +159,19 @@ def create_app(config, *, manager_factory=AgentManager, access_token=None):
     @app.get("/api/conversations/{cid}")
     async def conversation(cid: str):
         require_conversation(cid)
+        jobs = store.rows("SELECT * FROM jobs WHERE conversation_id=? ORDER BY created", (cid,))
         return {"conversation": store.conversation(cid),
-                "jobs": store.rows("SELECT * FROM jobs WHERE conversation_id=? ORDER BY created", (cid,)),
+                "jobs": [{**job, "usage_report": job_usage(job)} for job in jobs],
+                "usage_summary": conversation_usage(jobs),
                 "files": store.rows("SELECT id,job_id,kind,name,size,created FROM files WHERE conversation_id=? ORDER BY created", (cid,)),
                 "pending": manager.pending_requests(cid)}
+
+    @app.get("/api/conversations/{cid}/usage.csv")
+    async def export_usage(cid: str):
+        require_conversation(cid)
+        jobs = store.rows("SELECT * FROM jobs WHERE conversation_id=? ORDER BY created", (cid,))
+        return Response(usage_csv(jobs), media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition": 'attachment; filename="clara-task-usage.csv"'})
 
     @app.post("/api/conversations/{cid}/messages")
     async def message(cid: str, body: MessageInput):
@@ -198,6 +209,8 @@ def create_app(config, *, manager_factory=AgentManager, access_token=None):
                 rows = store.events(cid, cursor)
                 for event in rows:
                     cursor = event["id"]
+                    if event["kind"] == "usage":
+                        event["data"] = normalize_usage(event["data"])
                     yield f"id: {cursor}\ndata: {json.dumps(event)}\n\n"
                 if not rows:
                     ticks += 1

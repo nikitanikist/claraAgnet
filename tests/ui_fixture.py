@@ -11,6 +11,8 @@ import uvicorn
 import clara.app as app_module
 from clara.config import Config
 from clara.tools import publish_artifact
+from clara.usage import UsageTracker
+from claude_agent_sdk import ResultMessage
 
 
 class NoModelManager:
@@ -48,9 +50,20 @@ with tempfile.TemporaryDirectory(prefix="clara-ui-fixture-") as directory:
         (config.workspace / name).write_text(text)
         files.append(publish_artifact(config, store, first, name))
     store.event(conversation["id"], first["id"], "assistant", {"text": "Created and verified both files. Download them below."})
+    usage = UsageTracker().result(ResultMessage(subtype="success", duration_ms=12000,
+        duration_api_ms=9000, is_error=False, num_turns=4, session_id="synthetic", total_cost_usd=0.0314,
+        model_usage={"synthetic-model": {"inputTokens": 1000, "outputTokens": 200,
+            "cacheReadInputTokens": 3000, "cacheCreationInputTokens": 800, "costUSD": 0.0314}}), 13000, .10)
+    store.execute("UPDATE jobs SET usage=? WHERE id=?", (json.dumps(usage), first["id"]))
+    store.event(conversation["id"], first["id"], "usage", usage)
     store.status(first["id"], "completed")
     second = store.create_job(conversation["id"], "Where can I download them?", "ask", [])
     store.event(conversation["id"], second["id"], "assistant", {"text": "Use the file cards under the previous task."})
+    # Legacy usage must upgrade on history replay without a migration/model call.
+    usage = {"tokens": {"input_tokens": 90, "output_tokens": 10}, "sdk_estimated_usd": .002,
+             "turns": 1, "duration_ms": 1000}
+    store.execute("UPDATE jobs SET usage=? WHERE id=?", (json.dumps(usage), second["id"]))
+    store.event(conversation["id"], second["id"], "usage", usage)
     store.status(second["id"], "completed")
     print(json.dumps({"url": f"http://127.0.0.1:{config.port}/#access=ui-fixture-only", "cid": conversation["id"],
                       "empty_cid": empty["id"], "first_job": first["id"], "second_job": second["id"], "files": files}), flush=True)

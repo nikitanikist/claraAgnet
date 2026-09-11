@@ -48,10 +48,15 @@ test('artifact cards survive replay, stay with their task, and download real fil
         await page.waitForFunction(()=>document.querySelectorAll('#messages .message[data-job]').length===5);
         const layout=await page.evaluate(()=>{
             const group=document.querySelector('.file-message');
-            return {job:group.dataset.resultJob,previous:group.previousElementSibling.dataset.job,next:group.nextElementSibling.dataset.job,
+            return {job:group.dataset.resultJob,previous:group.previousElementSibling.dataset.job,next:group.nextElementSibling.nextElementSibling.dataset.job,
                     inline:group.querySelectorAll('.artifact').length,sidebar:document.querySelectorAll('#artifacts .artifact').length};
         });
         assert.deepEqual(layout,{job:fixture.first_job,previous:fixture.first_job,next:fixture.second_job,inline:2,sidebar:2});
+        assert.equal(await page.$$eval('.usage-message',nodes=>nodes.length),2);
+        assert.match(await page.$eval(`[data-usage-job="${fixture.first_job}"]`,node=>node.innerText),/5,000/);
+        assert.match(await page.$eval(`[data-usage-job="${fixture.first_job}"]`,node=>node.innerText),/\$0\.0314/);
+        assert.match(await page.$eval('#usage',node=>node.innerText),/5,100 tokens/);
+        assert.match(await page.$eval('#usage',node=>node.innerText),/\$0\.0334/);
 
         const cdp=await page.createCDPSession();
         await cdp.send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:work});
@@ -59,10 +64,18 @@ test('artifact cards survive replay, stay with their task, and download real fil
         const downloaded=path.join(work,'clara-first-test.txt');
         for(let attempt=0;attempt<50 && !existsSync(downloaded);attempt++)await new Promise(resolve=>setTimeout(resolve,100));
         assert.equal(await readFile(downloaded,'utf8'),'Clara is connected.');
+        await page.click('.usage-export');
+        const csv=path.join(work,'clara-task-usage.csv');
+        for(let attempt=0;attempt<50 && !existsSync(csv);attempt++)await new Promise(resolve=>setTimeout(resolve,100));
+        const report=await readFile(csv,'utf8');
+        assert.match(report,/SDK API estimate USD/);
+        assert.match(report,/5000,0\.0314/);
 
         await page.reload({waitUntil:'domcontentloaded'});
         await page.waitForFunction(()=>document.querySelectorAll('#messages .artifact').length===2);
         assert.equal(await page.$$eval('#artifacts .artifact',nodes=>nodes.length),2);
+        assert.equal(await page.$$eval('.usage-message',nodes=>nodes.length),2);
+        assert.match(await page.$eval('#usage',node=>node.innerText),/\$0\.0334/);
 
         // Live stream replacement must not lose cards or move older task files.
         await page.evaluate(()=>{
@@ -77,11 +90,27 @@ test('artifact cards survive replay, stay with their task, and download real fil
         assert.equal(await page.$$eval('#messages img',nodes=>nodes.length),0);
         assert.equal(await page.$eval('[data-result-job="live-job"]',node=>node.previousElementSibling.dataset.job),'live-job');
         assert.equal(await page.$eval('[data-result-job="live-job"] a',node=>node.getAttribute('href')),'/api/files/live-file');
+        assert.equal(await page.$$eval('.usage-message',nodes=>nodes.length),3);
+        assert.match(await page.$eval('[data-usage-job="live-job"]',node=>node.innerText),/Incomplete usage/);
+        assert.match(await page.$eval('#usage',node=>node.innerText),/2\/3 tasks report total tokens/);
+        // A repeated final event updates the task; it must never add cost twice.
+        await page.evaluate(()=>eventReceived({id:10006,job_id:'live-job',kind:'usage',data:{version:2,
+            total_tokens:600,tokens:{input_tokens:500,output_tokens:100,cache_read_input_tokens:0,cache_creation_input_tokens:0},
+            sdk_estimated_usd:.004,coverage:'reported',scope:'main_loop',turns:1,duration_ms:500,models:[]}}));
+        assert.match(await page.$eval('#usage',node=>node.innerText),/\$0\.0374/);
+        await page.evaluate(()=>showView('settings'));
+        await page.$eval('#budget-limit',node=>node.value='0.05');
+        await page.click('#settings-form button[type="submit"], #settings-form .primary');
+        await page.waitForFunction(()=>state.settings===null || document.querySelector('#toast').textContent==='Settings saved for the next task.');
+        assert.equal(await page.evaluate(async()=>(await api('/api/settings')).max_budget_usd),.05);
+        await page.evaluate(()=>showView('chat'));
 
         await page.setViewport({width:390,height:900});
         await page.$eval('[data-result-job="live-job"]',node=>node.scrollIntoView({block:'center'}));
         const bounds=await page.$eval('[data-result-job="live-job"] a',node=>{const r=node.getBoundingClientRect();return {left:r.left,right:r.right,width:r.width};});
         assert.ok(bounds.left>=0 && bounds.right<=390 && bounds.width>100);
+        const usageBounds=await page.$eval('[data-usage-job="live-job"]',node=>{const r=node.getBoundingClientRect();return {left:r.left,right:r.right};});
+        assert.ok(usageBounds.left>=0 && usageBounds.right<=390);
         const screenshots=path.join(root,'runtime/ui-artifacts');
         await mkdir(screenshots,{recursive:true});
         await page.screenshot({path:path.join(screenshots,'mobile.png'),fullPage:true});
@@ -93,6 +122,8 @@ test('artifact cards survive replay, stay with their task, and download real fil
         assert.equal(await page.$$eval('#messages .artifact',nodes=>nodes.length),0);
         assert.equal(await page.$$eval('#artifacts .artifact',nodes=>nodes.length),0);
         assert.equal(await page.evaluate(()=>state.resultGroups.size),0);
+        assert.equal(await page.evaluate(()=>state.usageReports.size),0);
+        assert.equal(await page.$$eval('.usage-message',nodes=>nodes.length),0);
         assert.deepEqual(errors,[]);
         console.log('Passed history replay, task association, download contents, live streaming, deduplication, filename escaping, mobile layout, and conversation reset.');
     }finally{
