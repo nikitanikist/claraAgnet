@@ -6,6 +6,9 @@ import sys
 if sys.argv[1] == "core":
     for name in ("ssl", "sqlite3", "ctypes", "clara.app", "pypdf", "docx", "pptx", "openpyxl"):
         importlib.import_module(name)
+    import sqlite3
+    with sqlite3.connect(':memory:') as probe:
+        probe.execute('CREATE VIRTUAL TABLE clara_fts_probe USING fts5(text)')
     from clara.auth import cli_path
     executable = cli_path()
     if not executable:
@@ -16,6 +19,8 @@ elif sys.argv[1] == "desktop":
     for name in ("win32api", "pythoncom", "comtypes", "dxcam", "windows_mcp.__main__"):
         importlib.import_module(name)
     subprocess.run([sys.executable, "-m", "windows_mcp", "serve", "--help"], check=True, timeout=30)
+    from pathlib import Path
+    subprocess.run([sys.executable,str(Path(__file__).resolve().parent.parent/'clara/windows_bridge.py'),'--probe'],check=True,timeout=30)
     print("Desktop imports and CLI help passed. No desktop action was performed.")
 else:
     raise SystemExit("Expected core or desktop.")

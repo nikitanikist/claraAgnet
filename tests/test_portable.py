@@ -108,4 +108,14 @@ def test_desktop_requires_successful_portable_setup(tmp_path, monkeypatch):
     (directory / 'python.exe').touch()
     assert connectors.desktop_command() is None
     (directory / '.clara-ready').touch()
-    assert connectors.desktop_command() == (str(directory / 'python.exe'), ['-m', 'windows_mcp'])
+    assert connectors.desktop_command() == (str(directory / 'python.exe'), [str(tmp_path / 'clara/windows_bridge.py')])
+
+
+def test_updating_owned_core_uses_existing_interpreter_without_copying_over_it(embedded,tmp_path,monkeypatch):
+    root=tmp_path/'app';monkeypatch.setattr(portable,'ROOT',root)
+    python=portable.prepare_runtime(embedded,root/'.portable-python',(3,12,8))
+    before=python.read_bytes()
+    assert portable.core_runtime(python.parent,(3,12,8))==python
+    assert python.read_bytes()==before
+    (python.parent/portable.OWNER).unlink()
+    with pytest.raises(ValueError,match='Clara-owned'): portable.core_runtime(python.parent,(3,12,8))

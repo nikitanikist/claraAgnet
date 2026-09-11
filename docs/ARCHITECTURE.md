@@ -59,3 +59,10 @@ flowchart LR
 ## Remaining engineering work
 
 Prove live model execution after login; test actual browser and native Windows behavior; add firm-approved skills; connect portal identity/tasks/attachments; establish the supported billing route; then evaluate retries and correctness against a representative test set. Server deployment needs an interactive-session launch strategy tested against that server's RDP policies. Mac backend tests cannot establish this.
+
+
+## Version 0.2.0 extension
+
+The current implementation and boundaries are described in [PRODUCTION-IMPLEMENTATION.md](PRODUCTION-IMPLEMENTATION.md). `records.py` adds workflow, evidence, knowledge, memory, operation and portal tables without rewriting prior history. `production_tools.py` exposes shared capabilities; `production_api.py` provides authenticated operator review. `windows_bridge.py` wraps the pinned Windows MCP runtime. Chrome and native desktop availability are independent: a missing optional connector is omitted and reported instead of rejecting all task execution. `portal.py` implements an outbound, operator-bound assignment/result protocol, disabled until configured.
+
+Screenshot evidence now lives separately from text events under the data/evidence directory. Diagnostics exports include IDs and checks but no screenshot bytes. `backup.py` uses SQLite backup and excludes model/browser account state. A successful SDK result cannot mark an incomplete configured workflow complete; operator review is a separate recorded step.

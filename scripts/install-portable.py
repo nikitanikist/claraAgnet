@@ -119,18 +119,20 @@ def provision(python, runner, requirements, probe):
 
 
 def install_browser(skip):
-    node = shutil.which("node")
-    if skip or not node:
-        return "Pending: Node.js was not found, or browser setup was skipped."
-    version = subprocess.check_output([node, "--version"], text=True).strip().lstrip("v")
-    major, minor, *_ = map(int, version.split("."))
-    if not ((major == 20 and minor >= 19) or (major == 22 and minor >= 12) or major >= 23):
-        return f"Pending: Node.js {version} does not meet the browser connector requirement."
-    npm = Path(node).parent / "node_modules/npm/bin/npm-cli.js"
-    if not npm.is_file():
-        return "Pending: npm was not found alongside Node.js."
-    run([node, npm, "ci", "--ignore-scripts", "--no-fund", "--no-audit"], cwd=ROOT)
+    if skip:
+        return "Skipped; run Setup-Browser.ps1 when browser control is needed."
+    run([sys.executable, ROOT / 'scripts/install-browser.py'], cwd=ROOT)
     return "Installed; browser actions still need testing."
+
+
+def core_runtime(source,version):
+    target=ROOT/'.portable-python'
+    if source.resolve()==target.resolve():
+        owner=target/OWNER
+        if not owner.is_file() or json.loads(owner.read_text()).get('owner')!='clara-portable' or json.loads(owner.read_text()).get('python')!=list(version):
+            raise ValueError('The current runtime is not a matching Clara-owned portable installation.')
+        return target/'python.exe'
+    return prepare_runtime(source,target,version)
 
 
 def main():
@@ -143,7 +145,7 @@ def main():
     source = Path(sys.executable).resolve().parent
     version = tuple(sys.version_info[:3])
     print(f"Existing runtime: {source}\nClara application: {ROOT}", flush=True)
-    python = prepare_runtime(source, ROOT / ".portable-python", version)
+    python = core_runtime(source,version)
     runner = bootstrap_pip()
     print("Installing Clara's core dependencies...", flush=True)
     provision(python, runner, ROOT / "requirements.lock", "core")

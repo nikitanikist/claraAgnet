@@ -182,11 +182,13 @@ def tool_server(config, store, job, request_input):
         return {"answer": await request_input(job, "question", {"question": args["question"]})}
 
     async def environment(args):
+        from .connectors import connector_status
         return {"platform": sys.platform, "python": sys.executable, "workspace": str(config.workspace),
                 "read_roots": [str(p) for p in config.read_roots()], "mode": job["mode"],
                 "libraries": ["pypdf", "docx", "pptx", "openpyxl"],
                 "browser_enabled": config.settings()["browser_enabled"],
-                "desktop_enabled": config.settings()["desktop_enabled"] and os.name == "nt"}
+                "desktop_enabled": config.settings()["desktop_enabled"] and os.name == "nt",
+                "connectors":connector_status(config)}
 
     definitions = [
         ("environment", "Get platform, folders, Python executable and enabled capabilities.", {}, environment),
@@ -197,4 +199,6 @@ def tool_server(config, store, job, request_input):
         ("publish_artifact", "Attach a verified, real file to the conversation for the user to download. Does not send anything to an external recipient.", {"type": "object", "properties": {"path": {"type": "string"}, "title": {"type": "string"}}, "required": ["path"]}, artifact),
         ("ask_user", "Ask a necessary clarification and wait for the user's answer in the dashboard.", {"question": str}, ask),
     ]
-    return create_sdk_mcp_server(name="clara", version="0.1.0", tools=[tool(name, desc, schema)(wrap(fn)) for name, desc, schema, fn in definitions])
+    from .production_tools import definitions as production_definitions
+    definitions += production_definitions(config,store,job)
+    return create_sdk_mcp_server(name="clara", version="0.2.0", tools=[tool(name, desc, schema)(wrap(fn)) for name, desc, schema, fn in definitions])

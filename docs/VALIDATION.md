@@ -1,3 +1,18 @@
+# Current validation: 0.2.0 · 12 September 2026
+
+- **71 Python tests pass**, including prior functionality and new workflow completion gates, wrong-client/stale-PDF rejection, checkpoint order, persistence, copy non-overwrite, aggregate resume budgets, incomplete usage, scoped/versioned memory qualification, suspension, uncertain external-write deduplication, portal assignment deduplication/owner binding, edit-preserving skills, authenticated operator APIs, PDF reference import, screenshot evidence masking/options, independent connector availability, owned-runtime update and SQLite/file backup/restore.
+- **Real Chrome MCP smoke test passes** on an isolated local page: launch, DOM snapshot, field fill, upload, click and result readback. Its download-link action passes; actual download bytes are independently checked in the dashboard browser test. No client tenant or model was used.
+- **Real Chrome/API UI regression passes**: artifact/CSV downloads, history/streaming, usage display, escaping, mobile layout, reference import, T1 workflow creation, rejected premature review and budget update. Screenshots were inspected locally.
+- Pinned Chrome dependency installation, Python dependency check, source compilation and JavaScript parsing pass. Eighteen CPA skill files pass the skill validator. The real SDK/CLI protocol connects without a prompt; MCP startup may be deferred.
+- The native Claude SDK account on this Mac is not signed in. **No fresh live-model inference is claimed for 0.2.0.** Earlier Windows live-model results remain historical evidence, not validation of every new feature.
+- The Windows bridge wraps pinned Windows-MCP 0.8.5; its API paths were reviewed against that package. Import/probe and actual Windows focus/UIA/TaxPrep operations require the non-admin RDP acceptance run. PowerShell setup and rollback execution have not been run on Windows for this release.
+- Portal transport is disabled by default. Unit tests verify local assignment semantics; actual authenticated portal endpoints, identity arrangement, file delivery and firm account connections still need integration. Dedicated vendor APIs are not implemented; Chrome supplies the UI route.
+- PDF validation is identity/text/hash evidence, not tax correctness or full visual completeness. Memory qualification is reviewed outcome evidence, not a proof of causal shortcut correctness. Raw OS/browser actions are not a transactional API. Complete closeout time/cost, repeated-run improvement and production acceptance remain unmeasured.
+
+One upstream Starlette/AnyIO test-client deprecation warning remains. No test failure remains in the recorded run.
+
+---
+
 # Validation record · 11 September 2026
 
 ## Initial development Mac checks (before Windows installation)

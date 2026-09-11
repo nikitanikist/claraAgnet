@@ -1,6 +1,6 @@
 # Run in the target Windows user's interactive session. No administrator required.
 [CmdletBinding()]
-param([switch]$SkipDesktop)
+param([switch]$SkipDesktop,[switch]$SkipBrowser)
 $ErrorActionPreference = 'Stop'
 $ClaraRoot = $PSScriptRoot
 Set-Location -LiteralPath $ClaraRoot
@@ -28,17 +28,6 @@ if (-not $ClaraPython -and (Get-Command python -ErrorAction SilentlyContinue)) {
 if (-not $ClaraPython) {
     throw 'Full Python 3.12+ with venv/ensurepip was not found. For an existing embeddable runtime, run scripts/install-portable.py with that python.exe. See docs/PORTABLE-WINDOWS.md.'
 }
-if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-    throw 'Install Node.js 22 LTS (22.12 or newer), reopen PowerShell, then rerun. See https://nodejs.org/en/download'
-}
-$ClaraNodeVersion = (& node --version).Trim().TrimStart('v').Split('.')
-if ($LASTEXITCODE -ne 0 -or $ClaraNodeVersion.Count -lt 2) { throw 'Could not read Node.js version.' }
-$ClaraNodeMajor = [int]$ClaraNodeVersion[0]
-$ClaraNodeMinor = [int]$ClaraNodeVersion[1]
-if (-not (($ClaraNodeMajor -eq 20 -and $ClaraNodeMinor -ge 19) -or ($ClaraNodeMajor -eq 22 -and $ClaraNodeMinor -ge 12) -or $ClaraNodeMajor -ge 23)) {
-    throw 'Node.js does not meet the browser connector requirement.'
-}
-if (-not (Get-Command npm.cmd -ErrorAction SilentlyContinue)) { throw 'npm.cmd was not found; repair the Node.js installation.' }
 Write-Host 'Installing Clara and its official Claude SDK...' -ForegroundColor Cyan
 if (-not (Test-Path '.venv\Scripts\python.exe')) {
     Run-Checked $ClaraPython ($ClaraPythonPrefix + @('-m', 'venv', '.venv'))
@@ -46,7 +35,7 @@ if (-not (Test-Path '.venv\Scripts\python.exe')) {
 $ClaraVenvPython = Join-Path $ClaraRoot '.venv\Scripts\python.exe'
 Run-Checked $ClaraVenvPython @('-m', 'pip', 'install', '-r', 'requirements.lock')
 Run-Checked $ClaraVenvPython @('-m', 'pip', 'install', '--no-deps', '-e', '.')
-Run-Checked 'npm.cmd' @('ci', '--ignore-scripts', '--no-fund', '--no-audit')
+if (-not $SkipBrowser) { Run-Checked $ClaraVenvPython @('scripts/install-browser.py') }
 if (-not $SkipDesktop) {
     Write-Host 'Installing Windows desktop tools into a separate environment...' -ForegroundColor Cyan
     if (-not (Test-Path '.windows-venv\Scripts\python.exe')) {
@@ -56,6 +45,7 @@ if (-not $SkipDesktop) {
     Run-Checked $ClaraDesktopPython @('-m', 'pip', 'install', '-r', 'requirements-windows-desktop.txt')
     Run-Checked $ClaraDesktopPython @('-m', 'pip', 'check')
     Run-Checked (Join-Path $ClaraRoot '.windows-venv\Scripts\windows-mcp.exe') @('serve', '--help')
+    Run-Checked $ClaraDesktopPython @('clara/windows_bridge.py', '--probe')
 }
 Run-Checked $ClaraVenvPython @('-m', 'pip', 'check')
 Run-Checked $ClaraVenvPython @('-m', 'clara', 'doctor')

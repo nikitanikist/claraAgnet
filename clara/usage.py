@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 TOKEN_KEYS = ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")
 MODEL_KEYS = ("inputTokens", "outputTokens", "cacheReadInputTokens", "cacheCreationInputTokens")
 NOTE = "SDK API cost estimate in USD, not a Max bill or remaining allowance. Different token categories have different rates."
-TERMINAL = {"completed", "failed", "cancelled", "interrupted"}
+TERMINAL = {"completed", "failed", "cancelled", "interrupted", "incomplete", "needs_review"}
 
 
 def number(value):

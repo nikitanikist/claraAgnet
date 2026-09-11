@@ -65,4 +65,4 @@ async def auth_status(config=None):
             "inference_verified": health.get("inference_verified", False), "needs_login": needs_login,
             "message": ("The last model call could not authenticate. Run clara login in a terminal, then retry."
                         if needs_login else "Native subscription sign-in found. A live task verifies that the session is usable."
-                        if connected else "Subscription sign-in required. Run clara login in a terminal. API billing is disabled in this prototype.")}
+                        if connected else "Subscription sign-in required. Run clara login in a terminal. No API billing fallback is configured.")}

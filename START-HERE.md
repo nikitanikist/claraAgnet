@@ -1,30 +1,39 @@
-# Your Clara build is ready for the next test
+# Clara 0.2.0 is ready for Windows qualification
 
-The real local app is in this folder. It includes chat, a Claude SDK executor, tools, skills, saved history, uploads/results, and Windows setup scripts. The existing Clearhouse portal and fixed T1 runner have not been modified.
+This update adds Chrome setup, fresh Windows observations and focus checks, workflow checkpoints, verified document evidence, reviewed procedural memory, searchable references, 18 CPA skills, total workflow budgets and local diagnostics. It preserves edited skills and saved conversations. The existing Clearhouse portal and old T1 script are not modified.
 
-**Windows milestone:** portable setup and native Claude login succeeded. The user's dashboard shows Clara creating, reading and publishing `clara-first-test.txt`, followed by a completed follow-up. Release 0.1.4 adds per-task token/cost reports, CSV export, an optional task estimate limit, direct-search guidance and an Explorer cleanup review. A fresh installation still needs native Claude login.
+## Update the existing RDP installation
 
-To update the existing GitHub installation on RDP, stop Clara with Ctrl+C in its server terminal, then run:
+Stop Clara with Ctrl+C in its server PowerShell window. In a new PowerShell window:
 
 ```powershell
-git -C "$env:LOCALAPPDATA\ClaraAgent" pull --ff-only
-if ($LASTEXITCODE -eq 0) { & "$env:LOCALAPPDATA\ClaraAgent\Start-Clara.ps1" }
+Set-Location "$env:LOCALAPPDATA\ClaraAgent"
+git status --short
+git rev-parse HEAD
+git pull --ff-only origin main
+if ($LASTEXITCODE -eq 0) { .\Update-Clara.ps1 }
 ```
 
-Refresh the dashboard and reopen the previous conversation. This update requires no dependency reinstall or repeated model task.
+Keep the old revision printed by `git rev-parse HEAD`. If local edits are listed, preserve them before updating. This first pull obtains the new updater; it then creates a local data backup before refreshing dependencies. Future updates can run `Update-Clara.ps1` directly. Do not simply restart after pulling: this version includes a browser runtime setup and Windows bridge probe.
 
-On this Mac:
+When setup passes, run:
 
-1. Open **Login-Clara.command** and complete the official sign-in.
-2. Open **Start-Clara.command**. If the app is already running, use **Open-Clara.command**.
-3. Try: “Use the find-client-document skill. Find the synthetic Rohit Sharma engagement letter under clara-smoke in your workspace, verify its reference, and attach it.”
-4. Then try: “Create a short Word document explaining the capabilities available on this computer. Attach the result.” Approve the document-generation command, or select autonomous mode for that task.
-5. Review **Skills library** and **Connections & settings**.
+```powershell
+.\Start-Clara.ps1
+```
 
-43 local Python tests pass. A real Chrome/API test verifies inline downloads, per-task usage, conversation totals, legacy records, CSV download, estimate-limit settings, streaming and mobile layout. The user reported a successful Softros Windows test; the new search/cleanup behaviors and tax workflows still need live Windows validation. This is an experimental build, not a completed production closeout system.
+The browser installer uses compatible Node if available or downloads a checksum-verified Node into Clara's own folder. It does not require an administrator installation. Your server must allow those executables under its normal policies. Google Chrome and the existing approved Python/Git installation are required.
 
-For RDP installation, use the GitHub instructions in **README.md**, or transfer **Clara-Agent-0.1.5.zip** to Windows and extract it to a persistent folder. If using the server's existing embeddable Python with no pip/venv, use **docs/PORTABLE-WINDOWS.md**. The package contains source/installers and downloads dependencies on the target machine. Your Mac virtual environment, local chat data and credentials are excluded.
+## First tests
 
-Keep Chrome tools off while its connector is missing, and Windows desktop tools on for native application tests. Use a new conversation for each closeout so its usage total includes only that closeout and its follow-ups. The browser connector remains pending on the current server because Node.js was not found during setup.
+1. In **Connections & settings**, enable Chrome and Windows tools and add your test folders. Keep the RDP session usable while testing.
+2. Ask Clara to open a harmless test website and inspect it. Websites use Clara's separate Chrome profile; sign into PandaDoc/OneDrive in that profile when required.
+3. In **Knowledge & memory**, import the relevant TaxPrep/ProFile manual sections and firm SOP. Record application build and tax year. Shipped official links are a source index, not entire manuals.
+4. Create a new conversation. In **Workflow review**, create a **T1 print test** with the actual test client key, year and member names.
+5. In Workspace, provide the source file/folder and request the client-copy print test. Ask Clara to verify the PDF, save evidence and attach a handoff. Use autonomous mode only for the task scope you intend.
+6. Inspect the workflow stages, PDF and usage. If the task stops, continue in that conversation after reviewing progress; its workflow budget does not reset. Budget changes are recorded in Workflow review.
+7. Qualify the complete closeout with firm-approved signature, billing and delivery details after printing works. See [CPA acceptance](docs/CPA-ACCEPTANCE.md).
 
-After each task, expand **Token breakdown & models** beneath the reply. Use **Download usage CSV** in the side panel to export the conversation’s tasks. In **Connections & settings**, an optional **Task estimate limit (USD)** can stop long runs based on the SDK estimate. It may be exceeded by the last model step and is not a cap on Max subscription usage.
+The local Python suite has 71 passing tests, plus real Chrome MCP and dashboard tests. The new native Windows bridge and complete TaxPrep closeout have not been independently tested on the target server. A live-model call on the Mac also needs native sign-in. This is a qualification candidate, not a declaration that the whole firm workflow is already production-qualified.
+
+[Implementation and limits](docs/PRODUCTION-IMPLEMENTATION.md) · [Backup and rollback](docs/UPDATE-AND-ROLLBACK.md) · [Portal protocol](docs/PORTAL-PROTOCOL.md) · [Usage interpretation](docs/USAGE.md)

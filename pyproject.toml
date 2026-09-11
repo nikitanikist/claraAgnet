@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clara-local-agent"
-version = "0.1.5"
+version = "0.2.0"
 description = "A local, skill-driven desktop agent for Clearhouse"
 requires-python = ">=3.12"
 dependencies = [
@@ -20,7 +20,7 @@ clara = "clara.__main__:main"
 include = ["clara*"]
 
 [tool.setuptools.package-data]
-clara = ["static/*", "starter_skills/*/*"]
+clara = ["static/*", "starter_skills/*/*", "reference-sources.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

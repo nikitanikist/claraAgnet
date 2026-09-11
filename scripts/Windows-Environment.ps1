@@ -9,6 +9,8 @@ function Initialize-ClaraWindows {
         throw 'Complete the standard or portable Clara installer first.'
     }
     $env:Path = "$(Split-Path -Parent $ClaraPython);$env:Path"
+    $ClaraNode = Join-Path $Root '.portable-node'
+    if (Test-Path (Join-Path $ClaraNode 'node.exe')) { $env:Path = "$ClaraNode;$env:Path" }
     $env:PYTHONIOENCODING = 'utf-8'
     if (-not $env:CLAUDE_CODE_GIT_BASH_PATH) {
         $ClaraGitCandidates = @("$env:ProgramFiles\Git\bin\bash.exe", "$env:LOCALAPPDATA\Programs\Git\bin\bash.exe")

@@ -2,6 +2,8 @@
 .windows-venv/
 .portable-python/
 .portable-desktop/
+.portable-node/
+browser-setup-result.json
 .install-tools/
 portable-setup-result.json
 node_modules/

@@ -1,8 +1,10 @@
-# Clara · local agent prototype
+# Clara · CPA workspace agent
 
 Clara is a local chat application backed by the Claude Agent SDK. The model chooses tools and loads skills to work toward a requested outcome. It is independent of the existing fixed T1 pipeline.
 
-**Build status, 11 September 2026:** portable setup, native Claude login and a create/read/publish task succeeded on Windows RDP. The user also reported a successful Softros LAN Messenger test. A later TaxPrep test opened the working return but exhausted its turn limit before a verified print. Release 0.1.5 prevents empty desktop observations, improves navigation/checkpoint guidance, adds bounded tool result/timing logs and task-log downloads, and explains incomplete runs more clearly. Fifty Python tests and the Chrome/API regression test pass on the development Mac. The revised behavior and complete TaxPrep printing still require Windows acceptance. Existing portal integration is deferred as requested.
+**Release 0.2.0 — qualification candidate:** Chrome control, application-local Node setup, fresh Windows focus/inspection tools, structured workflow checkpoints, verified PDF/source evidence, reviewed memory, searchable knowledge, 18 CPA skills, workflow-wide budgets, local screenshot evidence, an optional outbound portal adapter and a backup/update path are implemented. Real Chrome MCP and dashboard tests pass on the development Mac. The new Windows bridge and complete T1 closeout still need acceptance on the firm's RDP server. Read [what is implemented and what remains](docs/PRODUCTION-IMPLEMENTATION.md).
+
+For the existing RDP installation, use [update and rollback instructions](docs/UPDATE-AND-ROLLBACK.md). After updating, open **Knowledge & memory** to import the actual manuals and firm procedures, then create a **T1 print test** in **Workflow review** before testing a full closeout.
 
 ## Try it on this Mac
 
@@ -35,24 +37,24 @@ Download [Install-FromGitHub.ps1](https://raw.githubusercontent.com/nikitanikist
 .\Install-FromGitHub.ps1 -PythonPath 'O:\path\to\existing\python.exe'
 ```
 
-This clones into `%LOCALAPPDATA%\ClaraAgent` and runs portable setup. Use `-InstallDir` for a different new application folder. A later run updates a clean checkout with `git pull --ff-only` and refreshes dependencies when their requirements change. Stop Clara before updating. Use the firm's normal script execution method; the installer does not change execution policies. Native Claude sign-in follows installation, and Node.js is still needed for the browser connector.
+This clones into `%LOCALAPPDATA%\ClaraAgent` and runs portable setup. Use `-InstallDir` for a different new application folder. A later run updates a clean checkout with `git pull --ff-only` and refreshes dependencies when their requirements change. Stop Clara before updating. Use the firm's normal script execution method; the installer does not change execution policies. Native Claude sign-in follows installation. Browser setup installs a pinned Node runtime inside the application when a compatible one is absent.
 
 ### Standard Python installation or ZIP package
 
-**Already have an embeddable Python with no pip/venv?** Use the [existing-runtime installer](docs/PORTABLE-WINDOWS.md). It provisions separate application-local runtimes. Node.js remains necessary for the browser connector, but missing Node no longer blocks the portable core setup.
+**Already have an embeddable Python with no pip/venv?** Use the [existing-runtime installer](docs/PORTABLE-WINDOWS.md). It provisions separate application-local runtimes. The browser installer provisions application-local Node when needed.
 
 Extract the source package into a persistent folder such as `C:\Clara`. Do not copy the Mac `.venv` or `node_modules` to Windows.
 
-Prerequisites: 64-bit Python 3.12 or newer, Node.js 22 LTS (22.12 or newer), Chrome, and Git for Windows/Git Bash for Claude Code compatibility. Run the commands in the Windows user session that Clara should operate. The installer checks Python and Node; it does not change machine policies, create accounts or configure unattended Windows logins.
+Prerequisites: 64-bit Python 3.12 or newer, Chrome, and Git for Windows/Git Bash for Claude Code compatibility. Run the commands in the Windows user session that Clara should operate. The installer checks Python and Node; it does not change machine policies, create accounts or configure unattended Windows logins.
 
 ```powershell
 cd C:\Clara
-powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-Clara.ps1
+.\Install-Clara.ps1
 .\Login-Clara.ps1
 .\Start-Clara.ps1
 ```
 
-If PowerShell blocks the second or third script, invoke it with the same per-process `-ExecutionPolicy Bypass -File` form. This does not change the computer's persistent execution policy. Use the firm's approved execution method where applicable.
+Use the firm’s approved PowerShell execution method. If policy blocks an executable or script, resolve that with the server administrator; Clara does not alter those policies.
 
 The installer creates the main `.venv`, installs the official SDK, and installs Chrome's MCP connector. Windows-MCP gets its own `.windows-venv` to avoid dependency conflicts. This is a **source installer requiring internet**, not a prebuilt offline executable. It does not install or alter TaxPrep/Profile.
 
@@ -63,15 +65,16 @@ Read [the Windows acceptance checklist](docs/WINDOWS-ACCEPTANCE.md) before a rea
 ## What is implemented
 
 - Local chat with streamed text, real tool activity, Stop, necessary clarification/approval prompts, uploads, downloadable output files beneath each task and in Results, saved conversations and resumable SDK sessions.
-- An open-ended Claude Agent SDK loop; no mandatory fixed T1 stage sequence.
+- An open-ended Claude Agent SDK loop with evidence contracts for configured business workflows; navigation is chosen from live observations.
 - General recursive file search, PDF/DOCX/text reading, workspace text/script creation, PowerShell/Bash execution, and artifact publishing.
 - Python libraries for Word, PowerPoint, Excel and PDF manipulation.
 - Skills library with editing, Markdown imports and ZIP imports with relative resources.
-- Four starter skills: finding client documents, office documents, live computer navigation, and a T1 closeout starter requiring the firm's actual SOP.
+- 18 CPA business skills plus four original starter skills. Actual firm SOPs and software manuals are imported as references; user edits are preserved on update.
 - Chrome DevTools MCP integration with a dedicated profile and Windows-MCP configuration for live accessibility/screenshot/click/typing tools.
 - Per-task SDK token/cost reports, model and cache breakdowns, conversation totals, CSV export, an optional task estimate limit, and task-log JSON downloads.
-- Expandable tool activity with elapsed time and bounded text results for new runs. Older history may lack tool outputs; screenshots are not retained. Text logs can contain client information and are kept locally.
+- Expandable tool activity with elapsed time and bounded text results for new runs. Older history may lack tool outputs. New screenshot evidence is stored locally with bounded retention when enabled. Text logs can contain client information and are kept locally.
 - Direct file-search guidance and a one-time review of temporary Explorer windows before finishing desktop tasks.
+- Reviewed procedural memory, scoped source-linked knowledge, structured workflow stages, evidence-based completion gates, workflow-wide budgets and an outbound portal protocol.
 - A single local executor, persisted event history, process-level workspace locking, and explicit interrupted state after restart. Interrupted tasks are not automatically replayed.
 - Native sign-in status, model error reporting, tool availability checks and Windows input-desktop checks.
 - A localhost dashboard with session cookies, origin/Host checks, request headers, upload limits and isolated output snapshots.
@@ -81,7 +84,7 @@ Read [the Windows acceptance checklist](docs/WINDOWS-ACCEPTANCE.md) before a rea
 - Live skill selection and moved-file recovery by the model beyond the first successful create/read/publish task.
 - Reliable popup recovery, disconnected/locked RDP behavior, completed TaxPrep printing or Profile automation beyond the reported desktop tests.
 - Real PandaDoc/Drive actions or a complete real-client T1 closeout.
-- Current Clearhouse portal integration, multiuser authentication, a shared server billing design, remote workers, or multiple GUI tasks on one desktop.
+- Actual Clearhouse portal deployment, multiuser authentication, a shared server billing design, or multiple GUI tasks on one desktop. An outbound worker adapter is included but needs the documented portal protocol and operator configuration.
 - A custom Chrome extension. The existing general Chrome connector supplies browser tools without needing to build an extension first.
 - Automatic model training, reliable self-modification or learning a firm's policy from an unreviewed transcript. Skills and conversation state provide reusable context.
 - A Windows service or a guarantee of functioning after disconnect. The worker must have a usable interactive desktop; use the acceptance test to establish actual server behavior.
@@ -89,13 +92,13 @@ Read [the Windows acceptance checklist](docs/WINDOWS-ACCEPTANCE.md) before a rea
 
 ## Model access and cost
 
-This prototype uses the official, unmodified Claude binary with the signed-in person's native subscription. It does not collect OAuth credentials, offer a custom Claude login, configure an API key, purchase credits, or fall back to an API/provider when the subscription fails. Clara removes billing/provider environment overrides from its own process and confirms a subscription auth method before a task.
+This installation uses the official, unmodified Claude binary with the signed-in person's native subscription. It does not collect OAuth credentials, offer a custom Claude login, configure an API key, purchase credits, or fall back to an API/provider when the subscription fails. Clara removes billing/provider environment overrides from its own process and confirms a subscription auth method before a task.
 
 A stored sign-in is not proof that its session can still authenticate: an earlier Mac test failed authentication. Fresh native login on Windows was followed by a successful live task. The dashboard records model authentication failures and directs the user back to native login when needed.
 
 An SDK is not a separate cheaper model. It is the execution library. Account limits apply to subscription use; any extra-usage settings belong to the account. SDK-reported dollar estimates are not invoices or a measure of remaining Max allowance. Clara shows tokens, SDK cost estimates, elapsed time and conversation totals. Read [how usage reporting works](docs/USAGE.md) before interpreting a closeout estimate. No billing fallback is configured, but the app cannot promise unlimited usage or independently override the user's provider-side extra-usage settings.
 
-The current official help article pauses the announced SDK credit changes and says qualifying usage continues to draw from subscription limits. Separately, Anthropic's SDK/product guidance restricts developers routing end-user requests through their own Max credentials. This **individual local prototype is not a proven billing plan for a shared Clearhouse portal**. Resolve that deployment distinction before integrating multiple employees.
+The current official help article pauses the announced SDK credit changes and says qualifying usage continues to draw from subscription limits. Separately, Anthropic's SDK/product guidance restricts developers routing end-user requests through their own Max credentials. This **individual local installation is not a proven billing plan for a shared Clearhouse portal**. Resolve that deployment distinction before integrating multiple employees.
 
 Sources checked 11 September 2026: [Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/overview), [subscription usage update](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan), [authentication and product conditions](https://code.claude.com/docs/en/legal-and-compliance).
 

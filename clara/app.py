@@ -41,12 +41,17 @@ class SettingsInput(BaseModel):
     read_roots: list[str] = Field(default_factory=list, max_length=20)
     browser_enabled: bool = False
     desktop_enabled: bool = False
+    capture_evidence: bool = True
 
 
 def create_app(config, *, manager_factory=AgentManager, access_token=None):
     config.initialize()
     store = Store(config.data / "clara.sqlite3")
+    from .skill_pack import seed_sources
+    seed_sources(store)
     manager = manager_factory(config, store)
+    from .portal import PortalWorker
+    portal=PortalWorker(config,store,manager)
     token = access_token or secrets.token_urlsafe(32)
     cookie = secrets.token_urlsafe(32)
     origins = {f"http://127.0.0.1:{config.port}", f"http://localhost:{config.port}"}
@@ -54,14 +59,18 @@ def create_app(config, *, manager_factory=AgentManager, access_token=None):
     @asynccontextmanager
     async def lifespan(app):
         await manager.start()
+        await portal.start()
         atomic_json(config.data / "dashboard.json", {"url": f"http://127.0.0.1:{config.port}/#access={token}"})
         try:
             yield
         finally:
+            await portal.close()
             await manager.close()
 
     app = FastAPI(title="Clara Local Agent", version=__version__, lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store, app.state.manager, app.state.access_token = store, manager, token
+    from .production_api import install_routes
+    install_routes(app,config,store,manager)
 
     @app.middleware("http")
     async def local_access(request, call_next):
@@ -99,7 +108,7 @@ def create_app(config, *, manager_factory=AgentManager, access_token=None):
 
     @app.get("/static/{name}")
     async def static(name: str):
-        if name not in {"app.js", "style.css"}:
+        if name not in {"app.js", "production.js", "style.css"}:
             raise HTTPException(404)
         return FileResponse(PACKAGE / "static" / name)
 
@@ -121,7 +130,9 @@ def create_app(config, *, manager_factory=AgentManager, access_token=None):
     async def status():
         return {"version": __version__, "auth": await auth_status(config), "connectors": connector_status(config),
                 "desktop": desktop_ready(), "workspace": str(config.workspace),
-                "active_job": manager.active_job, "queued": manager.queue.qsize()}
+                "active_job": manager.active_job, "queued": manager.queue.qsize(),
+                "portal":{"running":bool(portal.task and not portal.task.done()),"error":portal.error,
+                          "message":"Outbound assignment adapter; configure the existing portal protocol before enabling."}}
 
     @app.get("/api/settings")
     async def settings():
@@ -202,6 +213,11 @@ def create_app(config, *, manager_factory=AgentManager, access_token=None):
                   "events": [{**row, "data": json.loads(row["data"])} for row in rows],
                   "coverage": "Local task history. Older tool outputs may be absent; excerpts may be truncated. "
                               "No screenshots or credential files are included. Task text can contain client information."}
+        from .workflows import Workflows
+        report['workflow']=Workflows(store,config).snapshot(job['conversation_id'])
+        report['verification']=[{**row,'payload':json.loads(row['payload'])} for row in store.rows('SELECT * FROM evidence WHERE job_id=? AND kind!=?',(jid,'tool_observation'))]
+        report['recovery']=store.one('SELECT * FROM execution_snapshots WHERE job_id=?',(jid,))
+        report['screenshot_files']=store.rows("SELECT id,name,size FROM files WHERE job_id=? AND kind='evidence'",(jid,))
         return Response(json.dumps(report, indent=2, ensure_ascii=False), media_type="application/json",
                         headers={"Content-Disposition": 'attachment; filename="clara-task-diagnostics.json"'})
 

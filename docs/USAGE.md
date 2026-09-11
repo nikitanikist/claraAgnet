@@ -23,3 +23,8 @@ The default remains no estimate limit, preserving existing settings. A budget-li
 ## Validation
 
 Tests cover all-model counts without double counting, independent follow-up totals, duplicate assistant messages, missing and zero usage, partial/crash reports, budget-crossing results, unknown model prices, authenticated CSV export and budget validation. A real Chrome/API test checks saved and live usage cards, conversation totals, CSV downloads, settings and narrow-screen layout using synthetic data. These tests do not submit model requests or measure a real closeout.
+
+
+## Workflow totals in 0.2.0
+
+A configured workflow links all its runs and snapshots turn, wall-time and optional USD-estimate limits. Resuming uses the remaining total rather than resetting it; individual requests also retain the limits in Connections. Workflow review permits an explicit, noted change to the total budget. SDK limits can be exceeded by the final model step and do not cap or reveal Max allowance. If a previous result has incomplete usage, the total shown is a lower bound and automatic resume is blocked pending diagnostics review. This release does not invent a dollar cost for a crashed request.

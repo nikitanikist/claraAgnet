@@ -5,22 +5,40 @@ from pathlib import Path
 from .config import PROJECT
 
 
+def node_command():
+    portable = PROJECT / '.portable-node/node.exe'
+    return str(portable) if os.name == 'nt' and portable.is_file() else shutil.which('node')
+
+
+def chrome_command():
+    candidates = ([os.path.join(os.environ.get(base, ''), suffix)
+                   for base in ('PROGRAMFILES', 'PROGRAMFILES(X86)', 'LOCALAPPDATA')
+                   for suffix in ('Google/Chrome/Application/chrome.exe',)] if os.name == 'nt' else
+                  ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'])
+    return next((str(p) for p in map(Path, candidates) if p.is_file()), None) or shutil.which('google-chrome')
+
+
 def desktop_command():
     portable = PROJECT / ".portable-desktop/python.exe"
     if portable.is_file() and (portable.parent / ".clara-ready").is_file():
-        return str(portable), ["-m", "windows_mcp"]
-    regular = PROJECT / ".windows-venv/Scripts/windows-mcp.exe"
+        return str(portable), [str(PROJECT / 'clara/windows_bridge.py')]
+    regular = PROJECT / ".windows-venv/Scripts/python.exe"
     if regular.is_file():
-        return str(regular), []
+        return str(regular), [str(PROJECT / 'clara/windows_bridge.py')]
     return None
 
 
 def connector_status(config):
-    node = shutil.which("node")
+    node = node_command()
     browser = PROJECT / "node_modules/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js"
     desktop = desktop_command()
-    return {"browser": {"installed": bool(node and browser.exists()), "enabled": config.settings()["browser_enabled"],
-                        "message": "Uses a separate Clara Chrome profile. Sign into websites there when needed."},
+    browser_installed = bool(node and browser.exists())
+    return {"browser": {"installed": browser_installed, "enabled": config.settings()["browser_enabled"],
+                        "available": bool(browser_installed and chrome_command()),
+                        "chrome_found": bool(chrome_command()),
+                        "message": ("Run Setup-Browser.ps1 in the Clara application folder. No administrator installation is required." if not browser_installed else
+                                    "Google Chrome was not found in a standard installation location." if not chrome_command() else
+                                    "Uses a separate Clara Chrome profile. Sign into websites there when needed.")},
             "desktop": {"installed": os.name == "nt" and bool(desktop), "enabled": config.settings()["desktop_enabled"],
                         "supported_platform": os.name == "nt", "message": "Requires a usable Windows interactive desktop. RDP and TaxPrep validation are pending."}}
 
@@ -29,22 +47,22 @@ def mcp_connectors(config):
     settings = config.settings()
     status = connector_status(config)
     servers = {}
-    if settings["browser_enabled"]:
-        if not status["browser"]["installed"]:
-            raise ValueError("Browser connector missing. Run npm ci in the Clara application folder.")
-        servers["chrome"] = {"type": "stdio", "command": shutil.which("node"), "args": [
+    if settings["browser_enabled"] and status["browser"]["available"]:
+        servers["chrome"] = {"type": "stdio", "command": node_command(), "args": [
             str(PROJECT / "node_modules/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js"),
             "--user-data-dir=" + str(config.data / "chrome-profile"), "--no-usage-statistics",
             "--no-performance-crux", "--no-category-performance", "--no-category-emulation",
             "--redact-network-headers", "--workspace=" + str(config.workspace),
             "--screenshot-format=jpeg", "--screenshot-max-width=1440"],
             "env": {"CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS": "1"}}
+        if chrome_command():
+            servers['chrome']['args'].append('--executable-path=' + chrome_command())
     if settings["desktop_enabled"]:
-        if not status["desktop"]["installed"]:
-            raise ValueError("Windows desktop connector unavailable. Complete desktop setup on Windows, or disable Desktop in Settings.")
+        if not status["desktop"]["installed"] or not desktop_ready()['ready']:
+            return servers
         command, prefix = desktop_command()
         servers["windows"] = {"type": "stdio", "command": command,
-                              "args": prefix + ["serve", "--exclude-tools=PowerShell,Registry,FileSystem,Process"],
+                              "args": prefix,
                               "env": {"ANONYMIZED_TELEMETRY": "false", "PYTHONIOENCODING": "utf-8"}}
     return servers
 

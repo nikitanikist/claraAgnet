@@ -1,0 +1,116 @@
+[
+  {
+    "id": 13,
+    "title": "Form T183 and Authorizing a Representative",
+    "note": "Canada Revenue Agency. Year-specific authorization and signatures before transmission.",
+    "url": "https://www.canada.ca/en/revenue-agency/services/e-services/digital-services-individuals/efile-electronic-filers/forms-t183-t1013.html"
+  },
+  {
+    "id": 14,
+    "title": "Digital services for tax preparers",
+    "note": "Canada Revenue Agency. Individual representative-authorization change effective July 15, 2025.",
+    "url": "https://www.canada.ca/en/revenue-agency/services/e-services/digital-services-tax-preparers.html"
+  },
+  {
+    "id": 15,
+    "title": "Auto-fill My Return for professional tax preparers",
+    "note": "Canada Revenue Agency. Required access and limits of available tax data.",
+    "url": "https://www.canada.ca/en/revenue-agency/services/e-services/about-auto-fill-return.html"
+  },
+  {
+    "id": 16,
+    "title": "Using tax preparation software: T2",
+    "note": "Canada Revenue Agency. Certified software, GIFI and T183CORP.",
+    "url": "https://www.canada.ca/en/revenue-agency/services/tax/businesses/topics/corporations/corporation-income-tax-return/completing-your-corporation-income-tax-t2-return/using-tax-preparation-software.html"
+  },
+  {
+    "id": 17,
+    "title": "Preparing financial statements using GIFI",
+    "note": "Canada Revenue Agency. Standardized financial-statement information.",
+    "url": "https://www.canada.ca/en/revenue-agency/services/tax/businesses/topics/corporations/corporation-income-tax-return/completing-your-corporation-income-tax-t2-return/general-index-financial-information-gifi/preparing-your-financial-statements-using-gifi.html"
+  },
+  {
+    "id": 18,
+    "title": "How to file a GST/HST return",
+    "note": "Canada Revenue Agency. Available electronic filing methods.",
+    "url": "https://www.canada.ca/en/revenue-agency/services/tax/businesses/topics/gst-hst-businesses/file-gst-hst-return/how-file.html"
+  },
+  {
+    "id": 19,
+    "title": "GST/HST and payroll records",
+    "note": "Canada Revenue Agency. Supporting invoices and payroll records; updated March 5, 2026.",
+    "url": "https://www.canada.ca/en/revenue-agency/services/tax/businesses/topics/keeping-records/gst-hst-payroll-records.html"
+  },
+  {
+    "id": 20,
+    "title": "File information returns electronically",
+    "note": "Canada Revenue Agency. T4, T5 and other slips, amendments and filing resources.",
+    "url": "https://www.canada.ca/en/revenue-agency/services/e-services/filing-information-returns-electronically-t4-t5-other-types-returns-overview.html"
+  },
+  {
+    "id": 21,
+    "title": "Define PDF files saving options",
+    "note": "Wolters Kluwer. Personal Taxprep 2025 v20 help.",
+    "url": "https://www.taxprep.com/assistance/T1/2025/v20/en-ca/Content/PDF/pdf_definesettings.htm"
+  },
+  {
+    "id": 22,
+    "title": "Print a group of client files",
+    "note": "Wolters Kluwer. Personal Taxprep 2025 v20 help.",
+    "url": "https://www.taxprep.com/assistance/T1/2025/v20/en-ca/Content/Printing/Print_TaxReturn_Group.htm"
+  },
+  {
+    "id": 23,
+    "title": "Assigning fields to recipients",
+    "note": "PandaDoc Support. Matching fields and signer roles.",
+    "url": "https://support.pandadoc.com/en/articles/9714628-assigning-fields-to-recipients"
+  },
+  {
+    "id": 24,
+    "title": "Send Document API",
+    "note": "PandaDoc. Draft/sent states, approval state and silent-delivery behaviour.",
+    "url": "https://developers.pandadoc.com/reference/send-document"
+  },
+  {
+    "id": 25,
+    "title": "driveItem: createUploadSession",
+    "note": "Microsoft Graph v1.0. Resumable uploads, permissions and conflict handling.",
+    "url": "https://learn.microsoft.com/en-us/graph/api/driveitem-createuploadsession?view=graph-rest-1.0"
+  },
+  {
+    "id": 26,
+    "title": "Share files, folders and drives",
+    "note": "Google Drive API. File permissions and access control.",
+    "url": "https://developers.google.com/workspace/drive/api/guides/manage-sharing"
+  },
+  {
+    "id": 27,
+    "title": "Get started with QuickBooks Web Connector",
+    "note": "Intuit. Windows QuickBooks Desktop integration through qbXML.",
+    "url": "https://static.developer.intuit.com/output_html/qbdesktop/docs/get-started/get-started-with-quickbooks-web-connector.html"
+  },
+  {
+    "id": 28,
+    "title": "Mapping and grouping",
+    "note": "Caseware Working Papers 2025. Importing and organizing client accounts.",
+    "url": "https://documentation.caseware.com/2025/WorkingPapers/en/Content/Engagements/Trial-Balance/Mapping-Grouping.htm"
+  },
+  {
+    "id": 29,
+    "title": "Review and finalize invoices",
+    "note": "CCH iFirm Canada. Separate draft review and finalization actions.",
+    "url": "https://support.cchifirm.ca/en/content/cch_ifirm/pm_-_review_and_finalise_invoices.html"
+  },
+  {
+    "id": 30,
+    "title": "The responsible use of AI in professional practice",
+    "note": "CPA Ontario. June 29, 2026 guidance on professional accountability and verification; provincial guidance, not a statement of every province's rules.",
+    "url": "https://www.cpaontario.ca/members/regulations-guidance/regulatory-publications/the-responsible-use-of-ai"
+  },
+  {
+    "id": 31,
+    "title": "Taxprep help centres",
+    "note": "Wolters Kluwer. Entry point for product- and version-specific manuals.",
+    "url": "https://www.taxprep.com/assistance/en-ca/Content/Home.htm"
+  }
+]

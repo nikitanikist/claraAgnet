@@ -47,6 +47,8 @@ class Config:
             if source.is_dir() and not target.exists():
                 shutil.copytree(source, target)
         (self.workspace / "outputs").mkdir(exist_ok=True)
+        from .skill_pack import install
+        install(self)
 
     def settings(self):
         return json.loads(self.settings_file.read_text(encoding="utf-8"))

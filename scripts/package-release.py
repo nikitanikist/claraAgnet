@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DIRECTORIES = ('clara', 'docs', 'scripts', 'tests')
 TOP_LEVEL = ('README.md', 'START-HERE.md', 'pyproject.toml', 'requirements.lock',
     'requirements-dev.txt', 'requirements-windows-desktop.txt', 'package.json', 'package-lock.json',
-    '.gitignore', 'Install-Clara.ps1', 'Install-FromGitHub.ps1', 'Start-Clara.ps1', 'Login-Clara.ps1', 'Open-Clara.ps1',
+    '.gitignore', 'Install-Clara.ps1', 'Install-FromGitHub.ps1', 'Start-Clara.ps1', 'Login-Clara.ps1', 'Open-Clara.ps1', 'Setup-Browser.ps1', 'Update-Clara.ps1',
     'Start-Clara.command', 'Login-Clara.command', 'Open-Clara.command')
 EXCLUDED = {'__pycache__', '.pytest_cache', '.venv', '.windows-venv', 'node_modules', '.git'}
 

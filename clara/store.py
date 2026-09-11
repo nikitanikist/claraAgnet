@@ -3,6 +3,7 @@ import json
 import sqlite3
 import time
 import uuid
+from .records import SCHEMA
 from contextlib import contextmanager
 
 
@@ -34,6 +35,7 @@ class Store:
             CREATE INDEX IF NOT EXISTS idx_files_conversation ON files(conversation_id, created);
             PRAGMA optimize;
             """)
+            db.executescript(SCHEMA)
 
     @contextmanager
     def connect(self):
@@ -93,7 +95,7 @@ class Store:
 
     def status(self, jid, status, **details):
         job = self.job(jid)
-        terminal = status in {"completed", "failed", "cancelled", "interrupted"}
+        terminal = status in {"completed", "failed", "cancelled", "interrupted", "incomplete", "needs_review"}
         self.execute("UPDATE jobs SET status=?,finished=? WHERE id=?", (status, time.time() if terminal else None, jid))
         self.event(job["conversation_id"], jid, "status", {"status": status, **details})
 
