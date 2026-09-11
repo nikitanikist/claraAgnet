@@ -46,6 +46,14 @@ test('artifact cards survive replay, stay with their task, and download real fil
             await page.evaluate(()=>document.body.innerText));
         await page.waitForFunction(()=>document.querySelectorAll('#messages .artifact').length===2);
         await page.waitForFunction(()=>document.querySelectorAll('#messages .message[data-job]').length===5);
+        await page.waitForSelector('#activity .activity-item.failed .tool-output');
+        assert.match(await page.$eval('#activity summary', n=>n.textContent), /1\.3s/);
+        assert.match(await page.$eval('#activity .tool-output', n=>n.textContent), /Application Example not found/);
+        assert.equal(await page.$$eval('#activity img', nodes=>nodes.length), 0);
+        const diagnosticHref=await page.$eval(`[data-usage-job="${fixture.first_job}"] a[download="clara-task-diagnostics.json"]`, n=>n.getAttribute('href'));
+        const diagnostic=await page.evaluate(async href=>await (await fetch(href)).json(), diagnosticHref);
+        assert.equal(diagnostic.task.id, fixture.first_job);
+        assert.ok(diagnostic.events.some(e=>e.data.duration_ms===1250));
         const layout=await page.evaluate(()=>{
             const group=document.querySelector('.file-message');
             return {job:group.dataset.resultJob,previous:group.previousElementSibling.dataset.job,next:group.nextElementSibling.nextElementSibling.dataset.job,
@@ -64,12 +72,16 @@ test('artifact cards survive replay, stay with their task, and download real fil
         const downloaded=path.join(work,'clara-first-test.txt');
         for(let attempt=0;attempt<50 && !existsSync(downloaded);attempt++)await new Promise(resolve=>setTimeout(resolve,100));
         assert.equal(await readFile(downloaded,'utf8'),'Clara is connected.');
-        await page.click('.usage-export');
+        await page.click('#usage .usage-export');
         const csv=path.join(work,'clara-task-usage.csv');
         for(let attempt=0;attempt<50 && !existsSync(csv);attempt++)await new Promise(resolve=>setTimeout(resolve,100));
         const report=await readFile(csv,'utf8');
         assert.match(report,/SDK API estimate USD/);
         assert.match(report,/5000,0\.0314/);
+        await page.click(`[data-usage-job="${fixture.first_job}"] a[download="clara-task-diagnostics.json"]`);
+        const logPath=path.join(work,'clara-task-diagnostics.json');
+        for(let attempt=0;attempt<50 && !existsSync(logPath);attempt++)await new Promise(resolve=>setTimeout(resolve,100));
+        assert.equal(JSON.parse(await readFile(logPath,'utf8')).task.id,fixture.first_job);
 
         await page.reload({waitUntil:'domcontentloaded'});
         await page.waitForFunction(()=>document.querySelectorAll('#messages .artifact').length===2);

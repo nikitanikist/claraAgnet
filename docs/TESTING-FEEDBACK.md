@@ -66,3 +66,21 @@ An optional task estimate limit is passed to the SDK. It does not measure or cap
 - Enabling the unavailable Chrome connector prevented a Windows desktop task from starting. The current configuration workaround is Chrome tools off and Windows desktop tools on. The user subsequently reported that the Softros LAN Messenger test worked. Connector startup behavior has not been changed.
 
 Application changes were deferred during feedback collection and are now included at the user's explicit request.
+
+## F004 — Slow TaxPrep navigation and exhausted turn limit
+
+Status: Targeted fixes prepared in 0.1.5; successful printing and speed improvement require a live Windows test.
+
+The supplied local history records application launch, repeated navigation/observation and explicit waits, followed by `error_max_turns` before a verified print. Some Snapshot calls disabled the UI tree without enabling vision; in the pinned connector this omits both the image and window/UI inspection. Old history records tool completion but lacks tool return contents, so it cannot establish whether individual focus/print actions succeeded.
+
+Changes:
+
+- Normalize the otherwise empty Windows Snapshot request to include vision, retaining the model's other arguments. Do not infer that an application is absent from omitted window data.
+- Add guidance for useful visual/UIA observations, coordinate scaling, focused reads, avoiding repetitive navigation/waits, and preserving phase checkpoints before resumption. These instructions are model guidance, not an automatic workflow engine or verified speed guarantee.
+- Save bounded tool-result text, duration, image counts and explicit error signals. Do not store image bytes; the result excerpt can be truncated and can contain client information. A successful return is not proof of task completion.
+- Show saved results and timings in expandable activity rows and provide a per-task JSON log download, including for older tasks whose evidence is more limited.
+- Explain exhausted-turn failures as incomplete work, identify the last requested tool, and advise inspecting existing work before resuming. Keep the configured model and turn limit unchanged.
+
+The client-provided database, prompts, SOP and case-specific review remain outside the source/release package. A separate focused test skill is supplied privately; it does not replace the full firm SOP or overwrite installed skills.
+
+Acceptance: run a bounded client-copy test on Windows with the existing test case, record actual PDF identity/content/page counts and elapsed time, then download that task's log. Check tool results for focus errors and repeated observations before extending to signing documents.

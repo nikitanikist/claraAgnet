@@ -23,7 +23,7 @@ On this Mac:
 
 43 local Python tests pass. A real Chrome/API test verifies inline downloads, per-task usage, conversation totals, legacy records, CSV download, estimate-limit settings, streaming and mobile layout. The user reported a successful Softros Windows test; the new search/cleanup behaviors and tax workflows still need live Windows validation. This is an experimental build, not a completed production closeout system.
 
-For RDP installation, use the GitHub instructions in **README.md**, or transfer **Clara-Agent-0.1.4.zip** to Windows and extract it to a persistent folder. If using the server's existing embeddable Python with no pip/venv, use **docs/PORTABLE-WINDOWS.md**. The package contains source/installers and downloads dependencies on the target machine. Your Mac virtual environment, local chat data and credentials are excluded.
+For RDP installation, use the GitHub instructions in **README.md**, or transfer **Clara-Agent-0.1.5.zip** to Windows and extract it to a persistent folder. If using the server's existing embeddable Python with no pip/venv, use **docs/PORTABLE-WINDOWS.md**. The package contains source/installers and downloads dependencies on the target machine. Your Mac virtual environment, local chat data and credentials are excluded.
 
 Keep Chrome tools off while its connector is missing, and Windows desktop tools on for native application tests. Use a new conversation for each closeout so its usage total includes only that closeout and its follow-ups. The browser connector remains pending on the current server because Node.js was not found during setup.
 

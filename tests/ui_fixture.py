@@ -44,6 +44,9 @@ with tempfile.TemporaryDirectory(prefix="clara-ui-fixture-") as directory:
     empty = store.create_conversation()
     conversation = store.create_conversation()
     first = store.create_job(conversation["id"], "Create two test files and attach them.", "ask", [])
+    store.event(conversation['id'], first['id'], 'tool', {'id':'fixture-tool', 'name':'mcp__windows__App', 'input':'{"mode":"switch","name":"Example"}'})
+    store.event(conversation['id'], first['id'], 'tool_done', {'id':'fixture-tool', 'name':'mcp__windows__App', 'failed':True,
+        'duration_ms':1250, 'output_excerpt':'Application Example not found. <img src=x>', 'output_truncated':False})
     store.event(conversation["id"], first["id"], "assistant", {"text": "The files are ready. I am adding the downloads."})
     files = []
     for name, text in (("clara-first-test.txt", "Clara is connected."), ("verification-notes.txt", "Synthetic browser test.")):

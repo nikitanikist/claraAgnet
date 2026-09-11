@@ -208,6 +208,27 @@ def login(client):
     assert client.post("/api/session", json={"token": "test-local-access"}).status_code == 200
 
 
+def test_task_diagnostics_download_is_authenticated_and_scoped(client):
+    store = client.app_instance.state.store
+    cid = store.create_conversation()['id']
+    job = store.create_job(cid, 'Inspect example application', 'ask', [])
+    other = store.create_job(cid, 'Unrelated task', 'ask', [])
+    store.event(cid, job['id'], 'tool_done', {'id':'a', 'name':'Snapshot', 'duration_ms':24, 'output_excerpt':'Example window'})
+    store.event(cid, other['id'], 'assistant', {'text':'Unrelated content'})
+    url = f"/api/jobs/{job['id']}/diagnostics.json"
+    assert client.get(url).status_code == 401
+    login(client)
+    response = client.get(url)
+    assert response.status_code == 200
+    assert 'attachment' in response.headers['content-disposition']
+    result = response.json()
+    assert result['task']['id'] == job['id']
+    assert any(e['data'].get('duration_ms') == 24 for e in result['events'])
+    assert 'Unrelated content' not in response.text
+    assert 'test-local-access' not in response.text
+    assert client.get('/api/jobs/missing/diagnostics.json').status_code == 404
+
+
 def test_loopback_auth_origin_and_content_security(client):
     assert client.get("/").status_code == 200
     assert "frame-ancestors 'none'" in client.get("/").headers["content-security-policy"]

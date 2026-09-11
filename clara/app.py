@@ -190,6 +190,21 @@ def create_app(config, *, manager_factory=AgentManager, access_token=None):
         await manager.cancel(jid)
         return {"stopping": True}
 
+    @app.get("/api/jobs/{jid}/diagnostics.json")
+    async def export_diagnostics(jid: str):
+        job = store.job(jid)
+        if not job:
+            raise HTTPException(404, "Task not found.")
+        rows = store.rows("SELECT kind,data,created FROM events WHERE job_id=? AND kind != 'delta' ORDER BY id", (jid,))
+        report = {"format_version": 1, "application_version": __version__,
+                  "task": {key: job[key] for key in ("id", "prompt", "status", "created", "finished", "mode")},
+                  "usage": job_usage(job),
+                  "events": [{**row, "data": json.loads(row["data"])} for row in rows],
+                  "coverage": "Local task history. Older tool outputs may be absent; excerpts may be truncated. "
+                              "No screenshots or credential files are included. Task text can contain client information."}
+        return Response(json.dumps(report, indent=2, ensure_ascii=False), media_type="application/json",
+                        headers={"Content-Disposition": 'attachment; filename="clara-task-diagnostics.json"'})
+
     @app.post("/api/requests/{rid}")
     async def answer(rid: str, body: AnswerInput):
         manager.answer(rid, body.answer)

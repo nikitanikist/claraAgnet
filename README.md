@@ -2,7 +2,7 @@
 
 Clara is a local chat application backed by the Claude Agent SDK. The model chooses tools and loads skills to work toward a requested outcome. It is independent of the existing fixed T1 pipeline.
 
-**Build status, 11 September 2026:** the portable core and desktop dependencies installed on the Windows RDP server. After native Claude login, the first live task created, read and published a text file; a follow-up also completed, as shown in the user's dashboard screenshot. Release 0.1.3 adds download cards directly beneath the producing task, including in existing conversations. Release 0.1.4 adds per-task usage/cost cards, conversation totals, CSV export, an optional SDK estimate limit, direct-search guidance and Explorer cleanup review. Forty-three Python tests and a real Chrome/API regression test pass on the development Mac. The user subsequently reported a successful Softros LAN Messenger desktop task. The new search/cleanup behavior, live browser actions, TaxPrep, Profile, PandaDoc and Drive still need testing. Existing portal integration is deferred as requested.
+**Build status, 11 September 2026:** portable setup, native Claude login and a create/read/publish task succeeded on Windows RDP. The user also reported a successful Softros LAN Messenger test. A later TaxPrep test opened the working return but exhausted its turn limit before a verified print. Release 0.1.5 prevents empty desktop observations, improves navigation/checkpoint guidance, adds bounded tool result/timing logs and task-log downloads, and explains incomplete runs more clearly. Fifty Python tests and the Chrome/API regression test pass on the development Mac. The revised behavior and complete TaxPrep printing still require Windows acceptance. Existing portal integration is deferred as requested.
 
 ## Try it on this Mac
 
@@ -69,7 +69,8 @@ Read [the Windows acceptance checklist](docs/WINDOWS-ACCEPTANCE.md) before a rea
 - Skills library with editing, Markdown imports and ZIP imports with relative resources.
 - Four starter skills: finding client documents, office documents, live computer navigation, and a T1 closeout starter requiring the firm's actual SOP.
 - Chrome DevTools MCP integration with a dedicated profile and Windows-MCP configuration for live accessibility/screenshot/click/typing tools.
-- Per-task SDK token/cost reports, model and cache breakdowns, conversation totals, CSV export, and an optional task estimate limit.
+- Per-task SDK token/cost reports, model and cache breakdowns, conversation totals, CSV export, an optional task estimate limit, and task-log JSON downloads.
+- Expandable tool activity with elapsed time and bounded text results for new runs. Older history may lack tool outputs; screenshots are not retained. Text logs can contain client information and are kept locally.
 - Direct file-search guidance and a one-time review of temporary Explorer windows before finishing desktop tasks.
 - A single local executor, persisted event history, process-level workspace locking, and explicit interrupted state after restart. Interrupted tasks are not automatically replayed.
 - Native sign-in status, model error reporting, tool availability checks and Windows input-desktop checks.
@@ -78,7 +79,7 @@ Read [the Windows acceptance checklist](docs/WINDOWS-ACCEPTANCE.md) before a rea
 ## What is not yet verified or implemented
 
 - Live skill selection and moved-file recovery by the model beyond the first successful create/read/publish task.
-- Native screenshots, popup recovery, disconnected/locked RDP behavior, TaxPrep or Profile automation.
+- Reliable popup recovery, disconnected/locked RDP behavior, completed TaxPrep printing or Profile automation beyond the reported desktop tests.
 - Real PandaDoc/Drive actions or a complete real-client T1 closeout.
 - Current Clearhouse portal integration, multiuser authentication, a shared server billing design, remote workers, or multiple GUI tasks on one desktop.
 - A custom Chrome extension. The existing general Chrome connector supplies browser tools without needing to build an extension first.
@@ -121,7 +122,7 @@ The attachment/usage test uses installed Chrome and Puppeteer bundled with the p
 
 For a fresh Mac installation, set `CLARA_PYTHON` to a Python 3.12+ executable if needed and run `bash scripts/install-mac.sh`.
 
-`requirements.lock` records the resolved Python runtime versions on the development Mac. Windows selects native wheels and conditional dependencies; native Windows-MCP is separately pinned at its top-level version. The portable installation passed core and desktop import/CLI checks on the target server; desktop interaction remains untested. `package-lock.json` pins the browser connector. The Windows installer runs dependency checks.
+`requirements.lock` records the resolved Python runtime versions on the development Mac. Windows selects native wheels and conditional dependencies; native Windows-MCP is separately pinned at its top-level version. The portable installation passed core and desktop import/CLI checks on the target server; full tax workflows remain unverified. `package-lock.json` pins the browser connector. The Windows installer runs dependency checks.
 
 After native login, either use the dashboard or stop the server and run:
 

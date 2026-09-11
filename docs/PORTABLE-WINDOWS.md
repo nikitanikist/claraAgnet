@@ -2,7 +2,7 @@
 
 Use this route when the server already has an approved, working 64-bit embeddable Python 3.12+ but has no pip, venv or ensurepip. The normal Clara installer requires a full Python distribution and is not suitable for this runtime. This is application packaging, not a change to Windows installer policy.
 
-Clone the repository or extract Clara-Agent-0.1.4.zip into a new, persistent application folder belonging to the current user. A short path under LOCALAPPDATA is preferable to a deeply nested network folder. Keep the existing Clara application and Python folder in place.
+Clone the repository or extract Clara-Agent-0.1.5.zip into a new, persistent application folder belonging to the current user. A short path under LOCALAPPDATA is preferable to a deeply nested network folder. Keep the existing Clara application and Python folder in place.
 
 Run the new installer with the existing interpreter, using actual paths on that server:
 

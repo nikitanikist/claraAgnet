@@ -69,3 +69,11 @@ bash -n Start-Clara.command Login-Clara.command Open-Clara.command scripts/insta
 ```
 
 After sign-in, use `scripts/live-smoke.py` with the server stopped, or run the equivalent task in the dashboard. Connector discovery uses `scripts/probe-connectors.py` with the desired connectors enabled in Settings. The Windows checklist documents the remaining target-platform checks.
+
+## Release 0.1.5: desktop observation and run diagnostics
+
+- 50 Python tests pass. Added cases exercise the actual SDK adapter hooks with a test double, normalization of empty observations while preserving useful UIA/image requests, structured and plain connector errors, bounded text retention without image bytes, clear exhausted-turn failures, and authenticated task-scoped log export.
+- The Chrome/API regression covers expandable failed-tool text and timing, safe rendering of HTML-like tool output, real task-log and CSV downloads, saved history, usage/file cards and mobile layout. These fixtures do not invoke a model or Windows.
+- Dependency versions and installer requirements are unchanged. The configured model and max-turn setting are preserved. Existing user-edited skills are not overwritten.
+- The reviewed Windows history is evidence of a failed pre-print run, not a successful T1 closeout. We cannot recover missing tool output/screenshots from that older database or distinguish all model/network/SDK delays from event timestamps alone.
+- Live Windows acceptance of this update, printing correctness, checkpoint quality and any speed improvement remain pending.
