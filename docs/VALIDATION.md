@@ -1,13 +1,13 @@
 # Validation record · 11 September 2026
 
-## Verified on the development Mac
+## Initial development Mac checks (before Windows installation)
 
 - 23 automated tests pass. They cover moved-file discovery, PDF content extraction, external-root reads, blocked path traversal/symlink escapes, protected skill paths, immutable artifact snapshots, ZIP skill resource handling and rejection of unsafe archives, real command execution/timeouts, Word/PowerPoint/Excel creation and reopening, interruption recovery, billing environment filtering, local HTTP authentication/origin checks, file upload/download, job/event persistence, settings/skill APIs, queue serialization/cancellation/questions, exclusive process locking, and SDK message/session/error handling with a test double.
 - Python dependency check reports no broken requirements.
 - Python source compilation and JavaScript syntax checks pass. Mac shell launchers pass `bash -n`.
 - The real Claude Agent SDK 0.2.152 imports and starts the official CLI protocol. Its matching bundled Claude binary is 2.1.259. A connection-only probe succeeds without submitting a model prompt. MCP initialization may be deferred until a task; this probe alone does not prove tool readiness.
 - An earlier task using the installed Claude CLI 2.1.220 connected the real Clara MCP server and advertised the seven custom tools plus SDK tools. That model request failed authentication and returned zero input/output tokens; it did not produce an artifact.
-- The current matching bundled CLI reports no native sign-in. `Login-Clara.command` / `Login-Clara.ps1` uses that official binary's login flow. No credentials were extracted or copied between clients.
+- At that stage, the matching bundled CLI on the Mac reported no native sign-in. `Login-Clara.command` / `Login-Clara.ps1` uses that official binary's login flow. No credentials were extracted or copied between clients.
 - Chrome DevTools MCP 1.9.0 started over stdio and advertised 24 browser tools. No browser navigation, clicks, screenshots or website transactions were executed during this check.
 - Local dashboard, JavaScript, CSS and health routes returned HTTP 200. The protected API returned 401 without a local session and worked after a valid bootstrap exchange. Four starter skills are discoverable in the API.
 
@@ -22,24 +22,30 @@ The test suite emits one upstream Starlette/AnyIO deprecation warning about its 
 - Cross-platform dependency dry runs selected Windows x64 / CPython 3.12 wheels for both requirements files. This checks wheel availability and resolution from the Mac; Windows-specific environment markers and imports still require the real target run.
 - Windows execution of the revised installer and launchers is pending. Browser setup reports pending when Node.js is absent. No live model or desktop actions were performed for this release.
 
-## Requires the user / target environment
+## Windows milestone and release 0.1.3
 
-Release 0.1.2 adds the GitHub clone/update entry point for `nikitanikist/claraAgnet`. The suite now passes **30 tests**, including dependency refresh when a Git update changes a requirements file. Windows execution of the new PowerShell entry point remains pending; no execution policies are changed by it.
+Release 0.1.2 added the GitHub clone/update entry point for `nikitanikist/claraAgnet`. The user's target-server screenshots now confirm portable core and desktop installation, native imports/CLI help, and native Claude login followed by a successful model task. Clara created, read and published `clara-first-test.txt`; the dashboard showed a 19-byte download in Results. A follow-up about the same file also completed. This evidence comes from the user's screenshots; it is not a direct independent inspection of the remote file.
+
+The screenshot also exposed a UI issue: downloads appeared only in the side panel while Clara described an attachment in chat. Release 0.1.3 adds cards beneath the producing task, with filenames and download links, while retaining Results. Existing conversations acquire the cards when their saved history loads; no model rerun is required.
+
+The **30 Python tests** pass. One added real Chrome/API regression test verifies actual downloaded file contents, history reload, multiple files, association with the producing task, duplicate event handling, streaming response replacement, escaped filenames, mobile card bounds and conversation reset. It uses temporary synthetic data and makes no model requests. Desktop and mobile screenshots were visually inspected on the Mac. This does not establish live browser-agent or native Windows GUI readiness.
+
+## Remaining target-environment validation
 
 | Area | Status | What establishes success |
 |---|---|---|
-| Live Claude reasoning and tool selection | Blocked by native sign-in | Fresh login, then a real task finds/verifies/attaches the synthetic document |
+| Live Claude reasoning and tool selection | First file task passed, per Windows screenshot | Extend to finding a moved document and verifying its contents |
 | Skill selection by the live model | Pending | Model invokes the relevant skill during a successful task |
-| Live session continuation | Pending | Follow-up refers correctly to the previous result in the real SDK session |
+| Live follow-up | User screenshot shows a completed follow-up about the file | Broader continuation and recovery tasks remain to be tested |
 | Browser behavior | Discovery passed; actions pending | A harmless page task succeeds with live DOM evidence |
-| Native Windows installer | Not executed on Mac | Installer, dependency checks and doctor succeed on Windows |
+| Portable Windows installer | Core and desktop setup/import checks passed on target | Standard full-Python installation path remains untested |
 | Windows desktop / RDP | Not tested | Notepad, popup, stop, lock and disconnect acceptance checks |
 | TaxPrep / Profile | Not tested | Correct package from a test return under the firm's SOP |
 | PandaDoc / Google Drive | Not tested | Authorized test account operations with actual destination evidence |
 | Existing portal | Not integrated | Portal authentication, jobs, results and supported billing connected later |
-| Visual frontend / accessibility QA | Not performed | User walkthrough or explicitly requested browser testing |
+| File download UI | Chrome/API regression and desktop/mobile visual checks passed on Mac | Confirm updated UI on Windows; full accessibility audit remains outside this check |
 
-Do not interpret offline adapter tests, tool discovery or an HTTP 200 as evidence that an autonomous tax closeout works. They establish the local application's groundwork; model and Windows acceptance are the next milestones.
+Do not interpret offline adapter tests, tool discovery or an HTTP 200 as evidence that an autonomous tax closeout works. The first Windows model task establishes basic file-tool execution; desktop and tax-workflow acceptance are the next milestones.
 
 ## Reproduce
 
@@ -48,6 +54,7 @@ Do not interpret offline adapter tests, tool discovery or an HTTP 200 as evidenc
 .venv/bin/python -m pip check
 .venv/bin/python -m compileall -q clara scripts
 node --check clara/static/app.js
+node --test tests/test_chat_artifacts.mjs
 bash -n Start-Clara.command Login-Clara.command Open-Clara.command scripts/install-mac.sh
 .venv/bin/python scripts/probe-sdk.py
 ```

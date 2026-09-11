@@ -2,7 +2,7 @@
 
 Use this route when the server already has an approved, working 64-bit embeddable Python 3.12+ but has no pip, venv or ensurepip. The normal Clara installer requires a full Python distribution and is not suitable for this runtime. This is application packaging, not a change to Windows installer policy.
 
-Clone the repository or extract Clara-Agent-0.1.2.zip into a new, persistent application folder belonging to the current user. A short path under LOCALAPPDATA is preferable to a deeply nested network folder. Keep the existing Clara application and Python folder in place.
+Clone the repository or extract Clara-Agent-0.1.3.zip into a new, persistent application folder belonging to the current user. A short path under LOCALAPPDATA is preferable to a deeply nested network folder. Keep the existing Clara application and Python folder in place.
 
 Run the new installer with the existing interpreter, using actual paths on that server:
 
@@ -18,12 +18,12 @@ The Windows desktop connector is provisioned in a separate `.portable-desktop` c
 
 Chrome's browser connector still requires compatible Node.js and npm. The installer uses them if available; otherwise its report marks browser setup as pending. It does not install another Node runtime. Arrange an approved Node deployment with the server administrator when needed. `--skip-browser` also leaves that connector pending.
 
-After setup, run Login-Clara.ps1 and then Start-Clara.ps1 using the firm's normal approved script execution method. Both launchers recognize the portable copy, put its Python on the current process PATH, and find Git Bash for the native Claude CLI. Native subscription login and a successful live model task still need verification. Sign in with the intended person's account.
+After setup, run Login-Clara.ps1 and then Start-Clara.ps1 using the firm's normal approved script execution method. Both launchers recognize the portable copy, put its Python on the current process PATH, and find Git Bash for the native Claude CLI. Sign in with the intended person's account and verify a simple file task on each new installation.
 
 The installer records `portable-setup-result.json`. A rerun verifies previously completed components and rebuilds dependency directories when their requirements change or setup was incomplete. These directories are owned by this installer. Stop the Clara process before rerunning setup. Keep the entire application folder in place after installation.
 
 ## Validation limits
 
-Source-copy isolation, retry behavior, rejection of unrelated destinations, wheel checksum/path checks and connector selection are covered by automated tests on the development Mac. The target Windows interpreter is confirmed by the user's RDP output as Python 3.12.8, 64-bit. Execution of this revised installer, native dependency imports, Claude login, browser tools and Windows UI actions are not yet verified on that server. A passing Mac test suite is not a Windows acceptance result.
+Source-copy isolation, retry behavior, rejection of unrelated destinations, wheel checksum/path checks and connector selection are covered by automated tests on the development Mac. The target Windows interpreter is confirmed by the user's RDP output as Python 3.12.8, 64-bit. The user's subsequent screenshots confirm portable core and desktop installation, native imports and CLI help, and a live file create/read/publish task after Claude login. Browser setup remains pending because Node.js was absent. Windows UI actions, disconnect behavior and tax software operation remain untested.
 
 Python describes application-local dependencies for its embeddable distribution in the [official Windows documentation](https://docs.python.org/3.12/using/windows.html#the-embeddable-package). The embedded runtime is not treated as a general-purpose pip installation; these packages belong to this Clara build.

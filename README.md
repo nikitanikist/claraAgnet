@@ -2,7 +2,7 @@
 
 Clara is a local chat application backed by the Claude Agent SDK. The model chooses tools and loads skills to work toward a requested outcome. It is independent of the existing fixed T1 pipeline.
 
-**Build status, 11 September 2026:** implementation and local backend tests are complete. The SDK launched and connected to Clara's tools, but its first model call failed because the stored Claude OAuth session was expired and could not refresh. Live model task completion is therefore **not proven yet**. Sign in again through the official terminal flow. Clara now uses the SDK's matching bundled CLI, which reports that it needs native sign-in here. Native Windows/RDP, TaxPrep, Profile, PandaDoc and Drive work still needs testing on the Windows server. Existing portal integration is deferred as requested.
+**Build status, 11 September 2026:** the portable core and desktop dependencies installed on the Windows RDP server. After native Claude login, the first live task created, read and published a text file; a follow-up also completed, as shown in the user's dashboard screenshot. Release 0.1.3 adds download cards directly beneath the producing task, including in existing conversations. Thirty Python tests and a real Chrome/API attachment regression test pass on the development Mac. Live Windows desktop actions, browser actions, TaxPrep, Profile, PandaDoc and Drive still need testing. Existing portal integration is deferred as requested.
 
 ## Try it on this Mac
 
@@ -39,7 +39,7 @@ This clones into `%LOCALAPPDATA%\ClaraAgent` and runs portable setup. Use `-Inst
 
 ### Standard Python installation or ZIP package
 
-**Already have an embeddable Python with no pip/venv?** Use the [existing-runtime installer](docs/PORTABLE-WINDOWS.md) in release 0.1.1. It provisions separate application-local runtimes. Node.js remains necessary for the browser connector, but missing Node no longer blocks the portable core setup.
+**Already have an embeddable Python with no pip/venv?** Use the [existing-runtime installer](docs/PORTABLE-WINDOWS.md). It provisions separate application-local runtimes. Node.js remains necessary for the browser connector, but missing Node no longer blocks the portable core setup.
 
 Extract the source package into a persistent folder such as `C:\Clara`. Do not copy the Mac `.venv` or `node_modules` to Windows.
 
@@ -62,7 +62,7 @@ Read [the Windows acceptance checklist](docs/WINDOWS-ACCEPTANCE.md) before a rea
 
 ## What is implemented
 
-- Local chat with streamed text, real tool activity, Stop, necessary clarification/approval prompts, uploads, downloadable output files, saved conversations and resumable SDK sessions.
+- Local chat with streamed text, real tool activity, Stop, necessary clarification/approval prompts, uploads, downloadable output files beneath each task and in Results, saved conversations and resumable SDK sessions.
 - An open-ended Claude Agent SDK loop; no mandatory fixed T1 stage sequence.
 - General recursive file search, PDF/DOCX/text reading, workspace text/script creation, PowerShell/Bash execution, and artifact publishing.
 - Python libraries for Word, PowerPoint, Excel and PDF manipulation.
@@ -75,8 +75,8 @@ Read [the Windows acceptance checklist](docs/WINDOWS-ACCEPTANCE.md) before a rea
 
 ## What is not yet verified or implemented
 
-- Successful live model reasoning: the saved OAuth session needs a fresh sign-in.
-- Windows installer execution, native screenshots, popup recovery, disconnected/locked RDP behavior, TaxPrep or Profile automation.
+- Live skill selection and moved-file recovery by the model beyond the first successful create/read/publish task.
+- Native screenshots, popup recovery, disconnected/locked RDP behavior, TaxPrep or Profile automation.
 - Real PandaDoc/Drive actions or a complete real-client T1 closeout.
 - Current Clearhouse portal integration, multiuser authentication, a shared server billing design, remote workers, or multiple GUI tasks on one desktop.
 - A custom Chrome extension. The existing general Chrome connector supplies browser tools without needing to build an extension first.
@@ -88,7 +88,7 @@ Read [the Windows acceptance checklist](docs/WINDOWS-ACCEPTANCE.md) before a rea
 
 This prototype uses the official, unmodified Claude binary with the signed-in person's native subscription. It does not collect OAuth credentials, offer a custom Claude login, configure an API key, purchase credits, or fall back to an API/provider when the subscription fails. Clara removes billing/provider environment overrides from its own process and confirms a subscription auth method before a task.
 
-A stored sign-in is not proof that its session can still authenticate: the live test uncovered exactly that distinction. The dashboard records a model authentication failure and directs the user back to native login.
+A stored sign-in is not proof that its session can still authenticate: an earlier Mac test failed authentication. Fresh native login on Windows was followed by a successful live task. The dashboard records model authentication failures and directs the user back to native login when needed.
 
 An SDK is not a separate cheaper model. It is the execution library. Account limits apply to subscription use; any extra-usage settings belong to the account. SDK-reported dollar estimates are not invoices or a measure of remaining Max allowance. Clara shows token counts and elapsed time. No billing fallback is configured, but the app cannot promise unlimited usage or independently override the user's provider-side extra-usage settings.
 
@@ -112,11 +112,14 @@ Outputs are copied to an attachment store before publishing, so later source edi
 .venv/bin/python -m pip install -r requirements-dev.txt
 .venv/bin/python -m pytest -q
 node --check clara/static/app.js
+node --test tests/test_chat_artifacts.mjs
 ```
+
+The attachment test uses installed Chrome and Puppeteer bundled with the pinned browser connector (`npm ci`). It starts an isolated local API with synthetic history and no model calls. Set `CLARA_TEST_CHROME` or `CLARA_TEST_PYTHON` if their default executable paths differ. Screenshots are saved under ignored `runtime/ui-artifacts`.
 
 For a fresh Mac installation, set `CLARA_PYTHON` to a Python 3.12+ executable if needed and run `bash scripts/install-mac.sh`.
 
-`requirements.lock` records the resolved Python runtime versions on the development Mac. Windows selects native wheels and conditional dependencies; native Windows-MCP is separately pinned at its top-level version and still requires target-platform dependency validation. `package-lock.json` pins the browser connector. The Windows installer runs dependency checks.
+`requirements.lock` records the resolved Python runtime versions on the development Mac. Windows selects native wheels and conditional dependencies; native Windows-MCP is separately pinned at its top-level version. The portable installation passed core and desktop import/CLI checks on the target server; desktop interaction remains untested. `package-lock.json` pins the browser connector. The Windows installer runs dependency checks.
 
 After native login, either use the dashboard or stop the server and run:
 
