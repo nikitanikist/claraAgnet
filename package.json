@@ -1,0 +1,1 @@
+{"name":"clara-browser-tools","version":"0.1.0","private":true,"description":"Pinned browser connector for the local Clara agent","dependencies":{"chrome-devtools-mcp":"1.9.0"}}

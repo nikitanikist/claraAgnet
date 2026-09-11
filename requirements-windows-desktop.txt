@@ -1,0 +1,2 @@
+# Separate virtual environment; native Windows dependencies.
+windows-mcp==0.8.5
