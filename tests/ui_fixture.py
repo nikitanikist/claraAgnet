@@ -12,6 +12,7 @@ import clara.app as app_module
 from clara.config import Config
 from clara.tools import publish_artifact
 from clara.usage import UsageTracker
+from clara.workflows import Workflows
 from claude_agent_sdk import ResultMessage
 
 
@@ -42,6 +43,15 @@ with tempfile.TemporaryDirectory(prefix="clara-ui-fixture-") as directory:
     app = app_module.create_app(config, manager_factory=NoModelManager, access_token="ui-fixture-only")
     store = app.state.store
     empty = store.create_conversation()
+    recovery = store.create_conversation()
+    stopped = store.create_job(recovery['id'], 'Continue the existing test package.', 'ask', [])
+    wf = Workflows(store, config)
+    wf.begin(stopped, 't1-print', {'client_key':'synthetic-client', 'year':'2025', 'members':['Test Person']})
+    wf.checkpoint(stopped, 'intake', [], note='Original intake is saved.')
+    partial = UsageTracker().partial(26100)
+    store.execute('UPDATE jobs SET usage=? WHERE id=?', (json.dumps(partial), stopped['id']))
+    store.event(recovery['id'], stopped['id'], 'usage', partial)
+    store.status(stopped['id'], 'cancelled')
     conversation = store.create_conversation()
     first = store.create_job(conversation["id"], "Create two test files and attach them.", "ask", [])
     store.event(conversation['id'], first['id'], 'tool', {'id':'fixture-tool', 'name':'mcp__windows__App', 'input':'{"mode":"switch","name":"Example"}'})
@@ -69,5 +79,6 @@ with tempfile.TemporaryDirectory(prefix="clara-ui-fixture-") as directory:
     store.event(conversation["id"], second["id"], "usage", usage)
     store.status(second["id"], "completed")
     print(json.dumps({"url": f"http://127.0.0.1:{config.port}/#access=ui-fixture-only", "cid": conversation["id"],
-                      "empty_cid": empty["id"], "first_job": first["id"], "second_job": second["id"], "files": files}), flush=True)
+                      "empty_cid": empty["id"], "recovery_cid": recovery['id'], "recovery_job": stopped['id'],
+                      "first_job": first["id"], "second_job": second["id"], "files": files}), flush=True)
     uvicorn.Server(uvicorn.Config(app, log_level="error", access_log=False)).run(sockets=[sock])

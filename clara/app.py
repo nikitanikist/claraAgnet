@@ -4,6 +4,7 @@ import secrets
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse, Response
@@ -21,7 +22,7 @@ from .usage import job_usage, normalize_usage, conversation_usage, usage_csv
 
 class MessageInput(BaseModel):
     text: str = Field(min_length=1, max_length=50000)
-    mode: str = "ask"
+    mode: str | None = None
     attachments: list[str] = Field(default_factory=list, max_length=20)
 
 
@@ -34,6 +35,7 @@ class SkillInput(BaseModel):
 
 
 class SettingsInput(BaseModel):
+    default_execution_mode: Literal["ask", "autonomous"] = "autonomous"
     model: str = "sonnet"
     max_turns: int | None = Field(default=40, ge=1)
     task_timeout_minutes: int = Field(default=20, ge=1, le=120)
@@ -187,12 +189,13 @@ def create_app(config, *, manager_factory=AgentManager, access_token=None):
     @app.post("/api/conversations/{cid}/messages")
     async def message(cid: str, body: MessageInput):
         require_conversation(cid)
-        if not body.text.strip() or body.mode not in {"ask", "autonomous"}:
+        mode = body.mode if body.mode is not None else config.settings()['default_execution_mode']
+        if not body.text.strip() or mode not in {"ask", "autonomous"}:
             raise ValueError("Enter a task and choose a valid execution mode.")
         for fid in body.attachments:
             if not store.one("SELECT id FROM files WHERE id=? AND conversation_id=? AND kind='upload'", (fid, cid)):
                 raise ValueError("An attachment does not belong to this conversation.")
-        return manager.submit(cid, body.text.strip(), body.mode, body.attachments)
+        return manager.submit(cid, body.text.strip(), mode, body.attachments)
 
     @app.post("/api/jobs/{jid}/stop")
     async def stop(jid: str):

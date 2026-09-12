@@ -190,21 +190,46 @@ class Workflows:
         w=self.get(cid)
         if not w:
             return None
-        rows=self.store.rows('SELECT j.usage,j.status FROM jobs j JOIN workflow_jobs l ON l.job_id=j.id WHERE l.workflow_id=?',(w['id'],))
-        used={'turns':0,'usd':0.0,'wall_ms':0};partial=False
+        rows=self.store.rows('SELECT j.id,j.usage,j.status FROM jobs j JOIN workflow_jobs l ON l.job_id=j.id WHERE l.workflow_id=?',(w['id'],))
+        reviewed=self.store.one("SELECT data FROM events WHERE conversation_id=? AND kind='workflow_usage_review' ORDER BY id DESC LIMIT 1",(cid,))
+        reviewed=json.loads(reviewed['data']).get('job_fingerprints',{}) if reviewed else {}
+        used={'turns':0,'usd':0.0,'wall_ms':0};partial_jobs=[]
         for row in rows:
-            if row['usage'] is None:
-                partial |= row['status'] in {'completed','failed','cancelled','interrupted','incomplete','needs_review'}
+            usage=json.loads(row['usage']) if row['usage'] is not None else {}
+            if not usage and row['status'] in {'queued','running','waiting','cancelling'}:
                 continue
-            usage=json.loads(row['usage']);used['turns']+=usage.get('turns') or 0
+            used['turns']+=usage.get('turns') or 0
             used['usd']+=usage.get('sdk_estimated_usd') or 0
             used['wall_ms']+=usage.get('wall_duration_ms') or usage.get('duration_ms') or 0
-            partial |= usage.get('coverage')!='reported'
-            partial |= usage.get('turns') is None or (w['limits'].get('max_budget_usd') is not None and usage.get('sdk_estimated_usd') is None)
+            partial=usage.get('coverage')!='reported' or usage.get('turns') is None or (w['limits'].get('max_budget_usd') is not None and usage.get('sdk_estimated_usd') is None)
+            if partial:
+                fingerprint=canonical_hash({'job_id':row['id'],'status':row['status'],'usage':usage})
+                partial_jobs.append({'job_id':row['id'],'status':row['status'],'fingerprint':fingerprint,
+                    'reviewed':reviewed.get(row['id'])==fingerprint,'turns':usage.get('turns'),
+                    'sdk_estimated_usd':usage.get('sdk_estimated_usd'),
+                    'wall_duration_ms':usage.get('wall_duration_ms',usage.get('duration_ms'))})
+        pending=[row for row in partial_jobs if not row['reviewed']]
         limits=w['limits']
-        return {'used':used,'partial':partial,'remaining_turns':None if limits['max_turns'] is None else max(0,limits['max_turns']-used['turns']),
+        return {'used':used,'partial':bool(partial_jobs),'requires_usage_review':bool(pending),
+                'partial_usage':partial_jobs,'unreviewed_usage':pending,
+                'remaining_turns':None if limits['max_turns'] is None else max(0,limits['max_turns']-used['turns']),
                 'remaining_usd':None if limits.get('max_budget_usd') is None else max(0,limits['max_budget_usd']-used['usd']),
                 'remaining_ms':max(0,limits['task_timeout_minutes']*60000-used['wall_ms'])}
+
+    def review_usage(self,cid,job_fingerprints,note):
+        budget=self.remaining(cid)
+        if budget is None: raise ValueError('No workflow exists in this conversation.')
+        if not note.strip(): raise ValueError('Record why you are continuing with incomplete usage.')
+        expected={row['job_id']:row['fingerprint'] for row in budget['unreviewed_usage']}
+        if not expected or job_fingerprints!=expected:
+            raise ValueError('The incomplete-usage history changed. Refresh Workflow review before continuing.')
+        # Review permits continuation; it does not edit usage, checkpoints, limits,
+        # session identity, or the uncertainty of an external application action.
+        self.store.event(cid,None,'workflow_usage_review',{
+            'job_fingerprints':{row['job_id']:row['fingerprint'] for row in budget['partial_usage']},
+            'note':note[:4000],
+            'coverage':'Missing usage remains unknown. Aggregate turn/cost totals are lower bounds; continuation uses the configured limits against reported usage.'})
+        return self.snapshot(cid)
 
     def finish_check(self,job):
         state=self.snapshot(job['conversation_id'])

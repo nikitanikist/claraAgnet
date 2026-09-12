@@ -41,7 +41,8 @@ class Config:
         if not self.settings_file.exists():
             self.save_settings({"model": "sonnet", "max_turns": 40, "task_timeout_minutes": 20,
                                 "read_roots": [], "browser_enabled": False,
-                                "desktop_enabled": False, "max_budget_usd": None})
+                                "desktop_enabled": False, "max_budget_usd": None,
+                                "default_execution_mode": "autonomous"})
         for source in (PACKAGE / "starter_skills").glob("*"):
             target = self.skills / source.name
             if source.is_dir() and not target.exists():
@@ -51,7 +52,9 @@ class Config:
         install(self)
 
     def settings(self):
-        return json.loads(self.settings_file.read_text(encoding="utf-8"))
+        settings = json.loads(self.settings_file.read_text(encoding="utf-8"))
+        settings.setdefault("default_execution_mode", "autonomous")
+        return settings
 
     def save_settings(self, settings):
         atomic_json(self.settings_file, settings)

@@ -27,7 +27,7 @@ Tests cover all-model counts without double counting, independent follow-up tota
 
 ## Workflow totals in 0.2.0
 
-A configured workflow links all its runs and snapshots turn, wall-time and optional USD-estimate limits. Resuming uses the remaining total rather than resetting it; individual requests also retain the limits in Connections. Workflow review permits an explicit, noted change to the total budget. SDK limits can be exceeded by the final model step and do not cap or reveal Max allowance. If a previous result has incomplete usage, the total shown is a lower bound and automatic resume is blocked pending diagnostics review. This release does not invent a dollar cost for a crashed request.
+A configured workflow links all its runs and snapshots turn, wall-time and optional USD-estimate limits. Resuming uses the remaining total rather than resetting it; individual requests also retain the limits in Connections. Workflow review permits an explicit, noted change to the total budget. SDK limits can be exceeded by the final model step and do not cap or reveal Max allowance. If a previous result has incomplete usage, the total shown is a lower bound. Starting with 0.2.4, Workflow review provides an acknowledgement action that permits continuation while retaining this gap. Clara does not invent a dollar cost for a crashed request.
 
 
 ## Turn limits and resuming in 0.2.3
@@ -35,3 +35,9 @@ A configured workflow links all its runs and snapshots turn, wall-time and optio
 Connections & settings accepts any positive whole-number turn limit, including 500, or an explicit No turn limit selection. Workflow review exposes the same choice for total model turns across all runs in that conversation. Both settings must be unlimited to remove both caps. A finite applicable cap still applies, and already-used workflow turns are subtracted from a finite total. Changing the request default does not silently rewrite existing workflows.
 
 The stored/API representation of No turn limit is `max_turns: null`; zero is invalid. With no applicable turn cap, the SDK receives `max_turns=None` and its CLI transport omits `--max-turns`. Clara continues recording actual turns, tokens, cost estimates and checkpoints. Request/workflow time and cost limits, unknown-usage checks, cancellation and provider/account restrictions are independent and remain enforced.
+
+## Interrupted usage review in 0.2.4
+
+In the paused conversation, select **Workflow review → Allow continuation with incomplete usage**. The review records the exact interrupted-job usage reports and a note in the local event history. It does not edit those reports or zero missing values. A different interruption or a changed report needs another review; stale browser submissions are rejected. The action requires an authenticated, idle dashboard and is not exposed as a model tool.
+
+After review, known usage still counts against workflow limits. Because unknown usage cannot be subtracted accurately, aggregate turn and cost limits cannot guarantee a true total for this workflow; the displayed totals are lower bounds. Per-request limits and all known exhausted budgets still apply. Review does not increase a budget, mark any output verified or waive uncertain external-operation checks. Continue in the same conversation so the saved session and checkpoints remain available.

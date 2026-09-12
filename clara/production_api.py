@@ -29,6 +29,9 @@ class BudgetInput(BaseModel):
     max_budget_usd:float|None=Field(default=None,gt=0,le=1000,allow_inf_nan=False)
     note:str=Field(min_length=1,max_length=4000)
 
+class UsageReviewInput(BaseModel):
+    job_fingerprints:dict[str,str]
+    note:str=Field(min_length=1,max_length=4000)
 
 def install_routes(app,config,store,manager):
     knowledge=Knowledge(store);memory=Memory(store);wf=Workflows(store,config)
@@ -107,3 +110,7 @@ def install_routes(app,config,store,manager):
         store.execute('UPDATE workflows SET limits=? WHERE id=?',(json.dumps(limits),w['id']))
         store.event(cid,None,'workflow_budget',{'limits':limits,'note':body.note})
         return wf.snapshot(cid)
+    @app.post('/api/conversations/{cid}/workflow/review-usage')
+    async def review_usage(cid:str,body:UsageReviewInput):
+        idle();conversation(cid)
+        return wf.review_usage(cid,body.job_fingerprints,body.note)

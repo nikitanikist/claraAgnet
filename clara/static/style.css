@@ -13,3 +13,5 @@
 .turn-limit-toggle{display:flex;align-items:center;gap:8px;margin-top:8px}.settings-form .turn-limit-toggle input,.settings-card .turn-limit-toggle input{width:auto;min-width:0;flex:none}.settings-fields small{display:block;margin-top:6px;color:var(--muted);font-size:12px;line-height:1.5}
 
 #workflow-view .turn-limit-toggle input,#settings-view .turn-limit-toggle input{width:16px;height:16px;padding:0;margin:0;flex:0 0 16px}.turn-limit-toggle{white-space:nowrap}
+
+.usage-recovery{padding:18px;margin:18px 0;border:1px solid var(--line);border-radius:12px;background:var(--paper)}.usage-recovery textarea{display:block;margin:14px 0;width:100%;min-height:78px}

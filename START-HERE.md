@@ -1,4 +1,4 @@
-# Clara 0.2.3 is ready for Windows qualification
+# Clara 0.2.4 is ready for Windows qualification
 
 This update adds Chrome setup, fresh Windows observations and focus checks, workflow checkpoints, verified document evidence, reviewed procedural memory, searchable references, 18 CPA skills, total workflow budgets and local diagnostics. It preserves edited skills and saved conversations. The existing Clearhouse portal and old T1 script are not modified.
 
@@ -38,6 +38,18 @@ Version 0.2.3 accepts larger turn counts such as 500 and adds **No turn limit**.
 
 Time and API-estimate limits remain configured separately for the request and workflow. Check remaining workflow time/cost before continuing; change them only if you intend to. Claude account limits and the Stop button still apply. No model-turn cap is passed to the SDK when both applicable turn limits are disabled.
 
+## Resume after stopping a task
+
+Version 0.2.4 adds recovery from a stopped request whose SDK usage report is incomplete. This can happen when Stop is pressed while Clara is waiting for a permission answer. Completed actions are not undone; keep the existing folders and application windows.
+
+1. Update and restart Clara using the commands above. Refresh the dashboard and confirm **LOCAL · 0.2.4**.
+2. Open the same paused conversation, then **Workflow review**. Under **Resume saved work**, inspect the stopped-task information and select **Allow continuation with incomplete usage**.
+3. Clara returns to the same chat with a continuation message filled in. Press **Send**. The agent receives its saved workflow state and previous tool observation, with instructions to inspect current windows and outputs and continue from the first unfinished step.
+
+This action records your acknowledgement of missing usage. It does not mark the closeout complete, change its budget, erase usage or replay any application action. Unknown amounts remain unknown; accumulated turn/cost totals are lower bounds. If the known time/cost/turn budget is exhausted, update it separately in Workflow review. A new interruption needs a new review.
+
+**Autonomous for this task** is now the default. You can change the saved preference under **Connections & settings → Default task mode**, or choose Ask for an individual task. Existing jobs keep their original mode. The recovery button prepares a message but does not submit it.
+
 ## First tests
 
 1. In **Connections & settings**, enable Chrome and Windows tools and add your test folders. Keep the RDP session usable while testing.
@@ -48,6 +60,6 @@ Time and API-estimate limits remain configured separately for the request and wo
 6. Inspect the workflow stages, PDF and usage. If the task stops, continue in that conversation after reviewing progress; its workflow budget does not reset. Budget changes are recorded in Workflow review.
 7. Qualify the complete closeout with firm-approved signature, billing and delivery details after printing works. See [CPA acceptance](docs/CPA-ACCEPTANCE.md).
 
-The local Python suite has 91 passing tests, plus real Chrome MCP and dashboard tests. The new native Windows bridge and complete TaxPrep closeout have not been independently tested on the target server. A live-model call on the Mac also needs native sign-in. This is a qualification candidate, not a declaration that the whole firm workflow is already production-qualified.
+The local Python suite has 99 passing tests, plus real Chrome MCP and dashboard tests. The new native Windows bridge and complete TaxPrep closeout have not been independently tested on the target server. A live-model call on the Mac also needs native sign-in. This is a qualification candidate, not a declaration that the whole firm workflow is already production-qualified.
 
 [Implementation and limits](docs/PRODUCTION-IMPLEMENTATION.md) · [Backup and rollback](docs/UPDATE-AND-ROLLBACK.md) · [Portal protocol](docs/PORTAL-PROTOCOL.md) · [Usage interpretation](docs/USAGE.md)

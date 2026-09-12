@@ -42,6 +42,7 @@ test('artifact cards survive replay, stay with their task, and download real fil
         await page.setViewport({width:1440,height:1000});
         await page.goto(fixture.url,{waitUntil:'domcontentloaded'});
         await page.waitForFunction(()=>!state.initializing);
+        assert.equal(await page.$eval('#execution-mode',node=>node.value),'autonomous');
         assert.equal(await page.evaluate(()=>state.cid),fixture.cid,
             await page.evaluate(()=>document.body.innerText));
         await page.waitForFunction(()=>document.querySelectorAll('#messages .artifact').length===2);
@@ -115,6 +116,23 @@ test('artifact cards survive replay, stay with their task, and download real fil
         await page.click('#settings-form button[type="submit"], #settings-form .primary');
         await page.waitForFunction(()=>state.settings===null || document.querySelector('#toast').textContent==='Settings saved for the next task.');
         assert.equal(await page.evaluate(async()=>(await api('/api/settings')).max_budget_usd),.05);
+        await page.select('#default-mode','ask');
+        await page.click('#settings-form .primary');
+        await page.waitForFunction(()=>state.settings.default_execution_mode==='ask' && $('execution-mode').value==='ask');
+        await page.reload({waitUntil:'domcontentloaded'});
+        await page.waitForFunction(()=>!state.initializing);
+        assert.equal(await page.$eval('#execution-mode',node=>node.value),'ask');
+        await page.evaluate(()=>showView('settings'));
+        await page.select('#default-mode','autonomous');
+        await page.click('#settings-form .primary');
+        await page.waitForFunction(()=>state.settings.default_execution_mode==='autonomous' && $('execution-mode').value==='autonomous');
+        // Reload cleared the synthetic live events; restore them for the mobile checks below.
+        await page.evaluate(()=>{
+            eventReceived({id:10001,job_id:'live-job',kind:'user',data:{text:'Create a report.'}});
+            eventReceived({id:10003,job_id:'live-job',kind:'artifact',data:{id:'live-file',name:'report.txt',size:20}});
+            eventReceived({id:10005,job_id:'live-job',kind:'status',data:{status:'completed'}});
+        });
+        await page.evaluate(()=>showView('settings'));
         await page.$eval('#max-turns',node=>node.value='500');
         await page.click('#settings-form .primary');
         await page.waitForFunction(async()=>(await api('/api/settings')).max_turns===500);
@@ -187,6 +205,31 @@ test('artifact cards survive replay, stay with their task, and download real fil
         await page.evaluate(()=>showView('settings'));
         await page.$eval('#unlimited-turns',node=>node.scrollIntoView({block:'center'}));
         await page.screenshot({path:path.join(screenshots,'turn-settings.png'),fullPage:true});
+        await page.evaluate(cid=>openConversation(cid),fixture.recovery_cid);
+        const original=await page.evaluate(async cid=>(await api('/api/conversations/'+cid)).jobs,fixture.recovery_cid);
+        await page.evaluate(()=>showView('workflow'));
+        await page.waitForSelector('#review-usage');
+        await page.$eval('#usage-recovery',node=>node.scrollIntoView({block:'center'}));
+        assert.match(await page.$eval('#usage-recovery',node=>node.innerText),/Missing usage stays unknown/);
+        await page.click('#usage-recovery summary');
+        assert.match(await page.$eval('#usage-recovery',node=>node.innerText),/26.1 seconds/);
+        await page.screenshot({path:path.join(screenshots,'resume-recovery.png'),fullPage:true});
+        await page.click('#review-usage');
+        await page.waitForFunction(()=>$('prompt').value.startsWith('Continue the existing task'));
+        assert.equal(await page.$eval('#execution-mode',node=>node.value),'autonomous');
+        assert.equal(await page.evaluate(()=>state.cid),fixture.recovery_cid);
+        const reviewed=await page.evaluate(async()=>await api('/api/conversations/'+state.cid+'/workflow'));
+        assert.equal(reviewed.workflow.budget.partial,true);
+        assert.equal(reviewed.workflow.budget.requires_usage_review,false);
+        assert.equal(reviewed.workflow.stages.intake.status,'verified');
+        assert.deepEqual(await page.evaluate(async cid=>(await api('/api/conversations/'+cid)).jobs,fixture.recovery_cid),original);
+        await page.reload({waitUntil:'domcontentloaded'});
+        await page.waitForFunction(()=>!state.initializing);
+        await page.evaluate(cid=>openConversation(cid),fixture.recovery_cid);
+        await page.evaluate(()=>showView('workflow'));
+        await page.waitForSelector('#usage-recovery');
+        assert.equal(await page.$('#review-usage'),null);
+        assert.match(await page.$eval('#usage-recovery',node=>node.innerText),/Continuation with incomplete usage has been recorded/);
         assert.deepEqual(errors,[]);
         console.log('Passed history replay, task association, download contents, live streaming, deduplication, filename escaping, mobile layout, and conversation reset.');
     }finally{

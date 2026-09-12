@@ -1,4 +1,4 @@
-# Clara 0.2.3 implementation and qualification
+# Clara 0.2.4 implementation and qualification
 
 This release implements the local execution, browser, retrieval and workflow layer of the CPA plan. It is a **qualification candidate**. It is not evidence that an entire T1/T2 engagement has passed on the firm's Windows server.
 
@@ -11,7 +11,8 @@ This release implements the local execution, browser, retrieval and workflow lay
 | Windows observation | Fresh window/PID enumeration, foreground confirmation, app version lookup, bounded accessibility inspection | Native behavior still needs RDP testing |
 | Windows actions | Up to six named UIA/shortcut actions with fresh focus checks and expected-control readback | Earlier actions may have occurred if a later action errors; inspect before retry |
 | Business workflows | Persisted stage contracts, source copies, PDF evidence, remote readback, operator review | A model reply cannot approve a configured workflow; configure one before a serious task |
-| Recovery | Tool observations and uncertain-action markers, checkpoints, source/output hashes, resume rechecks | No automatic replay after a crash; old remote/UI observations must be refreshed |
+| Recovery | Tool observations and uncertain-action markers, checkpoints, source/output hashes, resume rechecks; operator acknowledgement for interrupted usage reports | Usage gaps remain unknown, and aggregate totals are lower bounds. No automatic replay after a crash; old remote/UI observations must be refreshed |
+| Task mode | Autonomous is the default; saved Ask preference and individual overrides | Applies to newly submitted tasks. Does not change existing jobs or portal assignment defaults |
 | Memory | Candidates, review, client/firm scopes, build filters, evidence-backed uses, suspension, 90-day expiry | Qualification records outcomes; it is not a formal proof that a particular shortcut caused the outcome |
 | Knowledge | Eight libraries; source metadata; PDF/DOCX/Markdown/text import; bounded FTS retrieval by client/year/build | Sources shipped are an index, not downloaded manuals. Scanned PDFs require OCR text first |
 | CPA guidance | 18 business skills, installed with edit-preserving version manifests | Skills are not tax certification; firm rules and real test cases remain necessary |

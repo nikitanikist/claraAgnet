@@ -14,9 +14,21 @@ async function loadWorkflow(){
   if(!w){box.append(el('p','','No structured workflow in this conversation yet. Ask Clara to begin the relevant workflow before starting a business task.'));return;}
   box.append(el('h3','',w.kind+' · '+w.status),el('p','muted','Client: '+(w.context.client_key||'Unspecified')+' · Year: '+(w.context.year||'Unspecified')));
   const stages=el('ol','workflow-stages');for(const [name,s] of Object.entries(w.stages)){const li=el('li');li.append(el('strong','',name+' — '+s.status));if(s.note)li.append(el('p','',s.note));if(s.evidence_ids.length)li.append(el('small','',s.evidence_ids.length+' evidence records'));stages.append(li);}box.append(stages);
-  const b=w.budget;box.append(el('p','','Used: '+b.used.turns+' model turns · '+(b.used.wall_ms/60000).toFixed(1)+' minutes · $'+b.used.usd.toFixed(4)+' reported API estimate.'));
+  const b=w.budget;box.append(el('p','',(b.partial?'Known usage (incomplete): ':'Used: ')+b.used.turns+' model turns · '+(b.used.wall_ms/60000).toFixed(1)+' minutes · $'+b.used.usd.toFixed(4)+' reported API estimate.'));
   box.append(el('p','',b.remaining_turns===null?'Workflow turns: no limit.':('Workflow turns remaining: '+b.remaining_turns)));
-  if(b.partial)box.append(el('p','error','Some previous usage is incomplete. The known total is a lower bound; resume is blocked pending diagnostics review.'));
+  if(b.partial){
+    const panel=el('section','usage-recovery');panel.id='usage-recovery';
+    panel.append(el('h3','','Resume saved work'),el('p','',b.requires_usage_review?'A stopped task has an incomplete usage report. Its files and checkpoints are still saved.':'Continuation with incomplete usage has been recorded. Existing files and checkpoints are preserved.'));
+    panel.append(el('p','muted','Missing usage stays unknown. Total turns and cost are lower bounds; aggregate budgets can only account for reported usage. The configured limits still apply to the next request.'));
+    const details=el('details');details.append(el('summary','','Stopped task usage'));
+    for(const row of b.partial_usage||[]){const d=el('p','',row.status+' · '+(row.wall_duration_ms==null?'Time not reported':(row.wall_duration_ms/1000).toFixed(1)+' seconds')+' · '+usageNumber(row.turns)+' turns · API estimate '+usageCost(row.sdk_estimated_usd));const link=el('a','','Download task log');link.href='/api/jobs/'+encodeURIComponent(row.job_id)+'/diagnostics.json';link.download='clara-task-diagnostics.json';d.append(document.createTextNode(' · '),link);details.append(d);}panel.append(details);
+    if(b.requires_usage_review){
+      const note=el('textarea');note.id='usage-review-note';note.setAttribute('aria-label','Reason for continuing with incomplete usage');note.value='Continue the existing workflow after an interruption. Keep missing usage unknown and inspect saved work.';
+      const button=el('button','primary','Allow continuation with incomplete usage');button.id='review-usage';
+      button.onclick=async()=>{button.disabled=true;const cid=state.cid;try{await api('/api/conversations/'+cid+'/workflow/review-usage',{method:'POST',body:JSON.stringify({job_fingerprints:Object.fromEntries(b.unreviewed_usage.map(row=>[row.job_id,row.fingerprint])),note:note.value})});await openConversation(cid);$('prompt').value='Continue the existing task from the first unfinished step. Inspect the current application window, saved checkpoints and existing output files first. Reuse verified work; do not create duplicate folders or repeat completed actions.';$('prompt').focus();toast('Continuation enabled. Check the message and press Send.');}catch(error){toast(error.message);button.disabled=false;}};
+      panel.append(note,button);
+    }box.append(panel);
+  }
   box.append(el('p','muted','API estimates are not Max charges or remaining subscription allowance.'));
   for(const op of response.operations||[]){const row=el('details','learning-record');row.append(el('summary','',op.system+' · '+op.operation+' · '+op.state),el('p','',op.external_key));if(op.state==='uncertain'){const note=el('input');note.placeholder='Where you checked and why the write is confirmed absent';note.setAttribute('aria-label','Remote operation review note');const button=el('button','','Confirm absent and allow one retry');button.onclick=async()=>{try{await api('/api/operations/'+op.id+'/confirm-absence',{method:'POST',body:JSON.stringify({note:note.value})});await loadWorkflow();}catch(e){toast(e.message);}};row.append(note,button);}box.append(row);}
   const detail=el('details');detail.append(el('summary','','Evidence checks'),el('pre','',JSON.stringify(response.evidence,null,2)));box.append(detail);
