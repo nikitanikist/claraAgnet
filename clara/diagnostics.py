@@ -79,7 +79,9 @@ def tool_diagnostic(data, duration_ms=None):
 def limit_message(result, max_turns, last_tool):
     if result.subtype == "error_max_turns":
         last = f" Last tool requested: {last_tool}." if last_tool else ""
-        return (f"Clara stopped at the configured {max_turns}-turn limit; the task is incomplete.{last} "
+        reason=(f"Clara stopped at the configured {max_turns}-turn limit" if max_turns is not None
+                else "The model provider reported a turn limit even though Clara has no configured turn cap")
+        return (f"{reason}; the task is incomplete.{last} "
                 "Completed actions were not undone. Review the activity and any saved checkpoint before "
                 "resuming in this conversation; do not restart document creation blindly.")
     return (result.result or "; ".join(result.errors or []) or result.subtype)[:3000]

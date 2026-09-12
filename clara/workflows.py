@@ -202,7 +202,7 @@ class Workflows:
             partial |= usage.get('coverage')!='reported'
             partial |= usage.get('turns') is None or (w['limits'].get('max_budget_usd') is not None and usage.get('sdk_estimated_usd') is None)
         limits=w['limits']
-        return {'used':used,'partial':partial,'remaining_turns':max(0,limits['max_turns']-used['turns']),
+        return {'used':used,'partial':partial,'remaining_turns':None if limits['max_turns'] is None else max(0,limits['max_turns']-used['turns']),
                 'remaining_usd':None if limits.get('max_budget_usd') is None else max(0,limits['max_budget_usd']-used['usd']),
                 'remaining_ms':max(0,limits['task_timeout_minutes']*60000-used['wall_ms'])}
 

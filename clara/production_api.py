@@ -24,7 +24,7 @@ class WorkflowInput(BaseModel):
     context:dict
 
 class BudgetInput(BaseModel):
-    max_turns:int=Field(ge=1,le=1000)
+    max_turns:int|None=Field(ge=1)
     task_timeout_minutes:int=Field(ge=1,le=480)
     max_budget_usd:float|None=Field(default=None,gt=0,le=1000,allow_inf_nan=False)
     note:str=Field(min_length=1,max_length=4000)

@@ -2,7 +2,9 @@
 
 Clara is a local chat application backed by the Claude Agent SDK. The model chooses tools and loads skills to work toward a requested outcome. It is independent of the existing fixed T1 pipeline.
 
-**Release 0.2.2 — qualification candidate:** Chrome control, application-local Node setup, fresh Windows focus/inspection tools, structured workflow checkpoints, verified PDF/source evidence, reviewed memory, searchable knowledge, 18 CPA skills, workflow-wide budgets, local screenshot evidence, an optional outbound portal adapter and a backup/update path are implemented. Real Chrome MCP and dashboard tests pass on the development Mac. The new Windows bridge and complete T1 closeout still need acceptance on the firm's RDP server. Read [what is implemented and what remains](docs/PRODUCTION-IMPLEMENTATION.md).
+**Version 0.2.3 adds No turn limit** in Connections & settings and Workflow review, plus support for larger finite limits such as 500. Saved workflows retain their old limits until you explicitly update them. [Resume instructions](START-HERE.md#resume-after-reaching-a-turn-limit).
+
+**Release 0.2.3 — qualification candidate:** Chrome control, application-local Node setup, fresh Windows focus/inspection tools, structured workflow checkpoints, verified PDF/source evidence, reviewed memory, searchable knowledge, 18 CPA skills, workflow-wide budgets, local screenshot evidence, an optional outbound portal adapter and a backup/update path are implemented. Real Chrome MCP and dashboard tests pass on the development Mac. The new Windows bridge and complete T1 closeout still need acceptance on the firm's RDP server. Read [what is implemented and what remains](docs/PRODUCTION-IMPLEMENTATION.md).
 
 For the existing RDP installation, use [update and rollback instructions](docs/UPDATE-AND-ROLLBACK.md). After updating, open **Knowledge & memory** to import the actual manuals and firm procedures, then create a **T1 print test** in **Workflow review** before testing a full closeout.
 

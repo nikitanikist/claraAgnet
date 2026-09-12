@@ -219,9 +219,10 @@ class AgentManager:
         if budget:
             if budget['partial']:
                 raise ValueError('Previous workflow usage is incomplete. Review the diagnostics and budget before resuming; Clara cannot assume it was free.')
-            if budget['remaining_turns']<1 or budget['remaining_ms']<1000 or budget['remaining_usd']==0:
+            if (budget['remaining_turns'] is not None and budget['remaining_turns']<1) or budget['remaining_ms']<1000 or budget['remaining_usd']==0:
                 raise ValueError('Workflow budget exhausted. Saved progress is available; increase its budget explicitly in Workflow review to continue.')
-            settings={**settings,'max_turns':min(settings['max_turns'],budget['remaining_turns']),
+            turn_limits=[n for n in (settings['max_turns'],budget['remaining_turns']) if n is not None]
+            settings={**settings,'max_turns':min(turn_limits) if turn_limits else None,
                       'task_timeout_minutes':min(settings['task_timeout_minutes'],budget['remaining_ms']/60000)}
             limit=budget['remaining_usd'] if limit is None else min(limit,budget['remaining_usd']) if budget['remaining_usd'] is not None else limit
         tracker.query_limit=limit
@@ -293,10 +294,13 @@ class AgentManager:
         servers = mcp_connectors(self.config)
         servers["clara"] = tool_server(self.config, self.store, job, self.request_input)
         conversation = self.store.conversation(job["conversation_id"])
+        turn_instruction=("No Clara model-turn limit is configured for this request. Time and cost limits still apply; save progress as you work."
+                          if settings['max_turns'] is None else
+                          f"Maximum model turns for this request: {settings['max_turns']}. Keep room for verification and a checkpoint.")
         options = ClaudeAgentOptions(
             cli_path=cli_path(), cwd=str(self.config.workspace),
             system_prompt=SYSTEM + f"\nCurrent job-id: {job['id']}. Execution mode: {job['mode']}. "
-                f"Maximum model turns for this request: {settings['max_turns']}. Keep room for verification and a checkpoint.",
+                + turn_instruction,
             tools=["Read", "Skill", "ToolSearch"], allowed_tools=[],
             mcp_servers=servers, strict_mcp_config=True, setting_sources=["project"], skills="all",
             settings=json.dumps({"disableAllHooks": False,"autoMemoryEnabled":False}),

@@ -115,6 +115,16 @@ test('artifact cards survive replay, stay with their task, and download real fil
         await page.click('#settings-form button[type="submit"], #settings-form .primary');
         await page.waitForFunction(()=>state.settings===null || document.querySelector('#toast').textContent==='Settings saved for the next task.');
         assert.equal(await page.evaluate(async()=>(await api('/api/settings')).max_budget_usd),.05);
+        await page.$eval('#max-turns',node=>node.value='500');
+        await page.click('#settings-form .primary');
+        await page.waitForFunction(async()=>(await api('/api/settings')).max_turns===500);
+        await page.click('#unlimited-turns');
+        assert.equal(await page.$eval('#max-turns',node=>node.disabled),true);
+        await page.click('#settings-form .primary');
+        await page.waitForFunction(async()=>(await api('/api/settings')).max_turns===null);
+        await page.evaluate(()=>loadSettings());
+        assert.equal(await page.$eval('#unlimited-turns',node=>node.checked),true);
+        assert.equal(await page.evaluate(async()=>(await api('/api/settings')).max_budget_usd),.05);
         await page.evaluate(()=>showView('chat'));
 
         await page.setViewport({width:390,height:900});
@@ -154,11 +164,29 @@ test('artifact cards survive replay, stay with their task, and download real fil
         await page.type('#workflow-review-note','Premature review should fail');
         await page.click('#workflow-review button.primary');
         await page.waitForFunction(()=>document.querySelector('#toast').innerText.includes('Complete the required stages'));
-        await page.$eval('#workflow-turns',n=>n.value='120');
+        assert.equal(await page.$eval('#workflow-unlimited-turns',node=>node.checked),true);
+        await page.click('#workflow-unlimited-turns');
+        await page.$eval('#workflow-turns',n=>n.value='500');
         await page.type('#workflow-budget-note','Synthetic test budget update');await page.click('#workflow-budget button');
         await page.waitForFunction(()=>document.querySelector('#toast').innerText==='Workflow budget updated.');
-        assert.equal(await page.evaluate(async()=>((await api('/api/conversations/'+state.cid+'/workflow')).workflow.limits.max_turns)),120);
+        await page.waitForFunction(async()=>((await api('/api/conversations/'+state.cid+'/workflow')).workflow.limits.max_turns)===500);
+        await page.click('#workflow-unlimited-turns');
+        assert.equal(await page.$eval('#workflow-turns',node=>node.disabled),true);
+        await page.click('#workflow-budget button');
+        await page.waitForFunction(async()=>((await api('/api/conversations/'+state.cid+'/workflow')).workflow.limits.max_turns)===null);
+        await page.reload({waitUntil:'domcontentloaded'});
+        await page.waitForFunction(()=>!state.initializing);
+        await page.evaluate(cid=>openConversation(cid),fixture.empty_cid);
+        await page.evaluate(()=>showView('workflow'));
+        await page.waitForFunction(()=>document.querySelector('#workflow-unlimited-turns').checked);
+        assert.equal(await page.$eval('#workflow-turns',node=>node.disabled),true);
+        assert.match(await page.$eval('#workflow-record',node=>node.innerText),/Workflow turns: no limit/);
+        assert.ok(await page.$eval('#workflow-unlimited-turns',node=>node.getBoundingClientRect().width<30));
+        await page.$eval('#workflow-budget',node=>node.scrollIntoView({block:'start'}));
         await page.screenshot({path:path.join(screenshots,'workflow.png'),fullPage:true});
+        await page.evaluate(()=>showView('settings'));
+        await page.$eval('#unlimited-turns',node=>node.scrollIntoView({block:'center'}));
+        await page.screenshot({path:path.join(screenshots,'turn-settings.png'),fullPage:true});
         assert.deepEqual(errors,[]);
         console.log('Passed history replay, task association, download contents, live streaming, deduplication, filename escaping, mobile layout, and conversation reset.');
     }finally{

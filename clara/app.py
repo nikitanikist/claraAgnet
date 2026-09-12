@@ -35,7 +35,7 @@ class SkillInput(BaseModel):
 
 class SettingsInput(BaseModel):
     model: str = "sonnet"
-    max_turns: int = Field(default=40, ge=1, le=100)
+    max_turns: int | None = Field(default=40, ge=1)
     task_timeout_minutes: int = Field(default=20, ge=1, le=120)
     max_budget_usd: float | None = Field(default=None, gt=0, le=1000, allow_inf_nan=False)
     read_roots: list[str] = Field(default_factory=list, max_length=20)
