@@ -201,4 +201,4 @@ def tool_server(config, store, job, request_input):
     ]
     from .production_tools import definitions as production_definitions
     definitions += production_definitions(config,store,job)
-    return create_sdk_mcp_server(name="clara", version="0.2.1", tools=[tool(name, desc, schema)(wrap(fn)) for name, desc, schema, fn in definitions])
+    return create_sdk_mcp_server(name="clara", version="0.2.2", tools=[tool(name, desc, schema)(wrap(fn)) for name, desc, schema, fn in definitions])

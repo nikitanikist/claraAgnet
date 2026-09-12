@@ -48,6 +48,7 @@ if (-not $SkipDesktop) {
     Run-Checked $ClaraDesktopPython @('clara/windows_bridge.py', '--probe')
 }
 Run-Checked $ClaraVenvPython @('-m', 'pip', 'check')
+Run-Checked $ClaraVenvPython @('scripts/verify-portable.py', 'core')
 Run-Checked $ClaraVenvPython @('-m', 'clara', 'doctor')
 Write-Host "`nClara is installed. Next:" -ForegroundColor Green
 Write-Host '1. .\Login-Clara.ps1'

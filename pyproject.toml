@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clara-local-agent"
-version = "0.2.1"
+version = "0.2.2"
 description = "A local, skill-driven desktop agent for Clearhouse"
 requires-python = ">=3.12"
 dependencies = [
   "claude-agent-sdk==0.2.152", "fastapi==0.141.1", "uvicorn==0.52.4",
   "python-multipart==0.0.32", "pypdf==6.18.0", "python-docx==1.2.0",
-  "python-pptx==1.0.2", "openpyxl==3.1.5"
+  "python-pptx==1.0.2", "openpyxl==3.1.5", "httpx==0.28.1"
 ]
 
 [project.scripts]

@@ -1,8 +1,10 @@
 import hashlib
+import asyncio
 import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import sys
 import zipfile
 
 import pytest
@@ -119,3 +121,38 @@ def test_updating_owned_core_uses_existing_interpreter_without_copying_over_it(e
     assert python.read_bytes()==before
     (python.parent/portable.OWNER).unlink()
     with pytest.raises(ValueError,match='Clara-owned'): portable.core_runtime(python.parent,(3,12,8))
+
+
+def test_core_probe_rejects_missing_runtime_dependency():
+    root = Path(__file__).parents[1]
+    # Development dependencies must not hide a missing production dependency.
+    script = """
+import importlib.abc, runpy, sys
+class WithoutHttpx(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == 'httpx' or fullname.startswith('httpx.'):
+            raise ModuleNotFoundError("No module named 'httpx'", name='httpx')
+sys.meta_path.insert(0, WithoutHttpx())
+sys.argv = ['scripts/verify-portable.py', 'core']
+runpy.run_path(sys.argv[0], run_name='__main__')
+"""
+    result = subprocess.run([sys.executable, '-c', script], cwd=root, capture_output=True, text=True, timeout=45)
+    assert result.returncode != 0
+    assert "No module named 'httpx'" in result.stderr
+    assert 'Core imports' not in result.stdout
+
+
+def test_dashboard_probe_starts_without_inference_or_real_network(monkeypatch):
+    import socket
+    from claude_agent_sdk import ClaudeSDKClient
+    probe_spec = importlib.util.spec_from_file_location('startup_probe', Path(__file__).parents[1] / 'scripts/verify-portable.py')
+    module = importlib.util.module_from_spec(probe_spec)
+    probe_spec.loader.exec_module(module)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError('The startup probe must not request model inference or a network connection')
+
+    monkeypatch.setattr(ClaudeSDKClient, 'query', forbidden)
+    monkeypatch.setattr(socket, 'create_connection', forbidden)
+    monkeypatch.setattr(socket.socket, 'connect', forbidden)
+    asyncio.run(module.probe_dashboard())

@@ -9,5 +9,6 @@ if [ ! -x .venv/bin/python ]; then "$CLARA_PYTHON" -m venv .venv; fi
 .venv/bin/python -m pip install --no-deps -e .
 npm ci --ignore-scripts --no-fund --no-audit
 .venv/bin/python -m pip check
+.venv/bin/python scripts/verify-portable.py core
 .venv/bin/python -m clara doctor
 printf '%s\n' 'Installed. Run ./Login-Clara.command, then ./Start-Clara.command.'
