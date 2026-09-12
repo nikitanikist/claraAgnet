@@ -4,6 +4,7 @@ import json
 import sqlite3
 import tempfile
 import zipfile
+from contextlib import closing
 from pathlib import Path
 from .instance import single_instance
 
@@ -18,7 +19,10 @@ def backup(config,destination=None):
     with single_instance(config.data), tempfile.TemporaryDirectory() as temp:
         source=config.data/'clara.sqlite3';snapshot=Path(temp)/'clara.sqlite3'
         if source.exists():
-            with sqlite3.connect(source) as src,sqlite3.connect(snapshot) as dst: src.backup(dst)
+            # SQLite's transaction context manager does not close the connection.
+            # Release both handles before Windows archives/removes the snapshot.
+            with closing(sqlite3.connect(source)) as src, closing(sqlite3.connect(snapshot)) as dst:
+                src.backup(dst)
         with zipfile.ZipFile(target,'x',zipfile.ZIP_DEFLATED) as archive:
             if snapshot.exists(): archive.write(snapshot,'clara.sqlite3')
             for relative in ['settings.json','cpa-skill-manifest.json','workspace','artifacts','attachments','evidence']:

@@ -6,7 +6,7 @@ Set-Location -LiteralPath $PSScriptRoot
 . (Join-Path $PSScriptRoot 'scripts\Windows-Environment.ps1')
 $ClaraPython = Initialize-ClaraWindows $PSScriptRoot
 & $ClaraPython (Join-Path $PSScriptRoot 'scripts\backup-data.py')
-if ($LASTEXITCODE -ne 0) { throw 'Backup failed. Stop Clara before updating.' }
+if ($LASTEXITCODE -ne 0) { throw 'Backup failed. Read the error above for the cause. The update has not been installed.' }
 $ClaraBefore = (& git rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0) { throw 'This updater requires a Git checkout.' }
 $ClaraEdits = & git status --porcelain

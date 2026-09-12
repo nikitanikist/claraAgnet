@@ -1,6 +1,8 @@
-# Clara 0.2.0 is ready for Windows qualification
+# Clara 0.2.1 is ready for Windows qualification
 
 This update adds Chrome setup, fresh Windows observations and focus checks, workflow checkpoints, verified document evidence, reviewed procedural memory, searchable references, 18 CPA skills, total workflow budgets and local diagnostics. It preserves edited skills and saved conversations. The existing Clearhouse portal and old T1 script are not modified.
+
+Version 0.2.1 also fixes the Windows temporary-database lock during backup. If 0.2.0 showed `WinError 32` while deleting a temporary `clara.sqlite3`, pull this fix before running the updater again. That error was caused by an open backup connection, not evidence that Clara was still running.
 
 ## Update the existing RDP installation
 
@@ -34,6 +36,6 @@ The browser installer uses compatible Node if available or downloads a checksum-
 6. Inspect the workflow stages, PDF and usage. If the task stops, continue in that conversation after reviewing progress; its workflow budget does not reset. Budget changes are recorded in Workflow review.
 7. Qualify the complete closeout with firm-approved signature, billing and delivery details after printing works. See [CPA acceptance](docs/CPA-ACCEPTANCE.md).
 
-The local Python suite has 71 passing tests, plus real Chrome MCP and dashboard tests. The new native Windows bridge and complete TaxPrep closeout have not been independently tested on the target server. A live-model call on the Mac also needs native sign-in. This is a qualification candidate, not a declaration that the whole firm workflow is already production-qualified.
+The local Python suite has 74 passing tests, plus real Chrome MCP and dashboard tests. The new native Windows bridge and complete TaxPrep closeout have not been independently tested on the target server. A live-model call on the Mac also needs native sign-in. This is a qualification candidate, not a declaration that the whole firm workflow is already production-qualified.
 
 [Implementation and limits](docs/PRODUCTION-IMPLEMENTATION.md) · [Backup and rollback](docs/UPDATE-AND-ROLLBACK.md) · [Portal protocol](docs/PORTAL-PROTOCOL.md) · [Usage interpretation](docs/USAGE.md)
