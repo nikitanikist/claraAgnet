@@ -20,48 +20,17 @@ def usable_snapshot(name, args):
 
 def tool_diagnostic(data, duration_ms=None):
     """Keep text evidence and explicit error signals, not a claim of UI success."""
-    texts, images, structured_error = [], 0, False
-
-    def collect(value):
-        nonlocal images, structured_error
-        if isinstance(value, dict):
-            if value.get("type") in {"image", "audio"}:
-                images += value.get("type") == "image"
-                return
-            if value.get("isError") is True or value.get("is_error") is True:
-                structured_error = True
-            if value.get('clara_observation') and value.get('verified') is False:
-                structured_error = True
-            if isinstance(value.get("exit_code"), int) and value["exit_code"] != 0:
-                structured_error = True
-            if value.get("type") == "text" and isinstance(value.get("text"), str):
-                collect(value["text"])
-            elif "content" in value:
-                collect(value["content"])
-            else:
-                texts.append(json.dumps(value, ensure_ascii=False, default=str))
-        elif isinstance(value, list):
-            for item in value:
-                collect(item)
-        elif isinstance(value, str):
-            try:
-                decoded = json.loads(value)
-            except (ValueError, TypeError):
-                decoded = None
-            if isinstance(decoded, (dict, list)):
-                collect(decoded)
-            else:
-                texts.append(value)
-        elif value is not None:
-            texts.append(str(value))
-
-    collect(data.get("tool_response", data.get("error")))
-    text = "\n".join(texts)
+    from .tool_response import response_blocks
+    blocks, structured_error = response_blocks(data.get("tool_response",data.get("tool_result",data.get("error"))))
+    text = "\n".join(block['text'] for block in blocks if block['type']=='text')
+    images = sum(block['type']=='image' for block in blocks)
     # Windows-MCP can return a plain error string with MCP success.
     connector_error = data.get("tool_name", "").startswith("mcp__windows__") and bool(
         re.match(r"^(?:Error (?:switching app|capturing|clicking|typing)\b|"
                  r"Failed to get desktop state\b|No windows found on the desktop\b|"
                  r"Application .+ not found\.)", text.strip(), re.I))
+    connector_error |= data.get('tool_name','').startswith('mcp__chrome__') and bool(re.match(r'^Error: (?:Element with uid|Timed out|No page|Cannot find)',text.strip()))
+    connector_error |= text.startswith('Error: result (') and 'exceeds maximum allowed tokens' in text
     # Basic credential masking; arbitrary client text is not anonymized.
     text = re.sub(r"(?i)(bearer\s+)[A-Za-z0-9._~+/=-]+", r"\1[redacted]", text)
     text = re.sub(r"sk-ant-[A-Za-z0-9_-]{10,}", "[redacted]", text)

@@ -1,6 +1,8 @@
-# Clara 0.2.4 implementation and qualification
+# Clara 0.2.5 implementation and qualification
 
 This release implements the local execution, browser, retrieval and workflow layer of the CPA plan. It is a **qualification candidate**. It is not evidence that an entire T1/T2 engagement has passed on the firm's Windows server.
+
+0.2.5 adds structured question cards, bounded evidence retrieval, normalized SDK evidence, visible browser errors, explicit reasoning effort and input-wait timing. These improvements have local regression coverage; speed and model accuracy must be measured on the target workflow.
 
 ## Available now
 

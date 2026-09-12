@@ -15,3 +15,13 @@
 #workflow-view .turn-limit-toggle input,#settings-view .turn-limit-toggle input{width:16px;height:16px;padding:0;margin:0;flex:0 0 16px}.turn-limit-toggle{white-space:nowrap}
 
 .usage-recovery{padding:18px;margin:18px 0;border:1px solid var(--line);border-radius:12px;background:var(--paper)}.usage-recovery textarea{display:block;margin:14px 0;width:100%;min-height:78px}
+
+/* Questions remain readable at desktop and RDP/mobile widths. */
+.pending{max-height:62vh;overflow-y:auto;flex-shrink:0;background:#fffaf1;padding:20px}
+.pending-request+ .pending-request{border-top:1px solid #ead7b5;margin-top:18px;padding-top:18px}
+.pending h3{font-size:17px;line-height:1.45;margin:5px 0 12px;overflow-wrap:anywhere}
+.question-context{font-size:14px;font-weight:400;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;margin:0 0 14px}
+.question-details{margin:0 0 16px;font-size:13px}.question-details summary{cursor:pointer;color:#526860;padding:4px 0}.question-details .question-context{margin-top:10px;color:#53606a}
+.question-choices{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 16px}.pending .question-choice{margin:0;font-size:14px;white-space:normal;text-align:left;overflow-wrap:anywhere}
+.question-label{display:block;font-size:12px;color:#53606a;margin-bottom:5px}.pending .question-answer{display:block;width:100%;min-height:72px;margin:0 0 12px;font-size:14px}
+@media(max-width:620px){.pending{padding:15px;max-height:65vh}.question-choices{flex-direction:column}}

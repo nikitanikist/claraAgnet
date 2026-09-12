@@ -36,6 +36,7 @@ class SkillInput(BaseModel):
 
 class SettingsInput(BaseModel):
     default_execution_mode: Literal["ask", "autonomous"] = "autonomous"
+    reasoning_effort: Literal['low','medium','high','xhigh','max'] = 'medium'
     model: str = "sonnet"
     max_turns: int | None = Field(default=40, ge=1)
     task_timeout_minutes: int = Field(default=20, ge=1, le=120)

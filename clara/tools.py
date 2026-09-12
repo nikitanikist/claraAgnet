@@ -149,7 +149,9 @@ def tool_server(config, store, job, request_input):
                 result = await fn(args)
                 return {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False)}]}
             except (ValueError, OSError, TimeoutError) as error:
-                return {"isError": True, "content": [{"type": "text", "text": str(error)}]}
+                # Some SDK hook envelopes retain text but strip MCP isError.
+                return {"isError": True, "content": [{"type": "text", "text": json.dumps({
+                    'clara_tool_error':True,'message':str(error)},ensure_ascii=False)}]}
         return call
 
     async def search(args):
@@ -179,7 +181,8 @@ def tool_server(config, store, job, request_input):
         return publish_artifact(config, store, job, args["path"], args.get("title", ""))
 
     async def ask(args):
-        return {"answer": await request_input(job, "question", {"question": args["question"]})}
+        from .questions import question_data
+        return {"answer": await request_input(job, "question", question_data(args))}
 
     async def environment(args):
         from .connectors import connector_status
@@ -190,6 +193,7 @@ def tool_server(config, store, job, request_input):
                 "desktop_enabled": config.settings()["desktop_enabled"] and os.name == "nt",
                 "connectors":connector_status(config)}
 
+    from .questions import QUESTION_SCHEMA
     definitions = [
         ("environment", "Get platform, folders, Python executable and enabled capabilities.", {}, environment),
         ("search_files", "Search file names recursively, case-insensitively. Use wildcards; inspect candidates before returning a client document.", {"root": str, "pattern": str}, search),
@@ -197,8 +201,8 @@ def tool_server(config, store, job, request_input):
         ("write_text", "Write a UTF-8 file inside Clara's workspace. Also useful to prepare a Python script for execution.", {"path": str, "content": str}, write),
         ("run_command", "Run a command in PowerShell on Windows or Bash on Mac. Python and document libraries are installed. Commands have the OS user's access, not a sandbox. Ask mode requires confirmation.", {"type": "object", "properties": {"command": {"type": "string"}, "cwd": {"type": "string"}, "timeout_seconds": {"type": "integer"}}, "required": ["command"]}, command),
         ("publish_artifact", "Attach a verified, real file to the conversation for the user to download. Does not send anything to an external recipient.", {"type": "object", "properties": {"path": {"type": "string"}, "title": {"type": "string"}}, "required": ["path"]}, artifact),
-        ("ask_user", "Ask a necessary clarification and wait for the user's answer in the dashboard.", {"question": str}, ask),
+        ("ask_user", "Ask one short necessary question. Separate brief context and optional details; offer choices when useful. Always wait for the answer.", QUESTION_SCHEMA, ask),
     ]
     from .production_tools import definitions as production_definitions
     definitions += production_definitions(config,store,job)
-    return create_sdk_mcp_server(name="clara", version="0.2.4", tools=[tool(name, desc, schema)(wrap(fn)) for name, desc, schema, fn in definitions])
+    return create_sdk_mcp_server(name="clara", version="0.2.5", tools=[tool(name, desc, schema)(wrap(fn)) for name, desc, schema, fn in definitions])

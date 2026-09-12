@@ -1,4 +1,16 @@
-# Current validation: 0.2.4 · 12 September 2026
+# Current validation: 0.2.5 · 12 September 2026
+
+- **117 Python tests pass.** Eighteen new cases cover structured questions through the real pending-input manager, legacy questions, preserved MCP error signals, multiple SDK/Windows evidence envelopes, malformed/failed checks, screenshot source normalization, compact evidence pagination, scoped detail retrieval, overlapping/cancelled input waits, settings persistence and the installed SDK's effort argument.
+- **Real Chrome + local API regression passes.** Tests submit choice and multiline answers through the actual request endpoint, check that no answer is automatic, preserve drafts, render legacy paragraph breaks and escape untrusted text. Desktop/mobile bounds, reasoning settings, usage timing, prior downloads, workflow review and interruption recovery also pass. Synthetic data only; no model query or external account action.
+- The production-only Python runtime passes the isolated core/startup verifier. No dependency upgrade is required. Question screenshots were inspected locally.
+- Balanced (`medium`) is now explicit when no reasoning-effort preference exists. The selected model and an explicit saved effort remain intact. This is a setting to qualify against real outcomes, not a measured performance promise.
+- The release does not repair historical source-copy/application checkpoints, invent missing usage, approve a workflow, replay uploads or change completed files. Captured verification now handles the SDK envelopes on future calls.
+- Windows/RDP execution of this release, model-generated question brevity, final remote field placement, full closeout completion, repeated-run speed and Max capacity remain target acceptance work. Uploaded task diagnostics were reviewed privately and are excluded from the public repository/release.
+- One upstream Starlette/AnyIO test-client deprecation warning remains.
+
+---
+
+# Previous validation: 0.2.4 · 12 September 2026
 
 - Version 0.2.4 adds an operator-recorded recovery path for incomplete usage and makes Autonomous the default for new local tasks. Eight new Python cases cover cancelled permission waits, preserved session/checkpoints/output files, unchanged unknown usage, review persistence, stale/new-report rejection, authenticated idle-only review, saved Ask overrides and known exhausted budget enforcement. The browser regression exercises the actual review button and prepared continuation message without submitting model work, and verifies preference/review persistence across reloads. Native Windows continuation remains for the user's test.
 - Version 0.2.3 supports `max_turns: null` (No turn limit) and larger positive integer caps in request settings and workflow budgets. Fifteen new cases cover persisted API settings, invalid input, combinations of finite/unlimited caps, 101-turn historical usage, preserved resume session/checkpoints, time/cost enforcement and omission of the SDK CLI max-turns flag. The real Chrome UI test saves 500 and unlimited values in both forms and confirms reload persistence. Live Windows execution beyond 100 turns still needs the RDP retry; no provider/account limits are removed.

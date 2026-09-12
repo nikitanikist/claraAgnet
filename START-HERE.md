@@ -1,4 +1,4 @@
-# Clara 0.2.4 is ready for Windows qualification
+# Clara 0.2.5 is ready for Windows qualification
 
 This update adds Chrome setup, fresh Windows observations and focus checks, workflow checkpoints, verified document evidence, reviewed procedural memory, searchable references, 18 CPA skills, total workflow budgets and local diagnostics. It preserves edited skills and saved conversations. The existing Clearhouse portal and old T1 script are not modified.
 
@@ -6,19 +6,18 @@ Version 0.2.2 adds the missing production HTTP client and verifies isolated dash
 
 Version 0.2.1 also fixes the Windows temporary-database lock during backup. If 0.2.0 showed `WinError 32` while deleting a temporary `clara.sqlite3`, pull this fix before running the updater again. That error was caused by an open backup connection, not evidence that Clara was still running.
 
+Version 0.2.5 improves questions, evidence lookup, diagnostics and timing reports. **Connections & settings → Reasoning effort** defaults to **Balanced** while keeping your model selection. See [the repeat-test guide](docs/DELIVERY-IMPROVEMENTS.md).
+
 ## Update the existing RDP installation
 
 Stop Clara with Ctrl+C in its server PowerShell window. In a new PowerShell window:
 
 ```powershell
 Set-Location "$env:LOCALAPPDATA\ClaraAgent"
-git status --short
-git rev-parse HEAD
-git pull --ff-only origin main
-if ($LASTEXITCODE -eq 0) { .\Update-Clara.ps1 }
+.\Update-Clara.ps1
 ```
 
-Keep the old revision printed by `git rev-parse HEAD`. If local edits are listed, preserve them before updating. This first pull obtains the new updater; it then creates a local data backup before refreshing dependencies. Future updates can run `Update-Clara.ps1` directly. Do not simply restart after pulling: this version includes a browser runtime setup and Windows bridge probe.
+For the existing 0.2.4 installation, the updater makes a local data backup, checks for source edits, pulls the new code and verifies setup. If it reports an error, keep that output and do not start another update. The earlier 0.2.0 backup fix is documented in the release history.
 
 When setup passes, run:
 
@@ -42,7 +41,7 @@ Time and API-estimate limits remain configured separately for the request and wo
 
 Version 0.2.4 adds recovery from a stopped request whose SDK usage report is incomplete. This can happen when Stop is pressed while Clara is waiting for a permission answer. Completed actions are not undone; keep the existing folders and application windows.
 
-1. Update and restart Clara using the commands above. Refresh the dashboard and confirm **LOCAL · 0.2.4**.
+1. Update and restart Clara using the commands above. Refresh the dashboard and confirm **LOCAL · 0.2.5**.
 2. Open the same paused conversation, then **Workflow review**. Under **Resume saved work**, inspect the stopped-task information and select **Allow continuation with incomplete usage**.
 3. Clara returns to the same chat with a continuation message filled in. Press **Send**. The agent receives its saved workflow state and previous tool observation, with instructions to inspect current windows and outputs and continue from the first unfinished step.
 

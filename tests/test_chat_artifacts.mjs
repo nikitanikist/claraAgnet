@@ -64,6 +64,7 @@ test('artifact cards survive replay, stay with their task, and download real fil
         assert.equal(await page.$$eval('.usage-message',nodes=>nodes.length),2);
         assert.match(await page.$eval(`[data-usage-job="${fixture.first_job}"]`,node=>node.innerText),/5,000/);
         assert.match(await page.$eval(`[data-usage-job="${fixture.first_job}"]`,node=>node.innerText),/\$0\.0314/);
+        assert.match(await page.$eval(`[data-usage-job="${fixture.first_job}"]`,node=>node.innerText),/Waiting for you: 0.1 min · Working time: 0.2 min/);
         assert.match(await page.$eval('#usage',node=>node.innerText),/5,100 tokens/);
         assert.match(await page.$eval('#usage',node=>node.innerText),/\$0\.0334/);
 
@@ -112,10 +113,13 @@ test('artifact cards survive replay, stay with their task, and download real fil
             sdk_estimated_usd:.004,coverage:'reported',scope:'main_loop',turns:1,duration_ms:500,models:[]}}));
         assert.match(await page.$eval('#usage',node=>node.innerText),/\$0\.0374/);
         await page.evaluate(()=>showView('settings'));
+        assert.equal(await page.$eval('#reasoning-effort',node=>node.value),'medium');
+        await page.select('#reasoning-effort','high');
         await page.$eval('#budget-limit',node=>node.value='0.05');
         await page.click('#settings-form button[type="submit"], #settings-form .primary');
         await page.waitForFunction(()=>state.settings===null || document.querySelector('#toast').textContent==='Settings saved for the next task.');
         assert.equal(await page.evaluate(async()=>(await api('/api/settings')).max_budget_usd),.05);
+        assert.equal(await page.evaluate(async()=>(await api('/api/settings')).reasoning_effort),'high');
         await page.select('#default-mode','ask');
         await page.click('#settings-form .primary');
         await page.waitForFunction(()=>state.settings.default_execution_mode==='ask' && $('execution-mode').value==='ask');
@@ -230,6 +234,44 @@ test('artifact cards survive replay, stay with their task, and download real fil
         await page.waitForSelector('#usage-recovery');
         assert.equal(await page.$('#review-usage'),null);
         assert.match(await page.$eval('#usage-recovery',node=>node.innerText),/Continuation with incomplete usage has been recorded/);
+
+        // Real pending-input endpoint: choices never submit themselves, legacy
+        // paragraphs remain intact, and free-form multiline answers survive.
+        await page.evaluate(cid=>openConversation(cid),fixture.questions_cid);
+        await page.waitForSelector('.question-choices');
+        assert.equal(await page.$eval('#pending h3',n=>n.textContent),'Where should I upload the test PDFs?');
+        assert.equal(await page.$eval('.question-context',n=>getComputedStyle(n).whiteSpace),'pre-wrap');
+        assert.equal(await page.$eval('.question-details',n=>n.open),false);
+        const questionState=await page.evaluate(async()=>await api('/api/conversations/'+state.cid));
+        assert.equal(questionState.pending.length,1);
+        await page.screenshot({path:path.join(screenshots,'question-card.png'),fullPage:true});
+        await page.type('.question-answer','Preserve this draft');
+        await page.evaluate(()=>renderPending());
+        assert.equal(await page.$eval('.question-answer',n=>n.value),'Preserve this draft');
+        await page.click('.question-details summary');
+        assert.equal(await page.$$eval('#pending img',nodes=>nodes.length),0);
+        assert.match(await page.$eval('.question-details',n=>n.innerText),/Literal text: <img/);
+        await page.screenshot({path:path.join(screenshots,'question-desktop.png'),fullPage:true});
+        await page.setViewport({width:390,height:900});
+        const questionBounds=await page.$eval('#pending',node=>{const r=node.getBoundingClientRect();return {left:r.left,right:r.right,scroll:node.scrollWidth,client:node.clientWidth};});
+        assert.ok(questionBounds.left>=0 && questionBounds.right<=390 && questionBounds.scroll<=questionBounds.client+1);
+        await page.screenshot({path:path.join(screenshots,'question-mobile.png'),fullPage:true});
+        await page.click('.question-choice');
+        await page.waitForFunction(()=>$('pending').innerText.includes('Clara needs your input'));
+        assert.equal(await page.$eval('#pending h3',n=>n.textContent),'Clara needs your input');
+        assert.match(await page.$eval('.question-context',n=>n.textContent),/\n\nWhich test folder/);
+        await page.type('.question-answer','Use the test folder.');
+        await page.focus('.question-answer');await page.keyboard.press('Enter');
+        await page.type('.question-answer','Keep the existing files.');
+        assert.equal(await page.$eval('.question-answer',n=>n.value),'Use the test folder.\nKeep the existing files.');
+        await page.click('#pending .primary');
+        await page.waitForFunction(()=>$('pending').classList.contains('hidden'));
+        const answers=await page.evaluate(async()=>{
+            const detail=await api('/api/conversations/'+state.cid);
+            const diagnostics=await api('/api/jobs/'+detail.jobs[0].id+'/diagnostics.json');
+            return diagnostics.events.filter(e=>e.kind==='answer').map(e=>e.data.answer);
+        });
+        assert.deepEqual(answers,['Ask me for the existing test-folder link.','Use the test folder.\nKeep the existing files.']);
         assert.deepEqual(errors,[]);
         console.log('Passed history replay, task association, download contents, live streaming, deduplication, filename escaping, mobile layout, and conversation reset.');
     }finally{

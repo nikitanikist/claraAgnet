@@ -42,7 +42,35 @@ def normalize_usage(raw):
             "coverage": "reported" if available else "unavailable", "note": NOTE,
             "turns": number(raw.get("turns")), "duration_ms": number(raw.get("duration_ms")),
             "wall_duration_ms": number(raw.get("wall_duration_ms")),
+            "user_wait_ms": number(raw.get("user_wait_ms")),
+            "active_duration_ms": number(raw.get("active_duration_ms")),
             "limit_usd": number(raw.get("limit_usd"))}
+
+
+def with_wait_timing(store, job, report, ended_at):
+    """Union recorded input waits; processing time is elapsed time, not inference time."""
+    wall = number(report.get('wall_duration_ms'))
+    if wall is None:
+        return report
+    start = ended_at - wall / 1000
+    pending = {}; intervals = []
+    rows = store.rows("SELECT kind,data,created FROM events WHERE job_id=? AND kind IN ('question','approval','answer') ORDER BY id", (job['id'],))
+    for row in rows:
+        data = json.loads(row['data']); rid = data.get('request_id')
+        if not rid:
+            continue
+        if row['kind'] in {'question', 'approval'}:
+            pending.setdefault(rid, row['created'])
+        elif rid in pending:
+            intervals.append((pending.pop(rid), row['created']))
+    intervals.extend((value, ended_at) for value in pending.values())
+    wait = 0; previous_end = start
+    for left, right in sorted(intervals):
+        left = max(start, previous_end, left); right = min(ended_at, right)
+        if right > left:
+            wait += right - left; previous_end = right
+    wait_ms = min(wall, round(wait * 1000))
+    return {**report, 'user_wait_ms': wait_ms, 'active_duration_ms': wall - wait_ms}
 
 
 class UsageTracker:
@@ -128,7 +156,7 @@ def usage_csv(jobs):
     writer = csv.writer(output)
     writer.writerow(["Task ID", "Started UTC", "Task", "Status", "Usage coverage", "Token scope",
                      "Input tokens", "Output tokens", "Cache read tokens", "Cache write tokens", "Total tokens",
-                     "SDK API estimate USD", "Blended estimate USD per 1000 tokens", "Wall seconds", "Model turns", "Models", "Task estimate limit USD", "Note"])
+                     "SDK API estimate USD", "Blended estimate USD per 1000 tokens", "Wall seconds", "Waiting for user seconds", "Working seconds", "Model turns", "Models", "Task estimate limit USD", "Note"])
     for job in jobs:
         usage = job_usage(job)
         duration = usage["wall_duration_ms"] if usage["wall_duration_ms"] is not None else usage["duration_ms"]
@@ -139,6 +167,8 @@ def usage_csv(jobs):
                          usage["sdk_estimated_usd"] * 1000 / usage["total_tokens"]
                          if usage["total_tokens"] and usage["sdk_estimated_usd"] is not None else None,
                          duration / 1000 if duration is not None else None,
+                         usage['user_wait_ms'] / 1000 if usage.get('user_wait_ms') is not None else None,
+                         usage['active_duration_ms'] / 1000 if usage.get('active_duration_ms') is not None else None,
                          usage["turns"], csv_text("; ".join(m["model"] for m in usage["models"])),
                          usage["limit_usd"], NOTE])
     return "\ufeff" + output.getvalue()

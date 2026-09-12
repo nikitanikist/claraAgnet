@@ -41,3 +41,16 @@ The stored/API representation of No turn limit is `max_turns: null`; zero is inv
 In the paused conversation, select **Workflow review → Allow continuation with incomplete usage**. The review records the exact interrupted-job usage reports and a note in the local event history. It does not edit those reports or zero missing values. A different interruption or a changed report needs another review; stale browser submissions are rejected. The action requires an authenticated, idle dashboard and is not exposed as a model tool.
 
 After review, known usage still counts against workflow limits. Because unknown usage cannot be subtracted accurately, aggregate turn and cost limits cannot guarantee a true total for this workflow; the displayed totals are lower bounds. Per-request limits and all known exhausted budgets still apply. Review does not increase a budget, mark any output verified or waive uncertain external-operation checks. Continue in the same conversation so the saved session and checkpoints remain available.
+
+
+## Waiting time and reasoning effort in 0.2.5
+
+New task cards/CSV split elapsed time into user-input waiting and remaining working time. Questions/approvals count as waiting until answered or execution ends, with overlapping waits counted once. Working time includes inference, tools, network and other processing. Older reports without these fields show their original elapsed time. Existing task/workflow time limits continue to use wall time.
+
+Reasoning effort is configurable independently of the model. Balanced is medium and the default for an unset preference. Compare both speed and verified outcomes when changing effort; lower effort is not a guarantee of lower total cost if it introduces retries.
+
+## Estimating Max capacity
+
+As checked on 12 September 2026, the [Max 20x plan](https://support.claude.com/en/articles/11049762-choose-a-claude-plan) costs $200/month and is described relative to Pro capacity, not as a fixed published token balance. [Usage depends on model, conversation size, complexity and features](https://support.claude.com/en/articles/11647753-how-do-usage-and-length-limits-work). [The current SDK update](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan) says the announced separate SDK-credit change is paused; its old credit table is not an active $200 API allowance. Do not divide the subscription fee by Clara's API estimate to predict closeouts.
+
+For a practical estimate, record the provider's actual remaining-usage indicators before and after several comparable, reviewed test runs, with the same model/effort and no unrelated account activity. For each displayed limit window, divide remaining percentage points by typical percentage points consumed per run. Treat the lowest remaining-run estimate as the constraint, and account for resets. This is an empirical estimate, not a guaranteed quota; rounding, cache state, retries, other account activity and provider changes affect it. [Claude Code /usage](https://code.claude.com/docs/en/costs) reports plan usage; API dollar estimates answer a different question.

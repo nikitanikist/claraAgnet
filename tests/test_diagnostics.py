@@ -46,7 +46,9 @@ def test_tool_history_is_bounded_and_keeps_error_tail_but_not_images_or_known_se
 
 def test_hooks_save_actual_adjusted_call_output_and_explain_turn_exhaustion(tmp_path, monkeypatch):
     class SDKDouble:
-        def __init__(self, options): self.options = options
+        def __init__(self, options):
+            self.options = options
+            assert options.effort == 'medium'
         async def __aenter__(self): return self
         async def __aexit__(self, *args): pass
         async def query(self, prompt): pass

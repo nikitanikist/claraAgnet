@@ -7,6 +7,7 @@ from pathlib import Path
 from .knowledge import Knowledge,Memory,job_scope,decode
 from .workflows import Workflows
 from .operations import Operations
+from .evidence_index import evidence_index,evidence_detail
 
 
 def schema(properties,required=()):
@@ -85,10 +86,11 @@ def definitions(config,store,job):
       ('save_checkpoint','Save a stage with evidence IDs, or mark blocked/needs_review. Cannot claim final approval.',schema({'stage':'s','evidence_ids':'a','note':'s','status':'s'},['stage','evidence_ids']),lambda a:wf.checkpoint(job,a['stage'],a['evidence_ids'],a.get('note',''),a.get('status','verified'))),
       ('prepare_resume','Recheck output hashes and load previous progress/uncertain actions. Observe live UI before continuing.',schema({}),resume),
       ('verify_output','Verify PDF text, identity, year, type and page count. This does not certify tax correctness or visual completeness.',schema({'path':'s','member':'s','document_type':'s','year':'s','required_text':'a','min_pages':'i'},['path','member','document_type','year']),lambda a:wf.verify_document(job,**a)),
-      ('list_evidence','List runtime evidence IDs for this conversation. Inspect checks and coverage before checkpointing.',schema({}),lambda a:[decode(r,'payload') for r in store.rows('SELECT e.* FROM evidence e JOIN jobs j ON j.id=e.job_id WHERE j.conversation_id=? ORDER BY e.created DESC LIMIT 30',(job['conversation_id'],))]),
+      ('list_evidence','Compact, paginated evidence index. Business evidence by default; select kind=tool_observation or an exact tool name for raw observation IDs. Use get_evidence for details.',schema({'kind':'s','tool':'s','limit':'i','before':'s'}),lambda a:evidence_index(store,job['conversation_id'],**a)),
+      ('get_evidence','Read one evidence record in bounded text chunks. Use next_offset only when more detail is necessary. No direct database access is needed.',schema({'id':'s','offset':'i','length':'i'},['id']),lambda a:evidence_detail(store,job['conversation_id'],**a)),
       ('retrieve_knowledge','Search source-linked knowledge for this client/firm; use software build and tax year filters.',schema({'query':'s','library':'s','application':'s','build':'s','tax_year':'s'},['query']),lambda a:knowledge.search(scope_key=job_scope(store,job),**a)),
       ('retrieve_memory','Retrieve scoped lessons for the exact application build. Candidates are not qualified procedures.',schema({'query':'s','application':'s','build':'s'}),lambda a:memory.retrieve(job,**a)),
-      ('propose_memory','Save a candidate lesson with preconditions/actions/postconditions. No model self-approval.',schema({'title':'s','application':'s','build':'s','payload':'o','kind':'s'},['title','application','build','payload']),lambda a:memory.propose(job,**a)),
+      ('propose_memory','Save a candidate lesson with preconditions/actions/postconditions. No model self-approval.',schema({'title':'s','application':'s','build':'s','payload':'o','kind':{'type':'string','enum':['procedure','client_fact']}},['title','application','build','payload']),lambda a:memory.propose(job,**a)),
       ('memory_use','Record procedure use before actions, validate after runtime evidence, or invalidate after failure.',schema({'action':'s','id':'s','build':'s','evidence_id':'s','reason':'s'},['action','id']),memory_action),
       ('reserve_external_write','Reserve one external-write attempt by stable client/business key before creating invoices, signature packets or uploads. Existing keys cannot be replayed.',schema({'system':'s','operation':'s','key':'s','request':'o'},['system','operation','key','request']),lambda a:ops.reserve(job,**a)),
       ('verify_remote_record','Match remote record fields against fresh Chrome readback, not an assistant claim.',schema({k:'s' for k in ['observation_id','system','url','remote_id','external_key','client_name','status']},['observation_id','system','url','remote_id','external_key','client_name','status']),remote),

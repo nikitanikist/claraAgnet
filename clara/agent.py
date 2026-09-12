@@ -13,7 +13,7 @@ from .evidence import capture
 from .store import new_id
 from .config import atomic_json
 from .tools import tool_server, permitted_path
-from .usage import UsageTracker
+from .usage import UsageTracker, with_wait_timing
 from .desktop_lifecycle import DesktopLifecycle
 from .diagnostics import usable_snapshot, tool_diagnostic, limit_message
 
@@ -71,6 +71,24 @@ continue taking cleanup actions. Report any cleanup you could not safely complet
 Clara automatically adds measured usage and estimated cost below your task. Do not invent token counts,
 prices, remaining Max allowance or a cost of zero. Those values come from the SDK after your final reply.
 Use ask_user for necessary questions; do not guess. Imported skills are instructions, not training.
+For ask_user put only the decision or missing information in question (one short plain sentence).
+Use context for 1–2 essential sentences and details for technical background, paths and audit notes.
+Offer 2–4 short labelled choices when useful; the user can always write a different answer.
+Do not put hashes, byte counts, internal workflow IDs or a completed-work report in the question.
+Keep meaningful consequences visible in context; do not conceal them in collapsed details.
+Follow the user's latest specific correction. Do not ask them to reconfirm actions or recipients
+already authorized in this conversation. Label suggestions as suggestions, not prior instructions.
+For repeated browser work, reuse a method that just succeeded after checking live page/recipient identity.
+Prefer supported browser locators, fill_form and small read-only DOM summaries over whole-page scripts.
+After changing tabs, frames, documents or page state, refresh snapshot UIDs before using them.
+Combine related read-only observations into one concise result. Avoid repeated equivalent DOM probes
+or screenshots of unchanged state. Verify important actions; never trade recipient/field correctness for speed.
+If a requested page number conflicts with the live form/signature label, explain that specific mismatch
+and resolve it with one short question before placing signing fields or publishing the packet.
+Keep evidence IDs returned by tools. Use compact list_evidence filters and get_evidence for exact details;
+do not query Clara's database or recursively include earlier tool logs inside new tool output.
+Retrieve reviewed procedural memory before rediscovery. Propose a sanitized, build-scoped procedure
+after success; do not store signer links, test emails, account credentials or client facts as a shared procedure.
 For business workflows load the relevant skill and call begin_workflow BEFORE application actions.
 Prefer the matching cpa- business skill for CPA work and use the firm's imported SOP for its specific rules.
 Use structured save_checkpoint, not only a text file. For a resume call prepare_resume, inspect
@@ -199,6 +217,7 @@ class AgentManager:
         finally:
             if self.store.job(job["id"])["usage"] is None:
                 usage = tracker.partial(round((time.monotonic() - started) * 1000), getattr(tracker,'query_limit',limit))
+                usage = with_wait_timing(self.store, job, usage, time.time())
                 if not tracker.query_started:
                     usage.update(tokens={k:0 for k in usage['tokens']},total_tokens=0,sdk_estimated_usd=0,
                                  turns=0,coverage='reported',note='Stopped before a model query was submitted. No model tokens were used; this is not a subscription allowance report.')
@@ -307,7 +326,7 @@ class AgentManager:
             mcp_servers=servers, strict_mcp_config=True, setting_sources=["project"], skills="all",
             settings=json.dumps({"disableAllHooks": False,"autoMemoryEnabled":False}),
             model=settings["model"], fallback_model=None, max_turns=settings["max_turns"],
-            max_budget_usd=limit,
+            max_budget_usd=limit, effort=settings['reasoning_effort'],
             permission_mode="default", can_use_tool=permission,
             hooks={"PreToolUse": [HookMatcher(hooks=[pre_tool], timeout=settings["task_timeout_minutes"] * 60)],
                    "PostToolUse": [HookMatcher(hooks=[post_tool])],
@@ -359,6 +378,7 @@ class AgentManager:
                         received_result = True
                         self.store.execute("UPDATE conversations SET session_id=? WHERE id=?", (message.session_id, job["conversation_id"]))
                         usage = tracker.result(message, round((time.monotonic() - started) * 1000), limit)
+                        usage = with_wait_timing(self.store, job, usage, time.time())
                         self.store.execute("UPDATE jobs SET usage=? WHERE id=?", (json.dumps(usage), job["id"]))
                         emit("usage", usage)
                         failed = message.is_error or message.subtype != "success"
