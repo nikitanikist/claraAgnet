@@ -39,6 +39,10 @@ def snapshot(controller_pid):
     user32.OpenInputDesktop.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
     user32.OpenInputDesktop.restype = wintypes.HANDLE
     user32.CloseDesktop.argtypes = [wintypes.HANDLE]
+    user32.GetShellWindow.argtypes = []
+    user32.GetShellWindow.restype = wintypes.HWND
+    shell_window = user32.GetShellWindow()
+    shell_pid = win32process.GetWindowThreadProcessId(shell_window)[1] if shell_window else 0
     desktop = user32.OpenInputDesktop(0, False, 0x0100)
     accessible = bool(desktop)
     if desktop:
@@ -56,7 +60,7 @@ def snapshot(controller_pid):
               'owner': hashlib.sha256(str(sid).encode()).hexdigest(),
               'controller': [controller.pid, controller.create_time()],
               'ancestors': [p.pid for p in controller.parents()] + [controller.pid],
-              'processes': [], 'windows': [], 'print_jobs': [], 'errors': [],
+              'processes': [], 'windows': [], 'print_jobs': [], 'errors': [], 'shell_pid': shell_pid,
               'unresolved_processes': [], 'window_details': []}
     for process_session, pid, name, process_sid in win32ts.WTSEnumerateProcesses():
         if process_session != session or pid in {0, os.getpid()}:

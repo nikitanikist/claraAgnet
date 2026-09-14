@@ -8,6 +8,8 @@ Before a portal model task starts, Clara saves a read-only baseline from the sep
 
 Some RDP systems omit process owner SIDs from WTS enumeration. The probe attempts a limited token query and still tracks a process by PID and creation time when its SID stays unavailable; it never ignores a process based on its name. Missing creation identity remains an observation error. Diagnostic metadata identifies unresolved owners and window sizes. Zero-size shell helper windows are excluded from the visible app list; their processes remain tracked.
 
+ThumbnailDeviceHelperWnd and EdgeUiInputTopWndClass are also shell surfaces only when owned by the process returned by GetShellWindow. Ordinary File Explorer folder windows still block a clean baseline. The Windows boot-time estimate may jitter by up to two seconds; account, session and the controller's PID plus exact creation time must still match. New process identities are always tracked.
+
 After result reporting, WindowsHandoff takes fresh observations. Automatic release requires all of the following:
 
 - The configured session is dedicated and has passed Windows qualification.

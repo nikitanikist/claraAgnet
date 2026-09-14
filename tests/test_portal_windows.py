@@ -9,7 +9,7 @@ import pytest
 from clara.portal_bindings import PortalBindings
 from clara.portal_journal import PortalJournal
 from clara.agent import AgentManager
-from clara.portal_windows import WindowsHandoff, validate_snapshot
+from clara.portal_windows import WindowsHandoff, validate_snapshot, baseline_issues
 from test_portal_delivery import BASE, WORKER, setup
 
 
@@ -152,3 +152,33 @@ def test_unavailable_qualified_baseline_stops_before_query_or_application_action
         assert json.loads(store.job(jid)['usage'])['total_tokens'] == 0
         assert store.one('SELECT snapshot FROM portal_windows_baselines WHERE job_id=?', (jid,))
     asyncio.run(scenario())
+
+
+def test_boot_estimate_jitter_does_not_change_exact_controller_identity(tmp_path):
+    store, jid = task(tmp_path)
+    current, clock = sample(), [0]
+    observer = WindowsHandoff(store, exclusive=True, qualified=True,
+                              probe=lambda: copy.deepcopy(current), clock=lambda: clock[0])
+    async def scenario():
+        await observer.begin(jid)
+        current['boot'] += 0.012
+        assert (await observer.observe(jid))['in_flight'] == ['windows-settling']
+        current['boot'] -= 0.026
+        clock[0] = 4
+        assert (await observer.observe(jid))['complete']
+        current['controller'][1] += 0.001
+        assert 'windows-session-or-controller-changed' in (await observer.observe(jid))['unknown']
+    asyncio.run(scenario())
+
+
+def test_shell_helpers_require_actual_shell_pid_and_explorer_folders_still_block():
+    current = sample()
+    current['shell_pid'] = 20
+    current['windows'] += [{'handle': 88, 'pid': 20, 'class': 'ThumbnailDeviceHelperWnd'},
+                           {'handle': 89, 'pid': 20, 'class': 'EdgeUiInputTopWndClass'}]
+    assert baseline_issues(current) == []
+    current['windows'].append({'handle': 90, 'pid': 20, 'class': 'CabinetWClass'})
+    assert 'windows-baseline-applications-open' in baseline_issues(current)
+    current['windows'].pop()
+    current['windows'][1]['pid'] = 30
+    assert 'windows-baseline-applications-open' in baseline_issues(current)

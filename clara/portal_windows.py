@@ -19,6 +19,22 @@ from .connectors import desktop_command
 
 SHELL_CLASSES = {'Progman', 'WorkerW', 'Shell_TrayWnd', 'Shell_SecondaryTrayWnd'}
 CONSOLE_CLASSES = {'ConsoleWindowClass', 'CASCADIA_HOSTING_WINDOW_CLASS'}
+SHELL_HELPER_CLASSES = {'ThumbnailDeviceHelperWnd', 'EdgeUiInputTopWndClass'}
+
+
+def shell_surface(snapshot, window):
+    return (window['class'] in SHELL_CLASSES or
+            (window['class'] in SHELL_HELPER_CLASSES and snapshot.get('shell_pid', 0) > 0
+             and window['pid'] == snapshot['shell_pid']))
+
+
+def same_execution_session(current, baseline):
+    # psutil's Windows boot-time estimate jitters by milliseconds between calls.
+    # The controller PID + exact creation time, account and session must still
+    # match. A tiny clock-estimation change is not a new Windows boot.
+    return (all(current[k] == baseline.get(k) for k in ('session', 'controller', 'owner')) and
+            type(baseline.get('boot')) in {int, float} and
+            abs(current['boot'] - baseline['boot']) <= 2)
 
 
 async def native_snapshot():
@@ -80,7 +96,7 @@ def baseline_issues(snapshot):
     issues = []
     # Console hosts are retained so the operator can keep Clara's startup
     # PowerShell open. Every other application window must start closed.
-    if any(w['class'] not in SHELL_CLASSES | CONSOLE_CLASSES for w in snapshot['windows']):
+    if any(not shell_surface(snapshot, w) and w['class'] not in CONSOLE_CLASSES for w in snapshot['windows']):
         issues.append('windows-baseline-applications-open')
     if snapshot['print_jobs']:
         issues.append('windows-baseline-printing-active')
@@ -141,12 +157,13 @@ class WindowsHandoff:
         unknown.extend(baseline.get('baseline_issues', ['windows-baseline-unavailable']))
         try:
             current = await self.take()
-            if any(current[k] != baseline.get(k) for k in ('session', 'boot', 'controller', 'owner')):
+            if not same_execution_session(current, baseline):
                 unknown.append('windows-session-or-controller-changed')
             before = {process_key(p) for p in baseline.get('processes', [])}
             running.extend(f"windows-process:{p['pid']}:{p['created']}" for p in current['processes'] if process_key(p) not in before)
             windows = {window_key(w) for w in baseline.get('windows', [])}
-            running.extend(f"windows-window:{w['handle']}:{w['pid']}" for w in current['windows'] if window_key(w) not in windows)
+            running.extend(f"windows-window:{w['handle']}:{w['pid']}" for w in current['windows']
+                           if window_key(w) not in windows and not shell_surface(current, w))
             running.extend(f"windows-print:{p['queue']}:{p['id']}" for p in current['print_jobs'])
         except Exception:
             unknown.append('windows-observation-unavailable')
@@ -172,12 +189,12 @@ class WindowsHandoff:
         try:
             before = json.loads(row['snapshot'])
             current = await self.take()
-            if any(current[k] != before.get(k) for k in ('session', 'boot', 'controller', 'owner')):
+            if not same_execution_session(current, before):
                 return None
             old = {window_key(w) for w in before.get('windows', [])}
             names = {p['pid']: p.get('name', '') for p in current['processes']}
             windows = [{**w, 'application': names.get(w['pid'], '')} for w in current['windows']
-                       if window_key(w) not in old and w['class'] not in SHELL_CLASSES | CONSOLE_CLASSES
+                       if window_key(w) not in old and not shell_surface(current, w) and w['class'] not in CONSOLE_CLASSES
                        and w['pid'] not in current['ancestors']]
             return windows[:12] or None
         except Exception:
