@@ -123,11 +123,38 @@ class AgentManager:
         self.pending = {}
         self.cancelled = set()
         self.execution_guards = {}
+        self.execution_reservation = None
+        self.reserved_jobs = set()
 
     def assert_execution_permitted(self, job):
         guard = self.execution_guards.get(job["id"])
         if guard is not None:
             guard.assert_active()
+
+    def reserve_execution(self, reservation_id):
+        """Reserve the idle executor before a remote claim or recovery check.
+
+        The reservation outlives the model call. Its owner releases it only
+        after reporting results and establishing that desktop work is quiet.
+        """
+        if not isinstance(reservation_id, str) or not reservation_id.strip():
+            raise ValueError("An execution reservation needs an identity.")
+        if self.execution_reservation == reservation_id:
+            return True
+        if self.execution_reservation or self.active_job or not self.queue.empty():
+            return False
+        self.execution_reservation = reservation_id
+        return True
+
+    def release_execution(self, reservation_id, *, quiescent=False):
+        if self.execution_reservation != reservation_id:
+            raise ValueError("This reservation belongs to another execution.")
+        if not quiescent or self.active_job or not self.queue.empty():
+            raise ValueError("Keep the executor reserved until all work is confirmed stopped.")
+        self.execution_reservation = None
+        for jid in self.reserved_jobs:
+            self.execution_guards.pop(jid, None)
+        self.reserved_jobs.clear()
 
     async def start(self):
         self.store.recover()
@@ -143,12 +170,21 @@ class AgentManager:
             except asyncio.CancelledError:
                 pass
 
-    def submit(self, cid, prompt, mode, attachments):
+    def submit(self, cid, prompt, mode, attachments, *, reservation_id=None, execution_guard=None):
+        if self.execution_reservation is not None:
+            if reservation_id != self.execution_reservation or execution_guard is None:
+                raise ValueError("Clara is reserved for portal work or recovery. Use the portal queue or wait for the worker to be released.")
+            execution_guard.assert_active()
+        elif reservation_id is not None or execution_guard is not None:
+            raise ValueError("Reserve the executor before submitting guarded portal work.")
         running = self.store.one("SELECT id FROM jobs WHERE conversation_id=? AND status IN ('queued','running','waiting','cancelling')", (cid,))
         if running:
             raise ValueError("This conversation already has an active task. Answer its question, stop it, or wait for completion.")
         job = self.store.create_job(cid, prompt, mode, attachments)
         Workflows(self.store,self.config).attach(job)
+        if execution_guard is not None:
+            self.execution_guards[job["id"]] = execution_guard
+            self.reserved_jobs.add(job["id"])
         self.queue.put_nowait(job["id"])
         return job
 
@@ -269,6 +305,10 @@ class AgentManager:
         last_tool = None
 
         async def stop_hook(data, tool_use_id, context):
+            try:
+                self.assert_execution_permitted(job)
+            except LeaseLost:
+                return {}
             return desktop.stop_check(data)
 
         async def pre_tool(data, tool_use_id, context):

@@ -220,3 +220,65 @@ def test_sdk_hooks_and_final_result_remain_fenced_in_autonomous_mode(tmp_path, m
         # Actual usage is retained even when the success result is fenced out.
         assert json.loads(store.job(job['id'])['usage'])['total_tokens'] == 11
     asyncio.run(scenario())
+
+
+def test_remote_reservation_covers_claim_and_unacknowledged_result(tmp_path):
+    import asyncio
+    from clara.agent import AgentManager
+    from clara.config import Config
+    from clara.store import Store
+
+    async def scenario():
+        cfg = Config(tmp_path)
+        cfg.initialize()
+        store = Store(tmp_path / 'test.sqlite')
+        manager = AgentManager(cfg, store)
+        remote = store.create_conversation()['id']
+        local = store.create_conversation()['id']
+        assert manager.reserve_execution('remote-claim')
+        assert not manager.reserve_execution('other-claim')
+        with pytest.raises(ValueError, match='reserved'):
+            manager.submit(local, 'Local task during claim', 'autonomous', [])
+        lease, _ = lease_fixture()
+        renew(lease)
+        job = manager.submit(remote, 'Portal task', 'autonomous', [],
+                             reservation_id='remote-claim', execution_guard=lease)
+        # A reservation cannot be released while its job is still queued.
+        with pytest.raises(ValueError, match='confirmed stopped'):
+            manager.release_execution('remote-claim', quiescent=True)
+        async def execute(_job):
+            store.status(_job['id'], 'completed')
+        manager.execute = execute
+        worker = asyncio.create_task(manager.worker())
+        try:
+            await manager.queue.join()
+            assert store.job(job['id'])['status'] == 'completed'
+            # Model completion does not release a worker waiting for result acknowledgement.
+            with pytest.raises(ValueError, match='reserved'):
+                manager.submit(local, 'Local task before result ack', 'ask', [])
+            with pytest.raises(ValueError, match='confirmed stopped'):
+                manager.release_execution('remote-claim')
+            with pytest.raises(ValueError, match='another execution'):
+                manager.release_execution('other-claim', quiescent=True)
+            manager.release_execution('remote-claim', quiescent=True)
+            local_job = manager.submit(local, 'Local task after release', 'ask', [])
+            await manager.queue.join()
+            assert store.job(local_job['id'])['status'] == 'completed'
+        finally:
+            worker.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await worker
+    asyncio.run(scenario())
+
+
+def test_remote_claim_cannot_overtake_queued_local_work(tmp_path):
+    from clara.agent import AgentManager
+    from clara.config import Config
+    from clara.store import Store
+
+    cfg = Config(tmp_path)
+    cfg.initialize()
+    store = Store(tmp_path / 'test.sqlite')
+    manager = AgentManager(cfg, store)
+    manager.submit(store.create_conversation()['id'], 'Already queued', 'ask', [])
+    assert not manager.reserve_execution('remote-claim')
