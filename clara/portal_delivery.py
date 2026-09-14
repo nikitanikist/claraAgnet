@@ -46,7 +46,9 @@ class PortalDelivery:
         while after < end:
             lease.assert_active()
             reply = await self.transport.request('clara-messages',
-                {**asdict(identity), 'after_seq': after, 'limit': 100})
+                # The wire cursor is nullable or a positive message sequence.
+                # A new conversation starts at 1, so its initial cursor is null.
+                {**asdict(identity), 'after_seq': after if after > 0 else None, 'limit': 100})
             lease.assert_active()
             page = reply.body
             if (page['from_seq'], page['to_seq']) != (start, end):

@@ -47,11 +47,15 @@ def handler_for(claim, calls, *, lose_ack=False, bad_page=None):
         if request.url.path.endswith('clara-message-ack'):
             if lose_ack and sum(c[0]=='clara-message-ack' for c in calls)==1:
                 raise httpx.ReadError('lost receipt', request=request)
-            return wire({**CONTRACT.document['fixtures']['clara-message-ack']['response']})
-        seq = body['after_seq'] + 1
+            return wire({**CONTRACT.document['fixtures']['clara-message-ack']['response'],
+                         'acked_seq': claim['message_boundary_seq'],
+                         'to_seq': claim['message_boundary_seq']})
+        cursor = body.get('after_seq')
+        seq = (cursor if cursor is not None else claim['delivery_from_seq'] - 1) + 1
         message = {**claim['messages'][0], 'seq': seq,
                    'message_id': f'55555555-5555-4555-8555-{seq:012d}'}
         page = {**CONTRACT.document['fixtures']['clara-messages']['response'],
+                'from_seq': claim['delivery_from_seq'], 'to_seq': claim['message_boundary_seq'],
                 'messages': [message], 'more_messages': seq < claim['message_boundary_seq']}
         if bad_page:
             page.update(bad_page)
@@ -59,8 +63,12 @@ def handler_for(claim, calls, *, lose_ack=False, bad_page=None):
     return handle
 
 
-def test_all_pages_and_ack_are_required_before_exactly_once_enqueue(tmp_path):
+@pytest.mark.parametrize('first_seq', [1, 11])
+def test_all_pages_and_ack_are_required_before_exactly_once_enqueue(tmp_path, first_seq):
     config, store, claim, lease = setup(tmp_path)
+    claim['delivery_from_seq'] = first_seq
+    claim['message_boundary_seq'] = first_seq + 1
+    claim['messages'][0]['seq'] = first_seq
     calls = []
     async def scenario():
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler_for(claim, calls))) as client:
@@ -69,7 +77,8 @@ def test_all_pages_and_ack_are_required_before_exactly_once_enqueue(tmp_path):
             manager = AgentManager(config, store)
             assert manager.reserve_execution('portal')
             messages = await delivery.receive(claim, lease)
-            assert [m['seq'] for m in messages] == [11, 12]
+            assert [m['seq'] for m in messages] == [first_seq, first_seq + 1]
+            assert calls[0][1]['after_seq'] == (None if first_seq == 1 else first_seq - 1)
             assert store.rows('SELECT * FROM jobs') == []
             row = PortalBindings(store, BASE, WORKER).persist_claim(claim, 'Prepare the assigned task.')
             jid = row['local_job_id']
