@@ -899,6 +899,29 @@
                     },
                     "maxItems": 40,
                     "type": "array"
+                  },
+                  "attachments": {
+                    "items": {
+                      "properties": {
+                        "attachment_id": {
+                          "maxLength": 36,
+                          "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          "type": "string"
+                        },
+                        "name": {
+                          "maxLength": 300,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "attachment_id",
+                        "name"
+                      ],
+                      "additionalProperties": false,
+                      "type": "object"
+                    },
+                    "maxItems": 100,
+                    "type": "array"
                   }
                 },
                 "required": [
@@ -908,7 +931,8 @@
                   "tax_year",
                   "file_path",
                   "client_name",
-                  "members"
+                  "members",
+                  "attachments"
                 ],
                 "additionalProperties": false,
                 "type": [
@@ -2104,6 +2128,86 @@
         "type": "object"
       }
     },
+    "clara-attachment": {
+      "audience": "worker",
+      "idempotent": false,
+      "request": {
+        "properties": {
+          "job_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "worker_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "attempt_no": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "fence_token": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "attachment_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "worker_id",
+          "attempt_no",
+          "fence_token",
+          "attachment_id"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "response": {
+        "properties": {
+          "attachment_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 300,
+            "type": "string"
+          },
+          "download_url": {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "expires_at": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          },
+          "server_time": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "attachment_id",
+          "name",
+          "download_url",
+          "expires_at",
+          "server_time"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      }
+    },
     "clara-result": {
       "audience": "worker",
       "idempotent": false,
@@ -2698,6 +2802,12 @@
               "installments_required": false,
               "filing_deadline": "April 30, 2025"
             }
+          ],
+          "attachments": [
+            {
+              "attachment_id": "88888888-8888-4888-8888-888888888888",
+              "name": "Smith-slips-2024.pdf"
+            }
           ]
         },
         "required_outputs": [
@@ -2878,6 +2988,22 @@
       "response": {
         "command_id": 42,
         "recorded": true,
+        "server_time": "2026-09-14T13:00:00Z"
+      }
+    },
+    "clara-attachment": {
+      "request": {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "worker_id": "22222222-2222-4222-8222-222222222222",
+        "attempt_no": 3,
+        "fence_token": 91,
+        "attachment_id": "88888888-8888-4888-8888-888888888888"
+      },
+      "response": {
+        "attachment_id": "88888888-8888-4888-8888-888888888888",
+        "name": "Smith-slips-2024.pdf",
+        "download_url": "https://example.supabase.co/storage/v1/object/sign/documents/x",
+        "expires_at": "2026-09-14T13:00:00Z",
         "server_time": "2026-09-14T13:00:00Z"
       }
     },

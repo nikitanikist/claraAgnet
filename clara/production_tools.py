@@ -97,4 +97,25 @@ def definitions(config,store,job):
       ('reconcile_external_write','Confirm a reserved operation using verified remote-record evidence.',schema({'id':'s','evidence_id':'s'},['id','evidence_id']),lambda a:ops.reconcile(job,a['id'],a['evidence_id'])),
       ('publish_handoff','Publish a local JSON evidence package, remaining stages, operations and budget for review.',schema({'note':'s'}),handoff),
     ]
+    if store.one('SELECT local_job_id FROM portal_v1_attempts WHERE local_job_id=?', (job['id'],)):
+        from .portal_outputs import record_delivery
+        def record_schema(fields):
+            return schema({field: {'type': 'string', 'minLength': 1,
+                                  'maxLength': 2000 if field == 'url' else 200}
+                           for field in fields}, fields)
+        items.append(('record_portal_delivery',
+            'Record assigned T1 delivery using current Chrome observations. Supply document evidence IDs, '
+            'one PandaDoc per member (member_id, remote_id, url, external_key, observation_id), '
+            'folder (remote_id, url, external_key, observation_id), and files '
+            '(member_id, document_type, tax_year, remote_file_id, observation_id). Observations must '
+            'show recipient, business key, remote file name, exact byte size, file ID and folder ID. '
+            'Returns checkpoint proofs; does not send email or approve the workflow.',
+            schema({'document_evidence_ids': {'type':'array', 'items':{'type':'string'}, 'maxItems':100},
+                    'pandadoc': {'type':'array', 'maxItems':100, 'items':record_schema(
+                        ['member_id','remote_id','url','external_key','observation_id'])},
+                    'folder': record_schema(['remote_id','url','external_key','observation_id']),
+                    'files': {'type':'array', 'maxItems':300, 'items':record_schema(
+                        ['member_id','document_type','tax_year','remote_file_id','observation_id'])}},
+                   ['document_evidence_ids','pandadoc','folder','files']),
+            lambda a:record_delivery(config,store,job,a)))
     return [(name,description,args,sync(fn)) for name,description,args,fn in items]

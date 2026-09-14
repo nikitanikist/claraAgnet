@@ -30,7 +30,14 @@ use the optional legacy protocol documented in `PORTAL-PROTOCOL.md`.
   the scoped task prompt, the correct workflow and dispatch. It requires an
   already reserved executor. A repeated claim returns its existing local task
   for recovery and never enqueues it again. It is not yet connected to a
-  production claim poller or Windows activation.
+  production claim poller or Windows activation. Ordinary information requests
+  do not create a formal tax workflow or need a closeout review checkpoint.
+- `portal_inputs.py` downloads every assigned source attachment before intake
+  acknowledges delivery or dispatches execution. It verifies attachment identity,
+  uses a separate credential-free client for signed storage URLs, bounds file
+  and task sizes, and records local hashes without saving signed URLs. A failed
+  later attachment leaves the task unstarted; an unchanged earlier download can
+  be reused. Lease loss cancels a blocked transfer and removes its partial file.
 - `portal_artifacts.py` snapshots a published attachment from the same
   conversation, verifies its recorded size/hash, and uploads exact bytes to an
   allocation on the configured portal's storage origin. Worker credentials are
@@ -40,6 +47,17 @@ use the optional legacy protocol documented in `PORTAL-PROTOCOL.md`.
   assignment's exact member IDs, tax year and portal document types. It rejects
   missing/conflicting files, rechecks source hashes, and reuses immutable local
   published snapshots. It does not claim any file has reached OneDrive.
+- `portal_outputs.py` and the task-scoped `record_portal_delivery` tool bind
+  required PDFs to each member's PandaDoc record and observed OneDrive files.
+  Fresh Chrome observations must match the recipient, business key, file/folder
+  IDs, original filenames and exact byte counts. These are worker observations;
+  the reported source hashes are not independent OneDrive hash verification.
+  The tool returns checkpoint proofs and cannot approve a workflow or send email.
+- `portal_results.py` prepares the exact PDF attachments and delivery records
+  for the result endpoint. A stopped or incomplete task reports review instead
+  of requesting successful handoff. The durable result is reused after a lost
+  receipt or restart without recomputing usage, re-uploading files or starting
+  another task. This component does not release the worker reservation.
 - `portal_usage.py` maps one attempt's measured elapsed/waiting time, reported
   tokens and SDK API estimate. Missing values remain unknown. These figures
   cannot calculate remaining Max subscription allowance.
@@ -81,8 +99,11 @@ use the optional legacy protocol documented in `PORTAL-PROTOCOL.md`.
 3. Connect the implemented session and its independent control/progress loops
    to the worker lifecycle. Stop takes precedence over an answer. A lost claim response
    recovers its existing attempt; it never authorizes a second desktop task.
-4. Map current evidence to stable member IDs, document types and tax year, send
-   artifacts/results, and report observed quiescence before releasing the slot.
+4. Connect the implemented input/output/result components, align the final
+   original-filename and OneDrive manifest contract, and report observed Windows
+   quiescence before releasing the slot. The current general-task upload types
+   are limited to the portal's PDF/PNG/CSV/DOCX/XLSX allowlist; unsupported output
+   types must be resolved before general attachment delivery is enabled.
    A server receipt and a completed model response are different facts.
 5. Verify SQL concurrency, authenticated portal UI and the real Windows/RDP
    workflow before enabling execution or issuing an installation update.
@@ -94,3 +115,11 @@ removed from the environment inherited by model and command subprocesses. The
 legacy adapter uses the same provider so normal process sanitization does not
 disable its configured connection. Credential rotation requires the configured
 service restart; no model tool exposes the provider.
+
+## Latest local validation
+
+The development branch's Python suite passes 214 tests. The result delivery
+tests use synthetic PDFs and mocked portal/storage receipts. They verify the
+outbound payload and retry behavior, not an actual Ready to Email transition.
+No real PandaDoc/OneDrive account, authenticated portal UI or Windows desktop
+was exercised by these tests. This is not an installation or release notice.

@@ -26,6 +26,9 @@ def setup(tmp_path):
     config.initialize()
     store = Store(config.data / 'db')
     claim = copy.deepcopy(CONTRACT.document['fixtures']['clara-claim']['response'])
+    # Delivery/lease tests have no source files; input downloads have their own
+    # integration tests with storage responses and byte checks.
+    claim['closeout']['attachments'] = []
     identity = AttemptIdentity(claim['job_id'], WORKER, claim['attempt_no'], claim['fence_token'])
     lease = ExecutionLease(identity, clock=lambda: 100)
     server = datetime(2026, 9, 14, tzinfo=timezone.utc)
