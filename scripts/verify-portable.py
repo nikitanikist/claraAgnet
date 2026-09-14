@@ -45,6 +45,10 @@ def main():
     if sys.argv[1] == "core":
         for name in ("ssl", "sqlite3", "ctypes", "clara.app", "pypdf", "docx", "pptx", "openpyxl"):
             importlib.import_module(name)
+        # Loading the real wire contract also checks its optional format
+        # validators. A disabled portal in the dashboard probe cannot do this.
+        from clara.portal_contract import PortalContract
+        PortalContract.bundled()
         from contextlib import closing
         import sqlite3
         with closing(sqlite3.connect(":memory:")) as probe:
@@ -55,7 +59,7 @@ def main():
         if not executable:
             raise SystemExit("The SDK's native Claude executable was not found.")
         subprocess.run([executable, "--version"], check=True, timeout=30)
-        print("Core imports, isolated dashboard startup and the native Claude executable passed.")
+        print("Core imports, portal contract, isolated dashboard startup and the native Claude executable passed.")
         print("No model task or desktop action was performed.")
     else:
         for name in ("win32api", "pythoncom", "comtypes", "dxcam", "windows_mcp.__main__"):

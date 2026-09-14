@@ -13,10 +13,27 @@ on:
       - tests/windows_portal_setup.ps1
       - tests/windows_portal_update.ps1
       - .github/workflows/windows-handoff-check.yml
+      - requirements.lock
+      - pyproject.toml
+      - scripts/verify-portable.py
+      - clara/portal_contract.py
+      - clara/contracts/portal-v1.json
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
+  core-installation:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.lock
+      - run: python -m pip check
+      - name: Verify the installed core and portal contract without live access
+        run: python scripts/verify-portable.py core
   native-observations:
     runs-on: windows-latest
     timeout-minutes: 10
