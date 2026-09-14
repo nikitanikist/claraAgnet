@@ -142,10 +142,12 @@ def publish_artifact(config, store, job, source, title=""):
     return result
 
 
-def tool_server(config, store, job, request_input):
+def tool_server(config, store, job, request_input, execution_guard=None):
     def wrap(fn):
         async def call(args):
             try:
+                if execution_guard is not None:
+                    execution_guard()
                 result = await fn(args)
                 return {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False)}]}
             except (ValueError, OSError, TimeoutError) as error:

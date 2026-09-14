@@ -15,6 +15,7 @@ from .config import atomic_json
 from .tools import tool_server, permitted_path
 from .usage import UsageTracker, with_wait_timing
 from .desktop_lifecycle import DesktopLifecycle
+from .portal_lease import LeaseLost
 from .diagnostics import usable_snapshot, tool_diagnostic, limit_message
 
 SYSTEM = """You are Clara, a capable assistant working on this computer for its signed-in user.
@@ -121,6 +122,12 @@ class AgentManager:
         self.client = None
         self.pending = {}
         self.cancelled = set()
+        self.execution_guards = {}
+
+    def assert_execution_permitted(self, job):
+        guard = self.execution_guards.get(job["id"])
+        if guard is not None:
+            guard.assert_active()
 
     async def start(self):
         self.store.recover()
@@ -157,6 +164,7 @@ class AgentManager:
             self.store.status(jid, "cancelled")
 
     async def request_input(self, job, kind, data):
+        self.assert_execution_permitted(job)
         rid = new_id()
         future = asyncio.get_running_loop().create_future()
         self.pending[rid] = {"job_id": job["id"], "conversation_id": job["conversation_id"],
@@ -165,6 +173,7 @@ class AgentManager:
         self.store.status(job["id"], "waiting")
         try:
             answer = await future
+            self.assert_execution_permitted(job)
             self.store.event(job["conversation_id"], job["id"], "answer", {"request_id": rid, "answer": answer})
             self.store.status(job["id"], "running")
             return answer
@@ -198,6 +207,8 @@ class AgentManager:
                                       message="Execution stopped. Completed actions were not undone; inspect results before retrying.")
                     if asyncio.current_task().cancelling():
                         raise
+                except LeaseLost as error:
+                    self.store.status(jid, "interrupted", message=str(error))
                 except Exception as error:
                     self.store.status(jid, "failed", message=f"{type(error).__name__}: {str(error)[:1500]}")
             finally:
@@ -213,6 +224,7 @@ class AgentManager:
         started = time.monotonic()
         limit = self.config.settings().get("max_budget_usd")
         try:
+            self.assert_execution_permitted(job)
             await self._execute(job, tracker, started, limit)
         finally:
             if self.store.job(job["id"])["usage"] is None:
@@ -261,6 +273,11 @@ class AgentManager:
 
         async def pre_tool(data, tool_use_id, context):
             nonlocal last_tool
+            try:
+                self.assert_execution_permitted(job)
+            except LeaseLost as error:
+                return {"hookSpecificOutput": {"hookEventName": "PreToolUse",
+                        "permissionDecision": "deny", "permissionDecisionReason": str(error)}}
             name, args = data["tool_name"], data.get("tool_input", {})
             if name == "Read":
                 try:
@@ -304,6 +321,10 @@ class AgentManager:
             return {}
 
         async def permission(name, args, context):
+            try:
+                self.assert_execution_permitted(job)
+            except LeaseLost as error:
+                return PermissionResultDeny(message=str(error))
             if name in {"Read", "Skill", "ToolSearch"} or name.startswith("mcp__clara__"):
                 return PermissionResultAllow()
             readonly = name.rsplit("__", 1)[-1] in {"take_snapshot", "take_screenshot", "list_pages", "Snapshot", "Screenshot", "ListWindows", "InspectControls", "ApplicationInfo", "VerifyWindow"}
@@ -313,7 +334,8 @@ class AgentManager:
             return PermissionResultAllow() if answer == "allow" else PermissionResultDeny(message="User declined this action.")
 
         servers = mcp_connectors(self.config)
-        servers["clara"] = tool_server(self.config, self.store, job, self.request_input)
+        servers["clara"] = tool_server(self.config, self.store, job, self.request_input,
+            execution_guard=lambda: self.assert_execution_permitted(job))
         conversation = self.store.conversation(job["conversation_id"])
         turn_instruction=("No Clara model-turn limit is configured for this request. Time and cost limits still apply; save progress as you work."
                           if settings['max_turns'] is None else
@@ -357,6 +379,7 @@ class AgentManager:
         async with asyncio.timeout(settings["task_timeout_minutes"] * 60):
             async with self.client:
                 emit("runtime", {"message": "Claude connected; starting the task", "auth": {"plan": auth["plan"], "api_fallback": False}})
+                self.assert_execution_permitted(job)
                 tracker.query_started=True
                 await self.client.query(prompt)
                 async for message in self.client.receive_response():
@@ -381,6 +404,7 @@ class AgentManager:
                         usage = with_wait_timing(self.store, job, usage, time.time())
                         self.store.execute("UPDATE jobs SET usage=? WHERE id=?", (json.dumps(usage), job["id"]))
                         emit("usage", usage)
+                        self.assert_execution_permitted(job)
                         failed = message.is_error or message.subtype != "success"
                         error_text = " ".join([message.result or "", *(message.errors or [])]).lower()
                         needs_login = failed and any(term in error_text for term in ("authenticate", "oauth", "not logged in", "authentication"))
