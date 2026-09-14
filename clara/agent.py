@@ -228,6 +228,12 @@ class AgentManager:
 
     async def request_input(self, job, kind, data):
         self.assert_execution_permitted(job)
+        if self.store.one('SELECT local_job_id FROM portal_v1_attempts WHERE local_job_id=?', (job['id'],)):
+            from .portal_control import question_payload
+            # Reject an undeliverable question before putting the model into an
+            # indefinite wait. The tool error lets it rephrase without losing
+            # the context or silently truncating an approval request.
+            question_payload(kind, data)
         rid = new_id()
         future = asyncio.get_running_loop().create_future()
         self.pending[rid] = {"job_id": job["id"], "conversation_id": job["conversation_id"],

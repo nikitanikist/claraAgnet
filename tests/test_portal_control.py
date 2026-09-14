@@ -7,6 +7,7 @@ import pytest
 
 from clara.agent import AgentManager
 from clara.portal_bindings import PortalBindings
+from clara.portal_contract import ContractViolation
 from clara.portal_control import PortalControl
 from clara.portal_journal import PortalJournal
 from clara.portal_lease import LeaseLost
@@ -120,4 +121,16 @@ def test_busy_heartbeat_without_a_lease_stops_local_work(tmp_path):
             with pytest.raises(LeaseLost):
                 await control.heartbeat()
             assert store.job(jid)['status'] == 'cancelled'
+    asyncio.run(scenario())
+
+
+def test_oversized_question_is_refused_before_the_model_waits(tmp_path):
+    async def scenario():
+        store, manager, _, jid, _ = environment(tmp_path)
+        manager.pending.clear()
+        with pytest.raises(ContractViolation, match='400 characters'):
+            await manager.request_input(store.job(jid), 'question', {'question': 'a' * 401})
+        assert not manager.pending
+        assert store.job(jid)['status'] == 'queued'
+        assert not store.rows("SELECT id FROM events WHERE job_id=? AND kind='question'", (jid,))
     asyncio.run(scenario())

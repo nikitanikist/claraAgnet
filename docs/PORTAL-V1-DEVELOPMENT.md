@@ -26,6 +26,11 @@ use the optional legacy protocol documented in `PORTAL-PROTOCOL.md`.
   a lost acknowledgement without creating or replaying a job. The executor's
   portal dispatch method requires that acknowledgement and a live lease, and
   durably marks an attempt dispatched before queueing it.
+- `portal_intake.py` connects a positive authenticated claim to delivery,
+  the scoped task prompt, the correct workflow and dispatch. It requires an
+  already reserved executor. A repeated claim returns its existing local task
+  for recovery and never enqueues it again. It is not yet connected to a
+  production claim poller or Windows activation.
 - `portal_artifacts.py` snapshots a published attachment from the same
   conversation, verifies its recorded size/hash, and uploads exact bytes to an
   allocation on the configured portal's storage origin. Worker credentials are
@@ -39,6 +44,8 @@ use the optional legacy protocol documented in `PORTAL-PROTOCOL.md`.
   before acknowledging it. Stop takes priority over simultaneous answers;
   losing an acknowledgement never applies the answer a second time. A busy
   heartbeat without an actual renewed lease stops the local task.
+  Undeliverably long questions are rejected before entering the waiting state,
+  allowing the model to rephrase without silently discarding context.
 - `portal_progress.py` relays completed chat text and concise activity with
   stable message IDs and a durable cursor. It excludes raw tool arguments and
   output from activity, preserves paragraph breaks, and cannot cross into

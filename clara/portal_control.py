@@ -8,6 +8,26 @@ from .portal_lease import LeaseLost
 from .portal_transport import PortalRejected, PortalUnavailable
 
 
+def question_payload(kind, data):
+    if kind == 'approval':
+        body = {'question': 'Allow this action?', 'explanation': data.get('tool'),
+                'answer_type': 'choice', 'choices': ['Allow', 'Deny'],
+                'details': json.dumps(data.get('input', {}), ensure_ascii=False)}
+    else:
+        choices = [c['label'] for c in data.get('choices', [])]
+        if len(set(choices)) != len(choices):
+            raise ContractViolation('Question choices need distinct labels.')
+        body = {'question': data['question'], 'explanation': data.get('context'),
+                'answer_type': 'choice' if choices else 'text', 'choices': choices,
+                'details': data.get('details')}
+    for field, limit in [('question', 400), ('explanation', 600), ('details', 8000)]:
+        if body.get(field) is not None and len(body[field]) > limit:
+            raise ContractViolation(f'Keep the portal {field} within {limit} characters. Rephrase before asking; preserve essential context.')
+    if any(len(c) > 120 for c in body['choices']):
+        raise ContractViolation('Keep each choice label within 120 characters and put its full meaning in the answer.')
+    return body
+
+
 class PortalControl:
     def __init__(self, store, manager, transport, journal, lease, local_job_id):
         self.store, self.manager, self.transport = store, manager, transport
@@ -53,18 +73,7 @@ class PortalControl:
         for rid, item in list(self.manager.pending.items()):
             if item['job_id'] != self.local_job_id or item['future'].done():
                 continue
-            data = item['data']
-            if item['kind'] == 'approval':
-                body = {'question': 'Allow this action?', 'explanation': data.get('tool'),
-                        'answer_type': 'choice', 'choices': ['Allow', 'Deny'],
-                        'details': json.dumps(data.get('input', {}), ensure_ascii=False)}
-            else:
-                choices = [c['label'] for c in data.get('choices', [])]
-                if len(set(choices)) != len(choices):
-                    raise ContractViolation('Question choices need distinct labels.')
-                body = {'question': data['question'], 'explanation': data.get('context'),
-                        'answer_type': 'choice' if choices else 'text', 'choices': choices,
-                        'details': data.get('details')}
+            body = question_payload(item['kind'], item['data'])
             await self.transport.report(self.journal, self.identity, 'clara-ask', 'question-' + rid,
                 {**asdict(self.identity), **body, 'request_id': rid, 'blocking': True})
 
