@@ -87,16 +87,20 @@ def test_lost_lease_interrupts_hung_download_and_never_registers_partial_input(t
     attachment = attach(claim)
     async def scenario():
         cancelled = asyncio.Event()
+        clock = [100.0]
         async def storage(request):
             try:
+                # Expire only after the download actually starts. A wall-clock
+                # 50 ms lease could expire during setup on a loaded machine.
+                clock[0] = 101.0
                 await asyncio.Event().wait()
             finally:
                 cancelled.set()
-        lease.clock = time.monotonic
-        lease.deadline = time.monotonic() + .05
+        lease.clock = lambda: clock[0]
+        lease.deadline = 100.05
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: wire(ticket(attachment)))) as api, \
                 httpx.AsyncClient(transport=httpx.MockTransport(storage)) as blobs:
-            inputs = PortalInputs(config, store, PortalTransport(BASE, lambda: 'test', client=api), client=blobs)
+            inputs = PortalInputs(config, store, PortalTransport(BASE, lambda: 'test', client=api, clock=lease.clock), client=blobs)
             with pytest.raises(LeaseLost):
                 await asyncio.wait_for(inputs.receive(claim, lease), 1)
             assert cancelled.is_set()

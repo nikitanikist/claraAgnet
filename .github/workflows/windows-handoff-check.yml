@@ -1,0 +1,22 @@
+name: Windows observation checks
+on:
+  push:
+    branches: [feat/clearhouse-portal-v1]
+    paths:
+      - clara/windows_activity.py
+      - tests/test_windows_activity_native.py
+      - .github/workflows/windows-handoff-check.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-observations:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install psutil==7.2.2 pywin32==312 pytest==8.4.2
+      - run: python -m pytest tests/test_windows_activity_native.py -q

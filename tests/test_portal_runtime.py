@@ -22,6 +22,41 @@ def general(claim):
     return claim
 
 
+@pytest.mark.parametrize('unreturned', [False, True])
+def test_windows_quiet_observation_does_not_clear_other_unresolved_calls(tmp_path, unreturned):
+    config, store, claim, _ = setup(tmp_path)
+    general(claim)
+    executions, calls = [], []
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(portal_handler(claim, calls))) as client:
+            manager = simulated_manager(config, store, executions, desktop=True)
+            previous_execute = manager.execute
+            async def execute(job):
+                await previous_execute(job)
+                if unreturned:
+                    store.event(job['conversation_id'], job['id'], 'tool', {'id':'unreturned', 'name':'Read'})
+            manager.execute = execute
+            class Observer:
+                async def observe(self, jid):
+                    return {'in_flight':[], 'unknown':[], 'complete':True}
+            manager.windows_handoff = Observer()
+            await manager.start()
+            runtime = PortalRuntime(config, store, manager,
+                PortalTransport(BASE, lambda:'test', client=client, clock=lambda:100), WORKER)
+            try:
+                outcome = await asyncio.wait_for(runtime.tick(), 3)
+                report = next(b['report'] for op,b in calls if op == 'clara-quiesce')
+                assert 'external-desktop-state-unconfirmed' not in report['unknown']
+                assert report['complete'] is (not unreturned)
+                assert outcome == ('held' if unreturned else 'finished')
+                assert bool(manager.execution_reservation) is unreturned
+                assert len(executions) == 1
+            finally:
+                await runtime.close()
+                await manager.close()
+    asyncio.run(scenario())
+
+
 def portal_handler(claim, calls, *, result_losses=0, claim_losses=0):
     results, claims = 0, 0
     def handle(request):

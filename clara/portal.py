@@ -47,6 +47,12 @@ class PortalWorker:
                 raise ValueError('Configure a CLARA_PORTAL_ worker credential environment variable.')
             if data.get('authentication_reviewed') is not True:
                 raise ValueError('Review the model account/authentication arrangement before enabling portal assignments.')
+            handoff = data.get('windows_handoff', {})
+            if (not isinstance(handoff, dict) or set(handoff) - {'exclusive_session', 'qualified'} or
+                    any(type(v) is not bool for v in handoff.values())):
+                raise ValueError('Windows handoff settings require explicit boolean exclusive_session and qualified flags.')
+            if handoff.get('qualified') and not handoff.get('exclusive_session'):
+                raise ValueError('Automatic Windows handoff requires a qualified dedicated session.')
             return data
         if version!='legacy':
             raise ValueError('Choose the reviewed portal protocol version 1 or the legacy protocol.')
@@ -94,6 +100,10 @@ class PortalWorker:
                 from .portal_transport import PortalTransport
                 transport=PortalTransport(settings['base_url'],lambda:portal_credential(settings['token_env']))
                 self.v1=PortalRuntime(self.config,self.store,self.manager,transport,settings['worker_id'])
+                if settings.get('windows_handoff', {}).get('exclusive_session'):
+                    from .portal_windows import WindowsHandoff
+                    self.manager.windows_handoff = WindowsHandoff(self.store, exclusive=True,
+                        qualified=settings['windows_handoff'].get('qualified') is True)
                 try:
                     await self.v1.start()
                 except Exception:

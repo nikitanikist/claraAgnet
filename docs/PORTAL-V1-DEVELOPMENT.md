@@ -100,9 +100,10 @@ and this branch has not been accepted for Windows release.
   another local task's events.
 - `portal_quiescence.py` inventories running calls, unreturned tools,
   uncertain external writes and interrupted uploads. A returned desktop click
-  alone is insufficient: external desktop state stays unconfirmed until the
-  Windows observation/recovery integration is built. This includes Clara's
-  actual `run_command` tool, whose return cannot prove detached work stopped.
+  alone is insufficient. The Windows observer now adds fresh session, process,
+  window and print-queue observations for a qualified dedicated T1 worker.
+  Unqualified sessions and uncertain actions retain their hold. This includes
+  Clara's actual `run_command`, whose return cannot prove detached work stopped.
   Oversized unresolved
   reports retain the worker hold instead of silently losing actions.
 - The trusted portal preparation profile keeps required PDF/source-copy/
@@ -123,10 +124,10 @@ and this branch has not been accepted for Windows release.
    variable, and `authentication_reviewed: true` in the local `portal.json`.
    Configuration and credential changes require a restart. Keep `enabled: false`
    until the remaining Windows and portal acceptance checks pass.
-3. Implement and verify the Windows external-state observer and validate the explicit
-   operator recovery path end to end. The current conservative observer retains a hold
-   after desktop/shell/browser actions; a successful tool return alone cannot
-   confirm that printing, uploading or a detached process has stopped.
+3. Qualify the implemented Windows observer on the real dedicated RDP and validate
+   operator recovery end to end. See WINDOWS-WORKER-HANDOFF.md. Keep automatic
+   handoff unqualified until the native check and connected T1/queue tests pass;
+   a successful tool return alone never releases the desktop.
 4. Report observed Windows quiescence before releasing the slot. The current general-task upload types
    are limited to the portal's PDF/PNG/CSV/DOCX/XLSX allowlist; unsupported output
    types must be resolved before general attachment delivery is enabled.
@@ -144,7 +145,7 @@ service restart; no model tool exposes the provider.
 
 ## Latest local validation
 
-The development branch's Python suite passes 243 tests. The result delivery
+The development branch's Python suite passes 272 tests (plus a native Windows test that is skipped on macOS). The result delivery
 tests use synthetic PDFs and mocked portal/storage receipts. They verify the
 outbound payload and retry behavior, not an actual Ready to Email transition.
 No real PandaDoc/OneDrive account, authenticated portal UI or Windows desktop

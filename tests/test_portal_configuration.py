@@ -29,6 +29,10 @@ def test_v1_worker_settings_use_enrolled_identity_without_legacy_owner(tmp_path)
     {'protocol_version':True}, {'protocol_version':2}, {'worker_id':'unknown'},
     {'base_url':'http://example.com/functions/v1'}, {'base_url':BASE+'?key=unsafe'},
     {'token_env':'MODEL_KEY'}, {'authentication_reviewed':False},
+    {'windows_handoff': {'qualified':True}},
+    {'windows_handoff': {'exclusive_session':'yes'}},
+    {'windows_handoff': {'exclusive_session':True, 'qualified':1}},
+    {'windows_handoff': {'exclusive_session':True, 'ignore_unknowns':True}},
 ])
 def test_unreviewed_or_misdirected_configuration_never_starts(tmp_path, changes):
     config, store, _, _ = setup(tmp_path)

@@ -128,4 +128,7 @@ CREATE TABLE IF NOT EXISTS portal_v1_cycles (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS portal_v1_one_cycle
  ON portal_v1_cycles(namespace,worker_id) WHERE finished IS NULL;
+CREATE TABLE IF NOT EXISTS portal_windows_baselines (
+ job_id TEXT PRIMARY KEY REFERENCES jobs(id), snapshot TEXT NOT NULL
+);
 """

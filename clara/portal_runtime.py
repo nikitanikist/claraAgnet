@@ -251,6 +251,18 @@ class PortalRuntime:
                     AttemptIdentity(claim['job_id'], self.worker_id, claim['attempt_no'], claim['fence_token']))
         if report is None:
             report = self.observer(self.store, self.manager, self.transport.base_url, identity, prepared.local_job_id)
+            if ('external-desktop-state-unconfirmed' in report['unknown'] and
+                    self.manager.windows_handoff is not None):
+                activity = await self.manager.windows_handoff.observe(prepared.local_job_id)
+                report['in_flight'] = sorted(set(report['in_flight'] + activity['in_flight']))
+                report['unknown'] = sorted(set(report['unknown'] + activity['unknown']))
+                if activity['complete']:
+                    report['unknown'].remove('external-desktop-state-unconfirmed')
+                    report['finished'].append('windows-session-observed-quiet')
+                    report['finished'] = report['finished'][-200:]
+                report['complete'] = not report['in_flight'] and not report['unknown']
+                if len(report['in_flight']) > 200 or len(report['unknown']) > 200:
+                    raise ValueError('Windows activity report exceeds the portal limit; retain the worker hold.')
         # Compare actual current observations with a previous pending report.
         # Retrying unchanged observations reuses their original timestamp/key.
         fingerprint = hashlib.sha256(json.dumps({k:v for k,v in report.items() if k != 'observed_at'},
