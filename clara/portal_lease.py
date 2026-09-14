@@ -6,6 +6,7 @@ recovery requires a new explicitly authorized attempt.
 """
 from dataclasses import dataclass
 from datetime import datetime
+import asyncio
 import math
 import time
 
@@ -56,6 +57,15 @@ class ExecutionLease:
             self.fence('Portal lease expired; inspect existing work before resuming.')
         if self.reason is not None or self.deadline is None:
             raise LeaseLost(self.reason or 'No acknowledged portal lease is available.')
+
+    async def wait_until_lost(self):
+        """Wake the executor even when no new model/tool callback is arriving."""
+        while True:
+            try:
+                self.assert_active()
+            except LeaseLost as error:
+                return error
+            await asyncio.sleep(min(0.25, self.remaining_seconds))
 
     def acknowledge(self, identity, *, expires_at, server_time, request_started):
         """Renew from an exact server acknowledgement using a monotonic deadline.

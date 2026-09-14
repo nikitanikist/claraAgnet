@@ -261,7 +261,26 @@ class AgentManager:
         limit = self.config.settings().get("max_budget_usd")
         try:
             self.assert_execution_permitted(job)
-            await self._execute(job, tracker, started, limit)
+            guard = self.execution_guards.get(job['id'])
+            if guard is None:
+                await self._execute(job, tracker, started, limit)
+            else:
+                execution = asyncio.create_task(self._execute(job, tracker, started, limit))
+                monitor = asyncio.create_task(guard.wait_until_lost())
+                try:
+                    done, _ = await asyncio.wait((execution, monitor), return_when=asyncio.FIRST_COMPLETED)
+                    if monitor in done:
+                        # Await cancellation so SDK/tool cleanup runs before the
+                        # executor is considered idle. External effects still
+                        # require a separate quiescence report before release.
+                        execution.cancel()
+                        await asyncio.gather(execution, return_exceptions=True)
+                        raise monitor.result()
+                    await execution
+                finally:
+                    execution.cancel()
+                    monitor.cancel()
+                    await asyncio.gather(execution, monitor, return_exceptions=True)
         finally:
             if self.store.job(job["id"])["usage"] is None:
                 usage = tracker.partial(round((time.monotonic() - started) * 1000), getattr(tracker,'query_limit',limit))

@@ -152,6 +152,78 @@ def test_answer_after_fencing_does_not_resume_action(tmp_path):
     asyncio.run(scenario())
 
 
+def test_expiry_interrupts_a_blocked_execution_and_waits_for_cleanup(tmp_path):
+    import asyncio
+    import json
+    from clara.agent import AgentManager
+    from clara.config import Config
+    from clara.store import Store
+
+    async def scenario():
+        cfg = Config(tmp_path)
+        cfg.initialize()
+        store = Store(tmp_path / 'db')
+        manager = AgentManager(cfg, store)
+        lease, now = lease_fixture()
+        renew(lease)
+        assert manager.reserve_execution('portal-attempt')
+        job = manager.submit(store.create_conversation()['id'], 'Prepare a package', 'autonomous', [],
+                             reservation_id='portal-attempt', execution_guard=lease)
+        entered = asyncio.Event()
+        cleaned_up = asyncio.Event()
+        async def blocked_execution(job, tracker, started, limit):
+            tracker.query_started = True
+            entered.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                await asyncio.sleep(0)
+                cleaned_up.set()
+        manager._execute = blocked_execution
+        task = asyncio.create_task(manager.execute(job))
+        await entered.wait()
+        now[0] = 215  # lease expired while the model/tool was silent
+        with pytest.raises(LeaseLost):
+            await asyncio.wait_for(task, timeout=2)
+        assert cleaned_up.is_set()
+        assert manager.execution_reservation == 'portal-attempt'
+        assert json.loads(store.job(job['id'])['usage'])['coverage'] != 'reported'
+        with pytest.raises(ValueError, match='reserved'):
+            manager.submit(store.create_conversation()['id'], 'Other task', 'autonomous', [])
+    asyncio.run(scenario())
+
+
+def test_normal_guarded_completion_stops_its_watchdog(tmp_path):
+    import asyncio
+    from clara.agent import AgentManager
+    from clara.config import Config
+    from clara.store import Store
+
+    async def scenario():
+        cfg = Config(tmp_path)
+        cfg.initialize()
+        store = Store(tmp_path / 'db')
+        manager = AgentManager(cfg, store)
+        job = store.create_job(store.create_conversation()['id'], 'Read a file', 'autonomous', [])
+        lease, _ = lease_fixture()
+        renew(lease)
+        manager.execution_guards[job['id']] = lease
+        monitor_stopped = asyncio.Event()
+        async def monitor():
+            try:
+                await asyncio.Event().wait()
+            finally:
+                monitor_stopped.set()
+        lease.wait_until_lost = monitor
+        async def finish(*args):
+            await asyncio.sleep(0)
+        manager._execute = finish
+        await manager.execute(job)
+        assert monitor_stopped.is_set()
+        lease.assert_active()
+    asyncio.run(scenario())
+
+
 def test_in_process_tool_cannot_bypass_expired_lease(tmp_path, monkeypatch):
     import asyncio
     from clara.config import Config
