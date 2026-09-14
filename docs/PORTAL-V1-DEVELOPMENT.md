@@ -34,6 +34,20 @@ use the optional legacy protocol documented in `PORTAL-PROTOCOL.md`.
 - `portal_usage.py` maps one attempt's measured elapsed/waiting time, reported
   tokens and SDK API estimate. Missing values remain unknown. These figures
   cannot calculate remaining Max subscription allowance.
+- `portal_control.py` relays short questions with separate context/details,
+  maps choice labels to their full answers, and records command application
+  before acknowledging it. Stop takes priority over simultaneous answers;
+  losing an acknowledgement never applies the answer a second time. A busy
+  heartbeat without an actual renewed lease stops the local task.
+- `portal_progress.py` relays completed chat text and concise activity with
+  stable message IDs and a durable cursor. It excludes raw tool arguments and
+  output from activity, preserves paragraph breaks, and cannot cross into
+  another local task's events.
+- `portal_quiescence.py` inventories running calls, unreturned tools,
+  uncertain external writes and interrupted uploads. A returned desktop click
+  alone is insufficient: external desktop state stays unconfirmed until the
+  Windows observation/recovery integration is built. Oversized unresolved
+  reports retain the worker hold instead of silently losing actions.
 - The trusted portal preparation profile keeps required PDF/source-copy/
   application/signing/storage evidence and human review. Laureen handles
   invoicing. The server commits Ready to Email after receiving the result;
@@ -48,8 +62,8 @@ use the optional legacy protocol documented in `PORTAL-PROTOCOL.md`.
 2. Connect version dispatch, configuration and worker enrollment. Reserve the
    local executor before claim, persist the stable claim/message window, fetch
    every page and obtain the exact delivery acknowledgement before execution.
-3. Connect independent heartbeat/command polling, durable questions and reply
-   acknowledgement. Stop takes precedence over an answer. A lost claim response
+3. Connect the implemented control/progress components to independent polling
+   loops. Stop takes precedence over an answer. A lost claim response
    recovers its existing attempt; it never authorizes a second desktop task.
 4. Map current evidence to stable member IDs, document types and tax year, send
    artifacts/results, and report observed quiescence before releasing the slot.
@@ -59,3 +73,8 @@ use the optional legacy protocol documented in `PORTAL-PROTOCOL.md`.
 
 No inbound Windows desktop-control listener is introduced. Secrets belong in
 the configured credential provider, not this repository or task logs.
+Configured `CLARA_PORTAL_` credential values are retained in service memory and
+removed from the environment inherited by model and command subprocesses. The
+legacy adapter uses the same provider so normal process sanitization does not
+disable its configured connection. Credential rotation requires the configured
+service restart; no model tool exposes the provider.

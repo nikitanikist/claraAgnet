@@ -160,8 +160,21 @@ def test_restart_marks_jobs_interrupted_without_replay(config):
 def test_billing_environment_is_removed_not_forwarded():
     result = clean_environment({"PATH": "/bin", "HOME": "/home/person", "ANTHROPIC_API_KEY": "secret",
         "ANTHROPIC_BASE_URL": "https://other.example", "CLAUDE_CODE_USE_BEDROCK": "1",
-        "CLAUDE_CODE_OAUTH_TOKEN": "token", "AWS_SECRET_ACCESS_KEY": "secret", "CLAUDE_CONFIG_DIR": "/other"})
+        "CLAUDE_CODE_OAUTH_TOKEN": "token", "AWS_SECRET_ACCESS_KEY": "secret", "CLAUDE_CONFIG_DIR": "/other",
+        "CLARA_PORTAL_WORKER_KEY": "synthetic-worker-key"})
     assert result == {"PATH": "/bin", "HOME": "/home/person"}
+
+
+def test_portal_credentials_stay_in_service_after_subprocess_environment_sanitization(monkeypatch):
+    from clara import auth
+    monkeypatch.setattr(auth, '_portal_credentials', {})
+    monkeypatch.setenv('CLARA_PORTAL_TEST_KEY', 'synthetic-only')
+    auth.sanitize_process_environment()
+    assert 'CLARA_PORTAL_TEST_KEY' not in os.environ
+    assert auth.portal_credential('CLARA_PORTAL_TEST_KEY') == 'synthetic-only'
+    auth.sanitize_process_environment()
+    assert auth.portal_credential('CLARA_PORTAL_TEST_KEY') == 'synthetic-only'
+    assert 'CLARA_PORTAL_TEST_KEY' not in auth.clean_environment()
 
 
 def test_office_files_created_through_real_command_tool(config):

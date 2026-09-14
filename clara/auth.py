@@ -6,20 +6,38 @@ import shutil
 from pathlib import Path
 
 
+# Captured only from this process's explicitly configured environment. These
+# values are never copied into SDK/tool subprocesses, records or diagnostics.
+_portal_credentials = {}
+
+
+def portal_credential(name):
+    if not isinstance(name, str) or not name.startswith('CLARA_PORTAL_'):
+        raise ValueError('Use an explicitly configured CLARA_PORTAL_ credential name.')
+    sanitize_process_environment()
+    return _portal_credentials.get(name)
+
+
+def private_environment(key):
+    return billing_override(key) or key.startswith('CLARA_PORTAL_')
+
+
 def billing_override(key):
     return (key.startswith(("ANTHROPIC_", "CLAUDE_CODE_USE_", "AWS_", "AZURE_", "GOOGLE_"))
             or key in {"CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_API_KEY_HELPER", "CLAUDE_CONFIG_DIR", "CLAUDECODE"})
 
 
 def clean_environment(source=None):
-    return {k: v for k, v in (source if source is not None else os.environ).items() if not billing_override(k)}
+    return {k: v for k, v in (source if source is not None else os.environ).items() if not private_environment(k)}
 
 
 def sanitize_process_environment():
-    # SDK subprocesses inherit their parent's environment. Remove billing overrides
-    # from this Clara process only, without changing the user's shell or CLI files.
+    # SDK subprocesses inherit their parent's environment. Keep portal credentials
+    # in this service only; remove billing overrides. The user's shell is unchanged.
     for key in list(os.environ):
-        if billing_override(key):
+        if key.startswith('CLARA_PORTAL_'):
+            _portal_credentials[key] = os.environ.pop(key)
+        elif billing_override(key):
             os.environ.pop(key)
 
 

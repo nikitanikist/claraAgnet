@@ -5,11 +5,11 @@ Disabled unless an operator installs portal.json with a URL, owner and token env
 """
 import asyncio
 import json
-import os
 import time
 from urllib.parse import urlparse
 import httpx
 from .workflows import canonical_hash
+from .auth import portal_credential
 
 TERMINAL={'completed','needs_review','incomplete','failed','cancelled','interrupted'}
 
@@ -77,7 +77,7 @@ class PortalWorker:
                 try:
                     s=self.settings()
                     if not s: return
-                    token=os.environ.get(s['token_env'])
+                    token=portal_credential(s['token_env'])
                     if not token: raise ValueError('Configured portal token environment variable is empty.')
                     headers={'Authorization':'Bearer '+token};base=s['base_url'].rstrip('/')
                     record=self.store.one('SELECT a.* FROM portal_assignments a LEFT JOIN portal_receipts r ON r.external_id=a.external_id WHERE r.external_id IS NULL ORDER BY a.created LIMIT 1')

@@ -103,4 +103,15 @@ CREATE TABLE IF NOT EXISTS portal_v1_deliveries (
  acknowledged INTEGER NOT NULL DEFAULT 0,
  PRIMARY KEY(namespace,external_job_id,attempt_no)
 );
+CREATE TABLE IF NOT EXISTS portal_v1_commands (
+ namespace TEXT NOT NULL, external_job_id TEXT NOT NULL, worker_id TEXT NOT NULL,
+ attempt_no INTEGER NOT NULL, fence_token INTEGER NOT NULL, command_id INTEGER NOT NULL,
+ request_json TEXT NOT NULL, state TEXT NOT NULL, status TEXT,
+ PRIMARY KEY(namespace,external_job_id,attempt_no,command_id)
+);
+CREATE TABLE IF NOT EXISTS portal_v1_progress (
+ namespace TEXT NOT NULL, local_job_id TEXT NOT NULL REFERENCES jobs(id),
+ event_id INTEGER NOT NULL DEFAULT 0,
+ PRIMARY KEY(namespace,local_job_id)
+);
 """
