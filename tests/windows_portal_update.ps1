@@ -8,19 +8,20 @@ $ClaraRevision = 'a' * 40
 $ClaraTestPython = (Get-Command python).Source
 $ClaraOriginalPath = $env:Path
 $ClaraOriginalReceipt = $env:CLARA_TEST_DATA
+$global:ClaraUpdateTestState = @{ Case = ''; Calls = @() }
 function Assert-Clara($Condition, $Message) { if (-not $Condition) { throw $Message } }
 # Only the Git transport/checkout is mocked. Python, file writes and locks run.
 function git {
     $global:LASTEXITCODE = 0
     $ClaraCall = $args -join ' '
-    $script:ClaraCalls += $ClaraCall
+    $global:ClaraUpdateTestState.Calls += $ClaraCall
     switch -Regex ($ClaraCall) {
-        '^remote get-url origin$' { if ($script:ClaraCase -eq 'remote') { 'https://example.invalid/wrong.git' } else { 'https://github.com/nikitanikist/claraAgnet.git' }; break }
+        '^remote get-url origin$' { if ($global:ClaraUpdateTestState.Case -eq 'remote') { 'https://example.invalid/wrong.git' } else { 'https://github.com/nikitanikist/claraAgnet.git' }; break }
         '^rev-parse HEAD$' { 'b' * 40; break }
-        '^status --porcelain$' { if ($script:ClaraCase -eq 'dirty') { ' M user-edit.py' }; break }
-        '^fetch origin feat/clearhouse-portal-v1$' { if ($script:ClaraCase -eq 'fetch') { $global:LASTEXITCODE = 1 }; break }
-        '^merge-base --is-ancestor ' { if ($script:ClaraCase -eq 'revision') { $global:LASTEXITCODE = 1 }; break }
-        '^switch --detach ' { if ($script:ClaraCase -eq 'switch') { $global:LASTEXITCODE = 1 }; break }
+        '^status --porcelain$' { if ($global:ClaraUpdateTestState.Case -eq 'dirty') { ' M user-edit.py' }; break }
+        '^fetch origin feat/clearhouse-portal-v1$' { if ($global:ClaraUpdateTestState.Case -eq 'fetch') { $global:LASTEXITCODE = 1 }; break }
+        '^merge-base --is-ancestor ' { if ($global:ClaraUpdateTestState.Case -eq 'revision') { $global:LASTEXITCODE = 1 }; break }
+        '^switch --detach ' { if ($global:ClaraUpdateTestState.Case -eq 'switch') { $global:LASTEXITCODE = 1 }; break }
         default { throw "Unexpected Git operation: $ClaraCall" }
     }
 }
@@ -52,8 +53,8 @@ raise SystemExit(1 if (data / 'fail-install').exists() else 0)
 '@ | Set-Content (Join-Path $ClaraTestScripts 'install-portable.py') -Encoding UTF8
     $env:CLARA_TEST_DATA = $ClaraTestData
     foreach ($ClaraScenario in @('remote', 'dirty', 'fetch', 'revision', 'backup', 'switch', 'install', 'success')) {
-        $script:ClaraCase = $ClaraScenario
-        $script:ClaraCalls = @()
+        $global:ClaraUpdateTestState.Case = $ClaraScenario
+        $global:ClaraUpdateTestState.Calls = @()
         foreach ($ClaraMarker in @('backup-ran', 'install-ran', 'fail-backup', 'fail-install')) {
             Remove-Item (Join-Path $ClaraTestData $ClaraMarker) -ErrorAction SilentlyContinue
         }
@@ -63,7 +64,7 @@ raise SystemExit(1 if (data / 'fail-install').exists() else 0)
         try { & (Join-Path $Root 'Update-ClaraPortalTest.ps1') -Revision $ClaraRevision -ApplicationFolder $ClaraTestRoot -DataFolder $ClaraTestData }
         catch { $ClaraFailed = $true }
         Assert-Clara ($ClaraFailed -eq ($ClaraScenario -ne 'success')) "Unexpected outcome: $ClaraScenario"
-        $ClaraSwitched = @($script:ClaraCalls | Where-Object { $_ -like 'switch --detach *' }).Count -gt 0
+        $ClaraSwitched = @($global:ClaraUpdateTestState.Calls | Where-Object { $_ -like 'switch --detach *' }).Count -gt 0
         Assert-Clara ($ClaraSwitched -eq ($ClaraScenario -in @('switch', 'install', 'success'))) "Source changed before checks passed: $ClaraScenario"
         Assert-Clara ((Test-Path (Join-Path $ClaraTestData 'install-ran')) -eq ($ClaraScenario -in @('install', 'success'))) "Wrong install behavior: $ClaraScenario"
     }
@@ -79,4 +80,5 @@ raise SystemExit(1 if (data / 'fail-install').exists() else 0)
     $env:Path = $ClaraOriginalPath
     [Environment]::SetEnvironmentVariable('CLARA_TEST_DATA', $ClaraOriginalReceipt, 'Process')
     Remove-Item -LiteralPath $ClaraTestRoot -Recurse -Force
+    Remove-Variable -Name ClaraUpdateTestState -Scope Global
 }
