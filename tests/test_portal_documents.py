@@ -47,3 +47,18 @@ def test_missing_or_changed_document_never_becomes_a_ready_manifest(tmp_path):
     with pytest.raises(ValueError, match='changed'):
         collect_documents(config, store, BASE, lease.identity, job['id'], proofs)
     assert store.rows('SELECT id FROM files') == []
+
+
+def test_one_pdf_cannot_count_as_three_separate_required_documents(tmp_path):
+    config, store, job, lease, _ = package(tmp_path)
+    wf = Workflows(store, config)
+    context = wf.get(job['conversation_id'])['context']
+    # A combined PDF can contain every expected word. Text checks alone must
+    # not let it stand in for the three separately requested output files.
+    path = config.workspace / 'combined.pdf'
+    make_pdf(path, f"{context['members'][0]} {context['year']} income tax T183 engagement")
+    proofs = [wf.verify_document(job, str(path), context['members'][0], kind, context['year'])['id']
+              for kind in ['client-copy', 't183', 'engagement-letter']]
+    with pytest.raises(ContractViolation, match='multiple required outputs'):
+        collect_documents(config, store, BASE, lease.identity, job['id'], proofs)
+    assert store.rows('SELECT id FROM files') == []

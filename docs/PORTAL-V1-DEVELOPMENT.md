@@ -50,6 +50,11 @@ use the optional legacy protocol documented in `PORTAL-PROTOCOL.md`.
   heartbeat without an actual renewed lease stops the local task.
   Undeliverably long questions are rejected before entering the waiting state,
   allowing the model to rephrase without silently discarding context.
+- `portal_session.py` runs heartbeat, controls and progress independently while
+  an assigned local task executes or its result is delivered. A blocked chat
+  response cannot prevent Stop or the lease watchdog from cancelling work.
+  Local completion keeps the connection and reservation for result delivery;
+  closing the session never releases the desktop or replays execution.
 - `portal_progress.py` relays completed chat text and concise activity with
   stable message IDs and a durable cursor. It excludes raw tool arguments and
   output from activity, preserves paragraph breaks, and cannot cross into
@@ -73,8 +78,8 @@ use the optional legacy protocol documented in `PORTAL-PROTOCOL.md`.
 2. Connect version dispatch, configuration and worker enrollment. Reserve the
    local executor before claim, persist the stable claim/message window, fetch
    every page and obtain the exact delivery acknowledgement before execution.
-3. Connect the implemented control/progress components to independent polling
-   loops. Stop takes precedence over an answer. A lost claim response
+3. Connect the implemented session and its independent control/progress loops
+   to the worker lifecycle. Stop takes precedence over an answer. A lost claim response
    recovers its existing attempt; it never authorizes a second desktop task.
 4. Map current evidence to stable member IDs, document types and tax year, send
    artifacts/results, and report observed quiescence before releasing the slot.
