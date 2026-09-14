@@ -47,7 +47,8 @@ function Save-ClaraPortalConnection {
             windows_handoff = @{ exclusive_session = $true; qualified = $false }
         }
         [IO.File]::WriteAllText($ClaraTemporary, ($ClaraConfig | ConvertTo-Json -Depth 5), (New-Object Text.UTF8Encoding($false)))
-        if (Test-Path -LiteralPath $ClaraConfigPath) { [IO.File]::Replace($ClaraTemporary, $ClaraConfigPath, $null) }
+        # PowerShell 5.1 marshals ordinary $null to an empty string here.
+        if (Test-Path -LiteralPath $ClaraConfigPath) { [IO.File]::Replace($ClaraTemporary, $ClaraConfigPath, [NullString]::Value) }
         else { [IO.File]::Move($ClaraTemporary, $ClaraConfigPath) }
         $ClaraCommitted = $true
     } finally {
