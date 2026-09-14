@@ -123,7 +123,10 @@ class PortalRuntime:
                 return 'held'
             self._complete(cid)
             return 'idle'
-        self._update(cid, 'intake', claim=claim)
+        return await self._execute_claim(cid, reply)
+
+    async def _execute_claim(self, cid, reply):
+        self._update(cid, 'intake', claim=reply.body)
         try:
             self.lease = claim_lease(self.transport, reply, self.worker_id)
             prepared = await self._intake(reply, cid)
@@ -263,4 +266,53 @@ class PortalRuntime:
             self._complete(cycle['id'])
             return 'finished'
         self._update(cycle['id'], 'held', error='Some desktop actions are still unconfirmed. The worker remains reserved for review.')
+        if not report['in_flight'] and receipt['recovery_hold']:
+            return await self._reconciled_claim(cycle, identity)
         return 'held'
+
+    async def _reconciled_claim(self, cycle, previous):
+        """Accept new work only after the portal's recovery hold was cleared.
+
+        The claim endpoint atomically refuses work while this worker has a
+        recovery hold. A negative/ambiguous response never releases the local
+        reservation. A newer positive claim is permission for THAT attempt,
+        not permission to replay the stopped attempt or clear its history.
+        """
+        if (self.manager.execution_reservation != cycle['id'] or
+                self.manager.active_job or not self.manager.queue.empty()):
+            return 'held'
+        try:
+            reply = await self.transport.request('clara-claim',
+                {'worker_id':self.worker_id, 'agent_version':__version__})
+        except (PortalUnavailable, PortalRejected, ContractViolation):
+            return 'held'
+        claim = reply.body
+        if claim['claimed'] is not True:
+            return 'held'
+        if (self.manager.execution_reservation != cycle['id'] or
+                self.manager.active_job or not self.manager.queue.empty()):
+            # An issued claim can be recovered on the next poll. Do not transfer
+            # the executor if local state changed while the request was pending.
+            return 'held'
+        if (claim['fence_token'] <= previous.fence_token or
+                (claim['job_id'] == previous.job_id and claim['attempt_no'] <= previous.attempt_no)):
+            # A recovered copy of the old claim cannot authorize replay.
+            return 'held'
+        cid = str(uuid4())
+        # Keep the old cycle and its receipts as audit history. Save the new
+        # claimed slot before transferring the in-process reservation, so a
+        # crash here restores a hold on the newly issued attempt.
+        with self.store.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            changed = db.execute("UPDATE portal_v1_cycles SET state='reconciled',finished=?,error=NULL WHERE id=? AND finished IS NULL",
+                                 (time.time(), cycle['id']))
+            if changed.rowcount != 1:
+                raise ValueError('The saved recovery cycle changed.')
+            db.execute('INSERT INTO portal_v1_cycles VALUES(?,?,?,?,?,NULL,?,NULL,NULL)',
+                (cid, self.transport.base_url, self.worker_id, 'intake', json.dumps(claim, allow_nan=False), time.time()))
+        self.manager.release_execution(cycle['id'], quiescent=True)
+        if not self.manager.reserve_execution(cid):
+            raise ValueError('The newly issued portal attempt could not reserve this executor.')
+        # No await separates the local reservation transfer. Only the freshly
+        # authenticated claim proceeds through normal intake and its watchdog.
+        return await self._execute_claim(cid, reply)

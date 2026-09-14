@@ -82,13 +82,17 @@ and this branch has not been accepted for Windows release.
   worker reservation before a claim request and retains it on ambiguous errors.
   Input downloading has its own heartbeat and stop watchdog. After restart,
   a saved result can be reported again, but its model task cannot run again.
-  Only confirmed local quiescence plus the server release receipt clears the
+  Confirmed local quiescence plus the server release receipt clears the
   reservation. An interrupted intake or execution without a staged result
   reports its actual quiescence inventory without manufacturing a successful
   result or zero usage. An intake with no persisted binding cannot have
   dispatched execution. Unconfirmed actions retain their hold for operator
-  review; detecting that the portal's reconciliation flow released this hold
-  is not yet implemented. Failed context delivery releases locally only when
+  review. A newer positive claim from the portal can transfer the reservation
+  after operator reconciliation: the server refuses new claims while held.
+  Negative replies and copies of the old claim never release or replay it.
+  The old attempt/history remains saved, and the newly issued attempt is
+  persisted before dispatch, including recovery of a lost new-claim receipt.
+  Failed context delivery releases locally only when
   the server explicitly confirms release without a recovery hold.
 - `portal_progress.py` relays completed chat text and concise activity with
   stable message IDs and a durable cursor. It excludes raw tool arguments and
@@ -118,8 +122,8 @@ and this branch has not been accepted for Windows release.
    variable, and `authentication_reviewed: true` in the local `portal.json`.
    Configuration and credential changes require a restart. Keep `enabled: false`
    until the remaining Windows and portal acceptance checks pass.
-3. Implement and verify the Windows external-state observer and the explicit
-   operator recovery path. The current conservative observer retains a hold
+3. Implement and verify the Windows external-state observer and validate the explicit
+   operator recovery path end to end. The current conservative observer retains a hold
    after desktop/shell/browser actions; a successful tool return alone cannot
    confirm that printing, uploading or a detached process has stopped.
 4. Align the final error and context-outcome contract, and report observed Windows
@@ -140,7 +144,7 @@ service restart; no model tool exposes the provider.
 
 ## Latest local validation
 
-The development branch's Python suite passes 237 tests. The result delivery
+The development branch's Python suite passes 239 tests. The result delivery
 tests use synthetic PDFs and mocked portal/storage receipts. They verify the
 outbound payload and retry behavior, not an actual Ready to Email transition.
 No real PandaDoc/OneDrive account, authenticated portal UI or Windows desktop
@@ -151,3 +155,8 @@ and retaining a hold for unconfirmed desktop activity. Model execution and
 server receipts in these tests are simulated.
 Additional cases cover the original allocation filename, ambiguous failed
 context delivery, and reporting stopped intake/execution without a final result.
+
+Operator-reconciliation tests cover a retained server hold, newer-attempt
+resumption in the original conversation, lost newer-claim receipts, and
+rejection of a recovered old claim as permission to replay. Server operator
+reconciliation is simulated; no actual RDP action was observed.
