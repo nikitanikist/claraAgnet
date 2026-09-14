@@ -1,0 +1,3128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1",
+  "headers": {
+    "contract": "x-clara-contract",
+    "worker_key": "x-clara-worker-key",
+    "idempotency": "idempotency-key"
+  },
+  "error": {
+    "properties": {
+      "error": {
+        "maxLength": 64,
+        "type": "string"
+      },
+      "message": {
+        "maxLength": 500,
+        "type": "string"
+      },
+      "retryable": {
+        "type": "boolean"
+      },
+      "supported": {
+        "items": {
+          "maxLength": 8,
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "job_id": {
+        "maxLength": 36,
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+        "type": "string"
+      }
+    },
+    "required": [
+      "error",
+      "message",
+      "retryable"
+    ],
+    "additionalProperties": false,
+    "type": "object"
+  },
+  "operations": {
+    "clara-assign": {
+      "audience": "staff",
+      "idempotent": true,
+      "request": {
+        "properties": {
+          "closeout_form_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "software": {
+            "enum": [
+              "taxprep",
+              "profile"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "closeout_form_id",
+          "software"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "response": {
+        "properties": {
+          "job_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "conversation_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "state": {
+            "maxLength": 32,
+            "type": "string"
+          },
+          "duplicate": {
+            "type": "boolean"
+          },
+          "server_time": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "conversation_id",
+          "state",
+          "duplicate",
+          "server_time"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      }
+    },
+    "clara-new-conversation": {
+      "audience": "staff",
+      "idempotent": true,
+      "request": {
+        "properties": {
+          "title": {
+            "maxLength": 120,
+            "type": "string"
+          }
+        },
+        "required": [],
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "response": {
+        "properties": {
+          "conversation_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 120,
+            "type": "string"
+          },
+          "server_time": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "title",
+          "server_time"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      }
+    },
+    "clara-send-message": {
+      "audience": "staff",
+      "idempotent": true,
+      "request": {
+        "properties": {
+          "conversation_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "body": {
+            "minLength": 1,
+            "maxLength": 8000,
+            "type": "string"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "body"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "response": {
+        "properties": {
+          "message_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "delivery": {
+            "enum": [
+              "queued_continuation",
+              "queued_job",
+              "duplicate"
+            ],
+            "type": "string"
+          },
+          "job_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "server_time": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "delivery",
+          "job_id",
+          "server_time"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      }
+    },
+    "clara-answer": {
+      "audience": "staff",
+      "idempotent": true,
+      "request": {
+        "properties": {
+          "request_id": {
+            "maxLength": 64,
+            "type": "string"
+          },
+          "value": {
+            "minLength": 1,
+            "maxLength": 4000,
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "value"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "response": {
+        "properties": {
+          "accepted": {
+            "type": "boolean"
+          },
+          "command_id": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "status": {
+            "enum": [
+              "pending_delivery",
+              "expired",
+              "duplicate"
+            ],
+            "type": "string"
+          },
+          "server_time": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "accepted",
+          "command_id",
+          "status",
+          "server_time"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      }
+    },
+    "clara-stop": {
+      "audience": "staff",
+      "idempotent": true,
+      "request": {
+        "properties": {
+          "job_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 400,
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "response": {
+        "properties": {
+          "job_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "state": {
+            "maxLength": 32,
+            "type": "string"
+          },
+          "command_id": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "server_time": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "state",
+          "command_id",
+          "server_time"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      }
+    },
+    "clara-cancel": {
+      "audience": "staff",
+      "idempotent": true,
+      "request": {
+        "properties": {
+          "job_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 400,
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "response": {
+        "properties": {
+          "job_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "state": {
+            "maxLength": 32,
+            "type": "string"
+          },
+          "server_time": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "state",
+          "server_time"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      }
+    },
+    "clara-continue": {
+      "audience": "staff",
+      "idempotent": true,
+      "request": {
+        "properties": {
+          "job_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "reconciliation": {
+            "properties": {
+              "attempt_no": {
+                "minimum": 1,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "checkpoint_id": {
+                "maxLength": 120,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "reviewed_by_note": {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              "resolved_unknown_actions": {
+                "items": {
+                  "properties": {
+                    "action_ref": {
+                      "maxLength": 200,
+                      "type": "string"
+                    },
+                    "outcome": {
+                      "enum": [
+                        "finished",
+                        "not_started",
+                        "abandoned"
+                      ],
+                      "type": "string"
+                    },
+                    "remote_id": {
+                      "maxLength": 200,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "action_ref",
+                    "outcome"
+                  ],
+                  "additionalProperties": false,
+                  "type": "object"
+                },
+                "maxItems": 200,
+                "type": "array"
+              }
+            },
+            "required": [
+              "attempt_no",
+              "checkpoint_id",
+              "reviewed_by_note",
+              "resolved_unknown_actions"
+            ],
+            "additionalProperties": false,
+            "type": "object"
+          }
+        },
+        "required": [
+          "job_id",
+          "reconciliation"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "response": {
+        "properties": {
+          "job_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "state": {
+            "maxLength": 32,
+            "type": "string"
+          },
+          "server_time": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "state",
+          "server_time"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      }
+    },
+    "clara-artifact-url": {
+      "audience": "staff",
+      "idempotent": false,
+      "request": {
+        "properties": {
+          "artifact_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifact_id"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "response": {
+        "properties": {
+          "url": {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "expires_at": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expires_at"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      }
+    },
+    "clara-handoff-retry": {
+      "audience": "staff",
+      "idempotent": true,
+      "request": {
+        "properties": {
+          "job_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "response": {
+        "properties": {
+          "job_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "handoff": {
+            "properties": {
+              "attempted": {
+                "type": "boolean"
+              },
+              "status": {
+                "enum": [
+                  "ready_to_email",
+                  "needs_review",
+                  "failed"
+                ],
+                "type": "string"
+              },
+              "reason": {
+                "maxLength": 400,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "attempted",
+              "status",
+              "reason"
+            ],
+            "additionalProperties": false,
+            "type": "object"
+          },
+          "server_time": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "handoff",
+          "server_time"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      }
+    },
+    "clara-claim": {
+      "audience": "worker",
+      "idempotent": false,
+      "request": {
+        "properties": {
+          "worker_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "agent_version": {
+            "maxLength": 40,
+            "type": "string"
+          }
+        },
+        "required": [
+          "worker_id"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "response": {
+        "oneOf": [
+          {
+            "properties": {
+              "claimed": {
+                "type": "boolean",
+                "const": false
+              },
+              "server_time": {
+                "maxLength": 40,
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+                "format": "date-time",
+                "type": "string"
+              },
+              "heartbeat_interval_s": {
+                "minimum": 1,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "reason": {
+                "enum": [
+                  "no_work",
+                  "execution_disabled",
+                  "recovery_hold",
+                  "slot_busy",
+                  "resource_locked",
+                  "capability_mismatch",
+                  "worker_unavailable"
+                ],
+                "type": "string"
+              },
+              "owned_job_id": {
+                "maxLength": 36,
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "claimed",
+              "server_time",
+              "heartbeat_interval_s",
+              "reason"
+            ],
+            "additionalProperties": false,
+            "type": "object"
+          },
+          {
+            "properties": {
+              "claimed": {
+                "type": "boolean",
+                "const": true
+              },
+              "job_id": {
+                "maxLength": 36,
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "closeout",
+                  "general"
+                ],
+                "type": "string"
+              },
+              "attempt_no": {
+                "minimum": 1,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "fence_token": {
+                "minimum": 1,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "execution_id": {
+                "maxLength": 80,
+                "type": "string"
+              },
+              "conversation_id": {
+                "maxLength": 36,
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "type": "string"
+              },
+              "conversation_ref": {
+                "maxLength": 120,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "message_boundary_seq": {
+                "minimum": 1,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "delivery_from_seq": {
+                "minimum": 1,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "messages": {
+                "items": {
+                  "properties": {
+                    "message_id": {
+                      "maxLength": 36,
+                      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      "type": "string"
+                    },
+                    "seq": {
+                      "minimum": 1,
+                      "maximum": 9007199254740991,
+                      "type": "integer"
+                    },
+                    "role": {
+                      "enum": [
+                        "staff",
+                        "clara",
+                        "system",
+                        "question"
+                      ],
+                      "type": "string"
+                    },
+                    "body": {
+                      "maxLength": 16000,
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "maxLength": 40,
+                      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message_id",
+                    "seq",
+                    "role",
+                    "body",
+                    "created_at"
+                  ],
+                  "additionalProperties": false,
+                  "type": "object"
+                },
+                "maxItems": 200,
+                "type": "array"
+              },
+              "more_messages": {
+                "type": "boolean"
+              },
+              "recovered": {
+                "type": "boolean"
+              },
+              "scope": {
+                "properties": {
+                  "assigned_by": {
+                    "maxLength": 36,
+                    "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                    "type": "string"
+                  },
+                  "permissions": {
+                    "items": {
+                      "maxLength": 64,
+                      "type": "string"
+                    },
+                    "maxItems": 20,
+                    "type": "array"
+                  },
+                  "closeout_form_id": {
+                    "maxLength": 36,
+                    "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "assigned_by",
+                  "permissions",
+                  "closeout_form_id"
+                ],
+                "additionalProperties": false,
+                "type": "object"
+              },
+              "resume_from_checkpoint": {
+                "properties": {},
+                "required": [],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "closeout": {
+                "properties": {
+                  "closeout_form_id": {
+                    "maxLength": 36,
+                    "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                    "type": "string"
+                  },
+                  "form_type": {
+                    "maxLength": 64,
+                    "type": "string"
+                  },
+                  "software": {
+                    "enum": [
+                      "taxprep",
+                      "profile"
+                    ],
+                    "type": "string"
+                  },
+                  "tax_year": {
+                    "maxLength": 4,
+                    "type": "string"
+                  },
+                  "file_path": {
+                    "maxLength": 400,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "client_name": {
+                    "maxLength": 200,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "members": {
+                    "items": {
+                      "properties": {
+                        "member_id": {
+                          "maxLength": 64,
+                          "type": "string"
+                        },
+                        "member_name": {
+                          "maxLength": 200,
+                          "type": "string"
+                        },
+                        "member_email": {
+                          "maxLength": 320,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "taxes_payable": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "refund_amount": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "hst_payment_due": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "installments_required": {
+                          "type": "boolean"
+                        },
+                        "filing_deadline": {
+                          "maxLength": 40,
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "member_id",
+                        "member_name",
+                        "member_email",
+                        "taxes_payable",
+                        "refund_amount",
+                        "hst_payment_due",
+                        "installments_required",
+                        "filing_deadline"
+                      ],
+                      "additionalProperties": false,
+                      "type": "object"
+                    },
+                    "maxItems": 40,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "closeout_form_id",
+                  "form_type",
+                  "software",
+                  "tax_year",
+                  "file_path",
+                  "client_name",
+                  "members"
+                ],
+                "additionalProperties": false,
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "required_outputs": {
+                "items": {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              "policy": {
+                "properties": {
+                  "invoice_mode": {
+                    "enum": [
+                      "laureen_manual",
+                      "unset",
+                      "skip_test_only"
+                    ],
+                    "type": "string"
+                  },
+                  "may_send_client_email": {
+                    "type": "boolean"
+                  },
+                  "may_efile": {
+                    "type": "boolean"
+                  },
+                  "may_sign": {
+                    "type": "boolean"
+                  },
+                  "stop_at": {
+                    "enum": [
+                      "ready_to_email"
+                    ],
+                    "type": "string"
+                  },
+                  "onedrive_rules": {
+                    "properties": {
+                      "root_folder": {
+                        "maxLength": 400,
+                        "type": "string"
+                      },
+                      "per_member_subfolder": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "root_folder",
+                      "per_member_subfolder"
+                    ],
+                    "additionalProperties": false,
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "invoice_mode",
+                  "may_send_client_email",
+                  "may_efile",
+                  "may_sign",
+                  "stop_at",
+                  "onedrive_rules"
+                ],
+                "additionalProperties": false,
+                "type": "object"
+              },
+              "server_time": {
+                "maxLength": 40,
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+                "format": "date-time",
+                "type": "string"
+              },
+              "lease_expires_at": {
+                "maxLength": 40,
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+                "format": "date-time",
+                "type": "string"
+              },
+              "heartbeat_interval_s": {
+                "minimum": 1,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "claimed",
+              "job_id",
+              "kind",
+              "attempt_no",
+              "fence_token",
+              "execution_id",
+              "conversation_id",
+              "conversation_ref",
+              "message_boundary_seq",
+              "delivery_from_seq",
+              "messages",
+              "more_messages",
+              "scope",
+              "resume_from_checkpoint",
+              "closeout",
+              "required_outputs",
+              "policy",
+              "server_time",
+              "lease_expires_at",
+              "heartbeat_interval_s"
+            ],
+            "additionalProperties": false,
+            "type": "object"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "claimed"
+        }
+      }
+    },
+    "clara-messages": {
+      "audience": "worker",
+      "idempotent": false,
+      "request": {
+        "properties": {
+          "job_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "worker_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "attempt_no": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "fence_token": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "after_seq": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "limit": {
+            "minimum": 1,
+            "maximum": 200,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "job_id",
+          "worker_id",
+          "attempt_no",
+          "fence_token"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "response": {
+        "properties": {
+          "messages": {
+            "items": {
+              "properties": {
+                "message_id": {
+                  "maxLength": 36,
+                  "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                  "type": "string"
+                },
+                "seq": {
+                  "minimum": 1,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                "role": {
+                  "enum": [
+                    "staff",
+                    "clara",
+                    "system",
+                    "question"
+                  ],
+                  "type": "string"
+                },
+                "body": {
+                  "maxLength": 16000,
+                  "type": "string"
+                },
+                "created_at": {
+                  "maxLength": 40,
+                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+                  "format": "date-time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "message_id",
+                "seq",
+                "role",
+                "body",
+                "created_at"
+              ],
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "maxItems": 200,
+            "type": "array"
+          },
+          "from_seq": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "to_seq": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "acked_seq": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "more_messages": {
+            "type": "boolean"
+          },
+          "server_time": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "messages",
+          "from_seq",
+          "to_seq",
+          "acked_seq",
+          "more_messages",
+          "server_time"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      }
+    },
+    "clara-message-ack": {
+      "audience": "worker",
+      "idempotent": false,
+      "request": {
+        "properties": {
+          "job_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "worker_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "attempt_no": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "fence_token": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "acked_seq": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "job_id",
+          "worker_id",
+          "attempt_no",
+          "fence_token",
+          "acked_seq"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "response": {
+        "properties": {
+          "acked_seq": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "to_seq": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "server_time": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "acked_seq",
+          "to_seq",
+          "complete",
+          "server_time"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      }
+    },
+    "clara-heartbeat": {
+      "audience": "worker",
+      "idempotent": false,
+      "request": {
+        "oneOf": [
+          {
+            "properties": {
+              "job_id": {
+                "maxLength": 36,
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "type": "string"
+              },
+              "worker_id": {
+                "maxLength": 36,
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "type": "string"
+              },
+              "attempt_no": {
+                "minimum": 1,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "fence_token": {
+                "minimum": 1,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "busy": {
+                "type": "boolean",
+                "const": true
+              },
+              "stage": {
+                "maxLength": 64,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "job_id",
+              "worker_id",
+              "attempt_no",
+              "fence_token",
+              "busy"
+            ],
+            "additionalProperties": false,
+            "type": "object"
+          },
+          {
+            "properties": {
+              "worker_id": {
+                "maxLength": 36,
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                "type": "string"
+              },
+              "busy": {
+                "type": "boolean",
+                "const": false
+              }
+            },
+            "required": [
+              "worker_id",
+              "busy"
+            ],
+            "additionalProperties": false,
+            "type": "object"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "busy"
+        }
+      },
+      "response": {
+        "properties": {
+          "server_time": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          },
+          "lease_expires_at": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "heartbeat_interval_s": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "stop_requested": {
+            "type": "boolean"
+          },
+          "state": {
+            "maxLength": 32,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "server_time",
+          "lease_expires_at",
+          "heartbeat_interval_s",
+          "stop_requested",
+          "state"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      }
+    },
+    "clara-events": {
+      "audience": "worker",
+      "idempotent": false,
+      "request": {
+        "properties": {
+          "job_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "worker_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "attempt_no": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "fence_token": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "events": {
+            "items": {
+              "properties": {
+                "event_uid": {
+                  "maxLength": 80,
+                  "type": "string"
+                },
+                "level": {
+                  "enum": [
+                    "info",
+                    "warn",
+                    "error"
+                  ],
+                  "type": "string"
+                },
+                "stage": {
+                  "maxLength": 64,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "message": {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                "at": {
+                  "maxLength": 40,
+                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "meta": {
+                  "properties": {},
+                  "required": [],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "event_uid",
+                "level",
+                "message",
+                "at"
+              ],
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "minItems": 1,
+            "maxItems": 200,
+            "type": "array"
+          }
+        },
+        "required": [
+          "job_id",
+          "worker_id",
+          "attempt_no",
+          "fence_token",
+          "events"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "response": {
+        "properties": {
+          "ack_seq": {
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "accepted_uids": {
+            "items": {
+              "maxLength": 80,
+              "type": "string"
+            },
+            "maxItems": 200,
+            "type": "array"
+          },
+          "duplicate_uids": {
+            "items": {
+              "maxLength": 80,
+              "type": "string"
+            },
+            "maxItems": 200,
+            "type": "array"
+          },
+          "server_time": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ack_seq",
+          "accepted_uids",
+          "duplicate_uids",
+          "server_time"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      }
+    },
+    "clara-chat": {
+      "audience": "worker",
+      "idempotent": false,
+      "request": {
+        "properties": {
+          "job_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "worker_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "attempt_no": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "fence_token": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "message_uid": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "body": {
+            "minLength": 1,
+            "maxLength": 16000,
+            "type": "string"
+          },
+          "final": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "job_id",
+          "worker_id",
+          "attempt_no",
+          "fence_token",
+          "message_uid",
+          "body"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "response": {
+        "properties": {
+          "message_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "duplicate": {
+            "type": "boolean"
+          },
+          "server_time": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "duplicate",
+          "server_time"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      }
+    },
+    "clara-ask": {
+      "audience": "worker",
+      "idempotent": false,
+      "request": {
+        "properties": {
+          "job_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "worker_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "attempt_no": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "fence_token": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "request_id": {
+            "maxLength": 64,
+            "type": "string"
+          },
+          "question": {
+            "minLength": 1,
+            "maxLength": 400,
+            "type": "string"
+          },
+          "explanation": {
+            "maxLength": 600,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "answer_type": {
+            "enum": [
+              "text",
+              "choice",
+              "link"
+            ],
+            "type": "string"
+          },
+          "choices": {
+            "items": {
+              "maxLength": 120,
+              "type": "string"
+            },
+            "maxItems": 12,
+            "type": "array"
+          },
+          "details": {
+            "maxLength": 8000,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "blocking": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "job_id",
+          "worker_id",
+          "attempt_no",
+          "fence_token",
+          "request_id",
+          "question",
+          "answer_type"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "response": {
+        "properties": {
+          "request_id": {
+            "maxLength": 64,
+            "type": "string"
+          },
+          "state": {
+            "maxLength": 32,
+            "type": "string"
+          },
+          "duplicate": {
+            "type": "boolean"
+          },
+          "server_time": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "state",
+          "duplicate",
+          "server_time"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      }
+    },
+    "clara-commands": {
+      "audience": "worker",
+      "idempotent": false,
+      "request": {
+        "properties": {
+          "job_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "worker_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "attempt_no": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "fence_token": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "after_command_id": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "job_id",
+          "worker_id",
+          "attempt_no",
+          "fence_token"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "response": {
+        "properties": {
+          "commands": {
+            "items": {
+              "oneOf": [
+                {
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "answer"
+                      ],
+                      "type": "string",
+                      "const": "answer"
+                    },
+                    "command_id": {
+                      "minimum": 1,
+                      "maximum": 9007199254740991,
+                      "type": "integer"
+                    },
+                    "request_id": {
+                      "maxLength": 64,
+                      "type": "string"
+                    },
+                    "value": {
+                      "maxLength": 4000,
+                      "type": "string"
+                    },
+                    "issued_at": {
+                      "maxLength": 40,
+                      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "command_id",
+                    "request_id",
+                    "value",
+                    "issued_at"
+                  ],
+                  "additionalProperties": false,
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "stop"
+                      ],
+                      "type": "string",
+                      "const": "stop"
+                    },
+                    "command_id": {
+                      "minimum": 1,
+                      "maximum": 9007199254740991,
+                      "type": "integer"
+                    },
+                    "reason": {
+                      "maxLength": 400,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "issued_at": {
+                      "maxLength": 40,
+                      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "command_id",
+                    "reason",
+                    "issued_at"
+                  ],
+                  "additionalProperties": false,
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "cancel"
+                      ],
+                      "type": "string",
+                      "const": "cancel"
+                    },
+                    "command_id": {
+                      "minimum": 1,
+                      "maximum": 9007199254740991,
+                      "type": "integer"
+                    },
+                    "reason": {
+                      "maxLength": 400,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "issued_at": {
+                      "maxLength": 40,
+                      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "command_id",
+                    "reason",
+                    "issued_at"
+                  ],
+                  "additionalProperties": false,
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "continue"
+                      ],
+                      "type": "string",
+                      "const": "continue"
+                    },
+                    "command_id": {
+                      "minimum": 1,
+                      "maximum": 9007199254740991,
+                      "type": "integer"
+                    },
+                    "from_seq": {
+                      "minimum": 1,
+                      "maximum": 9007199254740991,
+                      "type": "integer"
+                    },
+                    "to_seq": {
+                      "minimum": 1,
+                      "maximum": 9007199254740991,
+                      "type": "integer"
+                    },
+                    "issued_at": {
+                      "maxLength": 40,
+                      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "command_id",
+                    "from_seq",
+                    "to_seq",
+                    "issued_at"
+                  ],
+                  "additionalProperties": false,
+                  "type": "object"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "type"
+              }
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "server_time": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "commands",
+          "server_time"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      }
+    },
+    "clara-command-ack": {
+      "audience": "worker",
+      "idempotent": false,
+      "request": {
+        "properties": {
+          "job_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "worker_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "attempt_no": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "fence_token": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "command_id": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "accepted",
+              "rejected",
+              "expired"
+            ],
+            "type": "string"
+          },
+          "checkpoint": {
+            "properties": {},
+            "required": [],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "note": {
+            "maxLength": 600,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "job_id",
+          "worker_id",
+          "attempt_no",
+          "fence_token",
+          "command_id",
+          "status"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "response": {
+        "properties": {
+          "command_id": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "recorded": {
+            "type": "boolean"
+          },
+          "server_time": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "command_id",
+          "recorded",
+          "server_time"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      }
+    },
+    "clara-artifact-upload-url": {
+      "audience": "worker",
+      "idempotent": false,
+      "request": {
+        "properties": {
+          "job_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "worker_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "attempt_no": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "fence_token": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "file_name": {
+            "minLength": 1,
+            "maxLength": 200,
+            "type": "string"
+          },
+          "content_type": {
+            "maxLength": 120,
+            "type": "string"
+          },
+          "bytes": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-fA-F]{64}$",
+            "type": "string"
+          },
+          "member_id": {
+            "maxLength": 64,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "document_type": {
+            "maxLength": 64,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tax_year": {
+            "maxLength": 4,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "job_id",
+          "worker_id",
+          "attempt_no",
+          "fence_token",
+          "file_name",
+          "content_type",
+          "bytes",
+          "sha256"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "response": {
+        "properties": {
+          "allocation_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "storage_path": {
+            "maxLength": 400,
+            "type": "string"
+          },
+          "upload_url": {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "expires_at": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          },
+          "server_time": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "allocation_id",
+          "storage_path",
+          "upload_url",
+          "expires_at",
+          "server_time"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      }
+    },
+    "clara-result": {
+      "audience": "worker",
+      "idempotent": false,
+      "request": {
+        "properties": {
+          "job_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "worker_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "attempt_no": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "fence_token": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "idempotency_key": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "completed_prepared",
+              "needs_review",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "needs_review_reason": {
+            "maxLength": 600,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "summary": {
+            "maxLength": 4000,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "artifacts": {
+            "items": {
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "document",
+                    "pandadoc",
+                    "onedrive_folder",
+                    "screenshot"
+                  ],
+                  "type": "string"
+                },
+                "member_id": {
+                  "maxLength": 64,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "document_type": {
+                  "maxLength": 64,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "tax_year": {
+                  "maxLength": 4,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "storage_path": {
+                  "maxLength": 400,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sha256": {
+                  "pattern": "^[0-9a-fA-F]{64}$",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "bytes": {
+                  "minimum": 1,
+                  "maximum": 9007199254740991,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "content_type": {
+                  "maxLength": 120,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "remote_id": {
+                  "maxLength": 200,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "url": {
+                  "maxLength": 2000,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "verification": {
+                  "enum": [
+                    "declared",
+                    "worker_observed"
+                  ],
+                  "type": "string"
+                },
+                "observed_at": {
+                  "maxLength": 40,
+                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+                  "format": "date-time",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "evidence": {
+                  "properties": {},
+                  "required": [],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "additionalProperties": false,
+              "type": "object"
+            },
+            "maxItems": 300,
+            "type": "array"
+          },
+          "usage": {
+            "properties": {
+              "active_seconds": {
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "waiting_seconds": {
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "input_tokens": {
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "output_tokens": {
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "cache_tokens": {
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "estimated_cost_usd": {
+                "minimum": 0,
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "usage_coverage": {
+                "enum": [
+                  "complete",
+                  "partial",
+                  "unknown"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "active_seconds",
+              "waiting_seconds",
+              "usage_coverage"
+            ],
+            "additionalProperties": false,
+            "type": "object"
+          }
+        },
+        "required": [
+          "job_id",
+          "worker_id",
+          "attempt_no",
+          "fence_token",
+          "idempotency_key",
+          "outcome",
+          "artifacts",
+          "usage"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "response": {
+        "properties": {
+          "accepted": {
+            "type": "boolean"
+          },
+          "replay": {
+            "type": "boolean"
+          },
+          "receipt_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "execution": {
+            "enum": [
+              "finished"
+            ],
+            "type": "string"
+          },
+          "result_recorded": {
+            "type": "boolean"
+          },
+          "handoff": {
+            "properties": {
+              "attempted": {
+                "type": "boolean"
+              },
+              "status": {
+                "enum": [
+                  "ready_to_email",
+                  "needs_review",
+                  "failed",
+                  "skipped"
+                ],
+                "type": "string"
+              },
+              "reason": {
+                "maxLength": 400,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "attempted",
+              "status",
+              "reason"
+            ],
+            "additionalProperties": false,
+            "type": "object"
+          },
+          "job_state": {
+            "maxLength": 32,
+            "type": "string"
+          },
+          "server_time": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "accepted",
+          "replay",
+          "receipt_id",
+          "execution",
+          "result_recorded",
+          "handoff",
+          "job_state",
+          "server_time"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      }
+    },
+    "clara-quiesce": {
+      "audience": "worker",
+      "idempotent": false,
+      "request": {
+        "properties": {
+          "job_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "worker_id": {
+            "maxLength": 36,
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "type": "string"
+          },
+          "attempt_no": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "fence_token": {
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "report": {
+            "properties": {
+              "finished": {
+                "items": {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                "maxItems": 200,
+                "type": "array"
+              },
+              "in_flight": {
+                "items": {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                "maxItems": 200,
+                "type": "array"
+              },
+              "unknown": {
+                "items": {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                "maxItems": 200,
+                "type": "array"
+              },
+              "observed_at": {
+                "maxLength": 40,
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+                "format": "date-time",
+                "type": "string"
+              },
+              "complete": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "finished",
+              "in_flight",
+              "unknown",
+              "observed_at",
+              "complete"
+            ],
+            "additionalProperties": false,
+            "type": "object"
+          }
+        },
+        "required": [
+          "job_id",
+          "worker_id",
+          "attempt_no",
+          "fence_token",
+          "report"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "response": {
+        "properties": {
+          "quiescent": {
+            "type": "boolean"
+          },
+          "recovery_hold": {
+            "type": "boolean"
+          },
+          "released_locks": {
+            "items": {
+              "maxLength": 400,
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "server_time": {
+            "maxLength": 40,
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "quiescent",
+          "recovery_hold",
+          "released_locks",
+          "server_time"
+        ],
+        "additionalProperties": false,
+        "type": "object"
+      }
+    }
+  },
+  "fixtures": {
+    "clara-assign": {
+      "request": {
+        "closeout_form_id": "44444444-4444-4444-8444-444444444444",
+        "software": "taxprep"
+      },
+      "response": {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "conversation_id": "33333333-3333-4333-8333-333333333333",
+        "state": "queued",
+        "duplicate": false,
+        "server_time": "2026-09-14T13:00:00Z"
+      }
+    },
+    "clara-new-conversation": {
+      "request": {
+        "title": "Find the 2023 slips"
+      },
+      "response": {
+        "conversation_id": "33333333-3333-4333-8333-333333333333",
+        "title": "Find the 2023 slips",
+        "server_time": "2026-09-14T13:00:00Z"
+      }
+    },
+    "clara-send-message": {
+      "request": {
+        "conversation_id": "33333333-3333-4333-8333-333333333333",
+        "body": "Please also include the 2023 notice of assessment."
+      },
+      "response": {
+        "message_id": "55555555-5555-4555-8555-555555555555",
+        "delivery": "queued_continuation",
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "server_time": "2026-09-14T13:00:00Z"
+      }
+    },
+    "clara-answer": {
+      "request": {
+        "request_id": "req_7",
+        "value": "https://contoso.sharepoint.com/sites/clients/Smith"
+      },
+      "response": {
+        "accepted": true,
+        "command_id": 42,
+        "status": "pending_delivery",
+        "server_time": "2026-09-14T13:00:00Z"
+      }
+    },
+    "clara-stop": {
+      "request": {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "reason": "client called"
+      },
+      "response": {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "state": "stopping",
+        "command_id": 43,
+        "server_time": "2026-09-14T13:00:00Z"
+      }
+    },
+    "clara-cancel": {
+      "request": {
+        "job_id": "11111111-1111-4111-8111-111111111111"
+      },
+      "response": {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "state": "cancelled",
+        "server_time": "2026-09-14T13:00:00Z"
+      }
+    },
+    "clara-continue": {
+      "request": {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "reconciliation": {
+          "attempt_no": 3,
+          "checkpoint_id": "ckpt_12",
+          "reviewed_by_note": "Checked TaxPrep and OneDrive; the T183 upload did not happen.",
+          "resolved_unknown_actions": [
+            {
+              "action_ref": "upload:t183:m1",
+              "outcome": "not_started"
+            }
+          ]
+        }
+      },
+      "response": {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "state": "queued",
+        "server_time": "2026-09-14T13:00:00Z"
+      }
+    },
+    "clara-artifact-url": {
+      "request": {
+        "artifact_id": "66666666-6666-4666-8666-666666666666"
+      },
+      "response": {
+        "url": "https://example.supabase.co/storage/v1/object/sign/clara-artifacts/x",
+        "expires_at": "2026-09-14T13:00:00Z"
+      }
+    },
+    "clara-handoff-retry": {
+      "request": {
+        "job_id": "11111111-1111-4111-8111-111111111111"
+      },
+      "response": {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "handoff": {
+          "attempted": true,
+          "status": "ready_to_email",
+          "reason": null
+        },
+        "server_time": "2026-09-14T13:00:00Z"
+      }
+    },
+    "clara-claim": {
+      "request": {
+        "worker_id": "22222222-2222-4222-8222-222222222222",
+        "agent_version": "1.4.0"
+      },
+      "response": {
+        "claimed": true,
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "kind": "closeout",
+        "attempt_no": 3,
+        "fence_token": 91,
+        "execution_id": "exec_91",
+        "conversation_id": "33333333-3333-4333-8333-333333333333",
+        "conversation_ref": "clara-local-17",
+        "message_boundary_seq": 12,
+        "delivery_from_seq": 11,
+        "messages": [
+          {
+            "message_id": "55555555-5555-4555-8555-555555555555",
+            "seq": 11,
+            "role": "staff",
+            "body": "Start when ready",
+            "created_at": "2026-09-14T13:00:00Z"
+          }
+        ],
+        "more_messages": false,
+        "scope": {
+          "assigned_by": "99999999-9999-4999-8999-999999999999",
+          "permissions": [
+            "closeout.t1.taxprep"
+          ],
+          "closeout_form_id": "44444444-4444-4444-8444-444444444444"
+        },
+        "resume_from_checkpoint": null,
+        "closeout": {
+          "closeout_form_id": "44444444-4444-4444-8444-444444444444",
+          "form_type": "Personal Tax",
+          "software": "taxprep",
+          "tax_year": "2024",
+          "file_path": "/Clients/Smith",
+          "client_name": "Smith",
+          "members": [
+            {
+              "member_id": "m1",
+              "member_name": "John Smith",
+              "member_email": "john@example.com",
+              "taxes_payable": 1200.5,
+              "refund_amount": null,
+              "hst_payment_due": null,
+              "installments_required": false,
+              "filing_deadline": "April 30, 2025"
+            }
+          ]
+        },
+        "required_outputs": [
+          "verified_documents",
+          "pandadoc_per_member",
+          "onedrive_upload"
+        ],
+        "policy": {
+          "invoice_mode": "laureen_manual",
+          "may_send_client_email": false,
+          "may_efile": false,
+          "may_sign": false,
+          "stop_at": "ready_to_email",
+          "onedrive_rules": {
+            "root_folder": "/Clients",
+            "per_member_subfolder": true
+          }
+        },
+        "server_time": "2026-09-14T13:00:00Z",
+        "lease_expires_at": "2026-09-14T13:02:00Z",
+        "heartbeat_interval_s": 20
+      }
+    },
+    "clara-messages": {
+      "request": {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "worker_id": "22222222-2222-4222-8222-222222222222",
+        "attempt_no": 3,
+        "fence_token": 91,
+        "after_seq": 10,
+        "limit": 100
+      },
+      "response": {
+        "messages": [
+          {
+            "message_id": "55555555-5555-4555-8555-555555555555",
+            "seq": 11,
+            "role": "staff",
+            "body": "Start when ready",
+            "created_at": "2026-09-14T13:00:00Z"
+          }
+        ],
+        "from_seq": 11,
+        "to_seq": 12,
+        "acked_seq": null,
+        "more_messages": true,
+        "server_time": "2026-09-14T13:00:00Z"
+      }
+    },
+    "clara-message-ack": {
+      "request": {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "worker_id": "22222222-2222-4222-8222-222222222222",
+        "attempt_no": 3,
+        "fence_token": 91,
+        "acked_seq": 12
+      },
+      "response": {
+        "acked_seq": 12,
+        "to_seq": 12,
+        "complete": true,
+        "server_time": "2026-09-14T13:00:00Z"
+      }
+    },
+    "clara-heartbeat": {
+      "request": {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "worker_id": "22222222-2222-4222-8222-222222222222",
+        "attempt_no": 3,
+        "fence_token": 91,
+        "busy": true,
+        "stage": "pandadoc"
+      },
+      "response": {
+        "server_time": "2026-09-14T13:00:00Z",
+        "lease_expires_at": "2026-09-14T13:02:00Z",
+        "heartbeat_interval_s": 20,
+        "stop_requested": false,
+        "state": "running"
+      }
+    },
+    "clara-events": {
+      "request": {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "worker_id": "22222222-2222-4222-8222-222222222222",
+        "attempt_no": 3,
+        "fence_token": 91,
+        "events": [
+          {
+            "event_uid": "evt_119",
+            "level": "info",
+            "stage": "pandadoc",
+            "message": "Created packet for member m1",
+            "at": "2026-09-14T13:00:00Z"
+          }
+        ]
+      },
+      "response": {
+        "ack_seq": 119,
+        "accepted_uids": [
+          "evt_119"
+        ],
+        "duplicate_uids": [],
+        "server_time": "2026-09-14T13:00:00Z"
+      }
+    },
+    "clara-chat": {
+      "request": {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "worker_id": "22222222-2222-4222-8222-222222222222",
+        "attempt_no": 3,
+        "fence_token": 91,
+        "message_uid": "chat_9",
+        "body": "I found three slips in the client folder.",
+        "final": true
+      },
+      "response": {
+        "message_id": "55555555-5555-4555-8555-555555555555",
+        "duplicate": false,
+        "server_time": "2026-09-14T13:00:00Z"
+      }
+    },
+    "clara-ask": {
+      "request": {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "worker_id": "22222222-2222-4222-8222-222222222222",
+        "attempt_no": 3,
+        "fence_token": 91,
+        "request_id": "req_7",
+        "question": "Which OneDrive folder should I use?",
+        "explanation": "I need the parent folder for this client.",
+        "answer_type": "link",
+        "choices": [],
+        "details": "Searched /Clients/Smith and found two candidates.",
+        "blocking": true
+      },
+      "response": {
+        "request_id": "req_7",
+        "state": "waiting_on_human",
+        "duplicate": false,
+        "server_time": "2026-09-14T13:00:00Z"
+      }
+    },
+    "clara-commands": {
+      "request": {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "worker_id": "22222222-2222-4222-8222-222222222222",
+        "attempt_no": 3,
+        "fence_token": 91,
+        "after_command_id": 41
+      },
+      "response": {
+        "commands": [
+          {
+            "command_id": 42,
+            "type": "answer",
+            "request_id": "req_7",
+            "value": "https://x",
+            "issued_at": "2026-09-14T13:00:00Z"
+          }
+        ],
+        "server_time": "2026-09-14T13:00:00Z"
+      }
+    },
+    "clara-command-ack": {
+      "request": {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "worker_id": "22222222-2222-4222-8222-222222222222",
+        "attempt_no": 3,
+        "fence_token": 91,
+        "command_id": 42,
+        "status": "accepted",
+        "checkpoint": {
+          "stage": "pandadoc"
+        },
+        "note": null
+      },
+      "response": {
+        "command_id": 42,
+        "recorded": true,
+        "server_time": "2026-09-14T13:00:00Z"
+      }
+    },
+    "clara-artifact-upload-url": {
+      "request": {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "worker_id": "22222222-2222-4222-8222-222222222222",
+        "attempt_no": 3,
+        "fence_token": 91,
+        "file_name": "Smith-T183-2024.pdf",
+        "content_type": "application/pdf",
+        "bytes": 240512,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "member_id": "m1",
+        "document_type": "t183",
+        "tax_year": "2024"
+      },
+      "response": {
+        "allocation_id": "88888888-8888-4888-8888-888888888888",
+        "storage_path": "11111111-1111-4111-8111-111111111111/3/Smith-T183-2024.pdf",
+        "upload_url": "https://example.supabase.co/storage/v1/upload/sign/clara-artifacts/x",
+        "expires_at": "2026-09-14T13:00:00Z",
+        "server_time": "2026-09-14T13:00:00Z"
+      }
+    },
+    "clara-result": {
+      "request": {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "worker_id": "22222222-2222-4222-8222-222222222222",
+        "attempt_no": 3,
+        "fence_token": 91,
+        "idempotency_key": "res_3_91",
+        "outcome": "completed_prepared",
+        "needs_review_reason": null,
+        "summary": "Prepared the return package for two members.",
+        "artifacts": [
+          {
+            "kind": "document",
+            "member_id": "m1",
+            "document_type": "t183",
+            "tax_year": "2024",
+            "storage_path": "11111111-1111-4111-8111-111111111111/3/Smith-T183-2024.pdf",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "bytes": 240512,
+            "content_type": "application/pdf"
+          },
+          {
+            "kind": "pandadoc",
+            "member_id": "m1",
+            "remote_id": "doc_123",
+            "url": "https://app.pandadoc.com/a/#/documents/doc_123"
+          },
+          {
+            "kind": "onedrive_folder",
+            "remote_id": "item_9",
+            "url": "https://contoso.sharepoint.com/sites/clients/Smith/2024",
+            "verification": "worker_observed",
+            "observed_at": "2026-09-14T13:00:00Z",
+            "evidence": {
+              "item_ids": [
+                "item_9"
+              ],
+              "uploaded": [
+                "Smith-T183-2024.pdf"
+              ]
+            }
+          }
+        ],
+        "usage": {
+          "active_seconds": 812,
+          "waiting_seconds": 240,
+          "input_tokens": 120000,
+          "output_tokens": 18000,
+          "cache_tokens": 50000,
+          "estimated_cost_usd": 1.42,
+          "usage_coverage": "complete"
+        }
+      },
+      "response": {
+        "accepted": true,
+        "replay": false,
+        "receipt_id": "77777777-7777-4777-8777-777777777777",
+        "execution": "finished",
+        "result_recorded": true,
+        "handoff": {
+          "attempted": true,
+          "status": "ready_to_email",
+          "reason": null
+        },
+        "job_state": "completed_prepared",
+        "server_time": "2026-09-14T13:00:00Z"
+      }
+    },
+    "clara-quiesce": {
+      "request": {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "worker_id": "22222222-2222-4222-8222-222222222222",
+        "attempt_no": 3,
+        "fence_token": 91,
+        "report": {
+          "finished": [
+            "pandadoc:m1"
+          ],
+          "in_flight": [],
+          "unknown": [
+            "upload:t183:m2"
+          ],
+          "observed_at": "2026-09-14T13:00:00Z",
+          "complete": false
+        }
+      },
+      "response": {
+        "quiescent": false,
+        "recovery_hold": true,
+        "released_locks": [],
+        "server_time": "2026-09-14T13:00:00Z"
+      }
+    }
+  },
+  "examples": [
+    {
+      "name": "claim_general_chat",
+      "operation": "clara-claim",
+      "direction": "response",
+      "valid": true,
+      "note": "A general chat job carries closeout:null and scope.closeout_form_id:null.",
+      "payload": {
+        "claimed": true,
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "kind": "general",
+        "attempt_no": 1,
+        "fence_token": 7,
+        "execution_id": "exec_7",
+        "conversation_id": "33333333-3333-4333-8333-333333333333",
+        "conversation_ref": "clara-local-4",
+        "message_boundary_seq": 2,
+        "delivery_from_seq": 1,
+        "messages": [
+          {
+            "message_id": "55555555-5555-4555-8555-555555555555",
+            "seq": 2,
+            "role": "staff",
+            "body": "Find the 2023 engagement letter",
+            "created_at": "2026-09-14T13:00:00Z"
+          }
+        ],
+        "more_messages": false,
+        "scope": {
+          "assigned_by": "99999999-9999-4999-8999-999999999999",
+          "permissions": [
+            "chat.general"
+          ],
+          "closeout_form_id": null
+        },
+        "resume_from_checkpoint": null,
+        "closeout": null,
+        "required_outputs": [],
+        "policy": {
+          "invoice_mode": "laureen_manual",
+          "may_send_client_email": false,
+          "may_efile": false,
+          "may_sign": false,
+          "stop_at": "ready_to_email",
+          "onedrive_rules": null
+        },
+        "server_time": "2026-09-14T13:00:00Z",
+        "lease_expires_at": "2026-09-14T13:02:00Z",
+        "heartbeat_interval_s": 20
+      }
+    },
+    {
+      "name": "claim_empty_queue",
+      "operation": "clara-claim",
+      "direction": "response",
+      "valid": true,
+      "note": "An empty queue is still a fully-formed claimed:false response.",
+      "payload": {
+        "claimed": false,
+        "reason": "no_work",
+        "server_time": "2026-09-14T13:00:00Z",
+        "heartbeat_interval_s": 60
+      }
+    },
+    {
+      "name": "claim_partial_positive",
+      "operation": "clara-claim",
+      "direction": "response",
+      "valid": false,
+      "note": "claimed:true without job facts must never validate.",
+      "payload": {
+        "claimed": true,
+        "server_time": "2026-09-14T13:00:00Z"
+      }
+    },
+    {
+      "name": "heartbeat_idle",
+      "operation": "clara-heartbeat",
+      "direction": "request",
+      "valid": true,
+      "note": "An idle worker sends no job identity.",
+      "payload": {
+        "worker_id": "22222222-2222-4222-8222-222222222222",
+        "busy": false
+      }
+    },
+    {
+      "name": "heartbeat_busy_without_identity",
+      "operation": "clara-heartbeat",
+      "direction": "request",
+      "valid": false,
+      "note": "busy:true must carry job, attempt and fence; the busy branch is pinned by const.",
+      "payload": {
+        "worker_id": "22222222-2222-4222-8222-222222222222",
+        "busy": true
+      }
+    },
+    {
+      "name": "timestamp_impossible_date",
+      "operation": "clara-quiesce",
+      "direction": "request",
+      "valid": false,
+      "note": "2026-02-30 matches a loose pattern but is not a real date.",
+      "payload": {
+        "job_id": "11111111-1111-4111-8111-111111111111",
+        "worker_id": "22222222-2222-4222-8222-222222222222",
+        "attempt_no": 3,
+        "fence_token": 91,
+        "report": {
+          "finished": [],
+          "in_flight": [],
+          "unknown": [],
+          "observed_at": "2026-02-30T10:00:00Z",
+          "complete": true
+        }
+      }
+    },
+    {
+      "name": "uuid_uppercase_accepted",
+      "operation": "clara-cancel",
+      "direction": "request",
+      "valid": true,
+      "note": "UUID matching is case-insensitive in both runners, spelled out in the pattern.",
+      "payload": {
+        "job_id": "11111111-1111-4111-8111-111111111111"
+      }
+    }
+  ]
+}

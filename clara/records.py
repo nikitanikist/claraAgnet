@@ -75,4 +75,32 @@ CREATE TABLE IF NOT EXISTS portal_v1_outbox (
  UNIQUE(namespace,external_job_id,worker_id,attempt_no,fence_token,operation,request_key)
 );
 CREATE INDEX IF NOT EXISTS portal_v1_pending ON portal_v1_outbox(namespace,acknowledged,id);
+CREATE TABLE IF NOT EXISTS portal_v1_conversations (
+ namespace TEXT NOT NULL, external_id TEXT NOT NULL,
+ local_id TEXT NOT NULL UNIQUE REFERENCES conversations(id), kind TEXT NOT NULL,
+ owner_user_id TEXT NOT NULL, closeout_form_id TEXT,
+ PRIMARY KEY(namespace,external_id)
+);
+CREATE TABLE IF NOT EXISTS portal_v1_attempts (
+ namespace TEXT NOT NULL, external_job_id TEXT NOT NULL, worker_id TEXT NOT NULL,
+ attempt_no INTEGER NOT NULL, fence_token INTEGER NOT NULL, execution_id TEXT NOT NULL,
+ local_job_id TEXT NOT NULL UNIQUE REFERENCES jobs(id), claim_hash TEXT NOT NULL,
+ claim_json TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'prepared', created REAL NOT NULL,
+ PRIMARY KEY(namespace,external_job_id,attempt_no)
+);
+CREATE TABLE IF NOT EXISTS portal_v1_uploads (
+ namespace TEXT NOT NULL, external_job_id TEXT NOT NULL, worker_id TEXT NOT NULL,
+ attempt_no INTEGER NOT NULL, fence_token INTEGER NOT NULL, file_id TEXT NOT NULL,
+ allocation_id TEXT NOT NULL, storage_path TEXT NOT NULL, sha256 TEXT NOT NULL,
+ bytes INTEGER NOT NULL, content_type TEXT NOT NULL, state TEXT NOT NULL,
+ updated REAL NOT NULL,
+ PRIMARY KEY(namespace,external_job_id,attempt_no,fence_token,file_id)
+);
+CREATE TABLE IF NOT EXISTS portal_v1_deliveries (
+ namespace TEXT NOT NULL, external_job_id TEXT NOT NULL, worker_id TEXT NOT NULL,
+ attempt_no INTEGER NOT NULL, fence_token INTEGER NOT NULL,
+ from_seq INTEGER NOT NULL, to_seq INTEGER NOT NULL, messages_json TEXT NOT NULL,
+ acknowledged INTEGER NOT NULL DEFAULT 0,
+ PRIMARY KEY(namespace,external_job_id,attempt_no)
+);
 """

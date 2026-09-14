@@ -199,6 +199,33 @@ class AgentManager:
         else:
             self.store.status(jid, "cancelled")
 
+    def enqueue_portal_job(self, jid, *, reservation_id, execution_guard):
+        """Dispatch a persisted and delivery-acknowledged attempt exactly once."""
+        if not reservation_id or reservation_id != self.execution_reservation or execution_guard is None:
+            raise ValueError('Reserve the executor before dispatching a portal task.')
+        execution_guard.assert_active()
+        identity = execution_guard.identity
+        job = self.store.job(jid)
+        row = self.store.one('SELECT * FROM portal_v1_attempts WHERE local_job_id=?', (jid,))
+        if (not row or not job or job['status'] != 'queued'
+                or (row['external_job_id'], row['worker_id'], row['attempt_no'], row['fence_token']) != (
+                    identity.job_id, identity.worker_id, identity.attempt_no, identity.fence_token)):
+            raise ValueError('This local task does not match the acknowledged portal execution.')
+        delivery = self.store.one('''SELECT acknowledged FROM portal_v1_deliveries
+            WHERE namespace=? AND external_job_id=? AND attempt_no=? AND worker_id=? AND fence_token=?''',
+            (row['namespace'], identity.job_id, identity.attempt_no, identity.worker_id, identity.fence_token))
+        if not delivery or not delivery['acknowledged']:
+            raise ValueError('Receive and acknowledge all task messages before starting.')
+        Workflows(self.store, self.config).attach(job)
+        execution_guard.assert_active()
+        changed = self.store.execute("UPDATE portal_v1_attempts SET state='dispatched' WHERE local_job_id=? AND state='prepared'", (jid,))
+        if changed != 1:
+            raise ValueError('This portal attempt was already dispatched; inspect existing work before resuming.')
+        self.execution_guards[jid] = execution_guard
+        self.reserved_jobs.add(jid)
+        self.queue.put_nowait(jid)
+        return job
+
     async def request_input(self, job, kind, data):
         self.assert_execution_permitted(job)
         rid = new_id()

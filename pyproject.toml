@@ -21,7 +21,7 @@ clara = "clara.__main__:main"
 include = ["clara*"]
 
 [tool.setuptools.package-data]
-clara = ["static/*", "starter_skills/*/*", "reference-sources.json"]
+clara = ["static/*", "starter_skills/*/*", "reference-sources.json", "contracts/*.json", "contracts/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

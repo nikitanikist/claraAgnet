@@ -32,6 +32,30 @@ def canonical_hash(value):
 class Workflows:
     def __init__(self,store,config): self.store,self.config=store,config
 
+    def _portal_assignment(self, job):
+        # This row is written by the authenticated adapter before enqueue; a
+        # model-supplied context flag cannot select a weaker evidence profile.
+        row = self.store.one('SELECT claim_json FROM portal_v1_attempts WHERE local_job_id=?', (job['id'],))
+        return json.loads(row['claim_json']) if row else None
+
+    def _check_portal_scope(self, job, kind, context):
+        assignment = self._portal_assignment(job)
+        if not assignment:
+            return None
+        if assignment['kind'] == 'general':
+            if kind != 'general':
+                raise ValueError('This portal conversation is for information requests. Assign an eligible T1 closeout for tax workflow execution.')
+            return assignment
+        if kind != 't1-closeout':
+            raise ValueError('The assigned portal closeout requires its complete T1 preparation workflow.')
+        closeout = assignment['closeout']
+        expected_members = [m['member_name'] for m in closeout['members']]
+        if (context.get('client_key') != closeout['closeout_form_id']
+                or str(context.get('year')) != str(closeout['tax_year'])
+                or context.get('members') != expected_members):
+            raise ValueError('Use the assigned closeout ID, tax year and exact member names from the portal task.')
+        return assignment
+
     def get(self,cid):
         return decode(self.store.one('SELECT * FROM workflows WHERE conversation_id=?',(cid,)),'context','contract','limits')
 
@@ -44,6 +68,7 @@ class Workflows:
     def begin(self,job,kind,context,requirements=None):
         if kind not in TEMPLATES:
             raise ValueError('Choose a supported workflow type: '+', '.join(TEMPLATES))
+        portal = self._check_portal_scope(job, kind, context)
         existing=self.get(job['conversation_id'])
         if existing:
             self.attach(job)
@@ -79,12 +104,23 @@ class Workflows:
                 contract['signature-packet']=[{'kind':'remote_record','system':'pandadoc'}]
                 contract['invoice']=[{'kind':'remote_record','system':'billing'}]
                 contract['delivery']=[{'kind':'remote_record','system':'storage'},{'kind':'remote_record','system':'portal'}]
+                if portal:
+                    # Local work ends at the prepared evidence package. The
+                    # portal verifies it and commits Ready to Email afterwards;
+                    # requiring that commit here would create a circular wait.
+                    if portal['policy']['invoice_mode'] != 'laureen_manual':
+                        raise ValueError('This portal release assigns invoicing to Laureen.')
+                    contract.pop('invoice')
+                    contract['delivery']=[{'kind':'remote_record','system':'storage'}]
+                    context={**context,'invoice_responsibility':'laureen_manual',
+                             'handoff_responsibility':'portal_after_result',
+                             'portal_closeout_id':portal['closeout']['closeout_form_id']}
         now=time.time();settings=self.config.settings();wid=new_id()
         limits={k:settings.get(k) for k in ['max_turns','task_timeout_minutes','max_budget_usd']}
         self.store.execute('INSERT INTO workflows VALUES(?,?,?,?,?,?,?,?,?)',
             (wid,job['conversation_id'],kind,json.dumps(context),json.dumps(contract),json.dumps(limits),'active',now,now))
         self.attach(job)
-        self.event(job,'workflow',{'id':wid,'kind':kind,'stages':TEMPLATES[kind]})
+        self.event(job,'workflow',{'id':wid,'kind':kind,'stages':list(contract)})
         return self.snapshot(job['conversation_id'])
 
     def evidence(self,job,kind,subject,payload,verified):

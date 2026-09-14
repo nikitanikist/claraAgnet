@@ -4,6 +4,7 @@ The adapter supplies its bundled contract. It never downloads a schema from a
 server response, and schema references cannot retrieve network resources.
 """
 import json
+from importlib.resources import files
 
 from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import SchemaError
@@ -16,6 +17,10 @@ class ContractViolation(ValueError):
 
 
 class PortalContract:
+    @classmethod
+    def bundled(cls):
+        return cls(json.loads(files('clara').joinpath('contracts/portal-v1.json').read_text()))
+
     def __init__(self, document):
         try:
             self.document = json.loads(json.dumps(document, allow_nan=False))
@@ -36,6 +41,10 @@ class PortalContract:
             base = str(doc.get('$id') or 'urn:clara:portal-contract:1')
             registry = Registry().with_resource(base, resource)
             self.validators = {}
+            if isinstance(doc.get('error'), dict):
+                Draft202012Validator.check_schema(doc['error'])
+                self.validators['error', 'response'] = Draft202012Validator(
+                    {'$ref': f'{base}#/error'}, registry=registry, format_checker=FormatChecker())
             for name, operation in operations.items():
                 if not isinstance(name, str) or not name.startswith('clara-') or len(name) > 80:
                     raise ContractViolation('The portal contract has an invalid operation name.')
