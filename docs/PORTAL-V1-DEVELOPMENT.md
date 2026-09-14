@@ -123,17 +123,21 @@ and this branch has not been accepted for Windows release.
    worker UUID, an HTTPS `/functions/v1` base URL, a `CLARA_PORTAL_` credential
    variable, and `authentication_reviewed: true` in the local `portal.json`.
    Configuration and credential changes require a restart. Keep `enabled: false`
-   until the remaining Windows and portal acceptance checks pass.
+   during setup. After the environment and credentials have been checked, enable
+   it only for a supervised acceptance window with test assignments. General
+   staff use waits until the connected acceptance checks pass.
 3. Qualify the implemented Windows observer on the real dedicated RDP and validate
    operator recovery end to end. See WINDOWS-WORKER-HANDOFF.md. Keep automatic
-   handoff unqualified until the native check and connected T1/queue tests pass;
-   a successful tool return alone never releases the desktop.
+   handoff unqualified during setup. After native observations and the first
+   task's cleanup have been reviewed, qualify it for the supervised two-task
+   queue test; retain qualification for general use only if that test passes.
+   A successful tool return alone never releases the desktop.
 4. Report observed Windows quiescence before releasing the slot. The current general-task upload types
    are limited to the portal's PDF/PNG/CSV/DOCX/XLSX allowlist; unsupported output
    types must be resolved before general attachment delivery is enabled.
    A server receipt and a completed model response are different facts.
 5. Verify SQL concurrency, authenticated portal UI and the real Windows/RDP
-   workflow before enabling execution or issuing an installation update.
+   workflow before enabling general staff execution or issuing a release update.
 
 No inbound Windows desktop-control listener is introduced. Secrets belong in
 the configured credential provider, not this repository or task logs.

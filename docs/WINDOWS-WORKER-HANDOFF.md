@@ -31,7 +31,7 @@ In the existing protocol-v1 portal.json, add:
 }
 ```
 
-Keep `enabled: false` during deployment/setup. `exclusive_session` enables baseline capture and diagnostics; `qualified: false` keeps the automatic release gate closed. Set qualification true only after the actual Windows acceptance checks below. Changes require a Clara restart. Existing local-only conversations are unaffected. No model tool can change the in-memory qualification flags.
+Keep `enabled: false` during deployment/setup. On an enabled portal worker, `exclusive_session` enables baseline capture and diagnostics; `qualified: false` keeps the automatic release gate closed. After native observations and a test task's cleanup have been reviewed, qualification can be enabled for the supervised two-task acceptance test below. Keep it enabled for general staff use only after that test passes. Changes require a Clara restart. Existing local-only conversations are unaffected. No model tool can change the in-memory qualification flags.
 
 With qualification enabled, an unavailable/dirty initial desktop fails before any model query or application action. Close task applications before the first queued run. Staff should use the portal on their own computers, leaving the dedicated worker desktop for Clara. Chrome's separate profile retains website sign-in storage when its task window closes.
 
@@ -43,9 +43,9 @@ Review the report for an active/unlocked session, complete process and printer v
 
 ## Connected acceptance still required
 
-1. Use test closeouts and a dedicated unlocked account. Configure worker credentials and required providers; keep live clients out of this test.
-2. Run one complete T1 through actual TaxPrep, PandaDoc and OneDrive. Verify the individual documents and signing links, human email draft and Ready to Email result. Confirm normal app cleanup and the quiet receipt.
-3. Submit two staff tasks. The second must remain queued until the first task's applications/printing settle and the portal confirms release.
+1. Use test closeouts and a dedicated unlocked account. Configure worker credentials and required providers; keep live clients out of this test. After environment review, enable the worker and portal execution only for this supervised acceptance window. Keep automatic handoff unqualified for the initial task.
+2. Run one complete T1 through actual TaxPrep, PandaDoc and OneDrive. Verify the individual documents and signing links, human email draft and Ready to Email result. Confirm normal app cleanup. While qualification is false, the desktop hold is expected; reconcile that exact attempt through the portal after inspecting the observations and outputs.
+3. Review the initial task's native observations and normal cleanup, then enable qualification for the controlled queue test and submit two staff tasks. The second must remain queued until the first task's applications/printing settle and the portal confirms release. A failed check means disable qualification and resolve the cause before general staff use.
 4. Stop a task during a command/print or upload. Confirm the next task cannot start, incomplete usage remains unknown and existing work is preserved. Continue only through the portal's exact-attempt reconciliation.
 5. Interrupt RDP/Clara and restart. Confirm old execution is not replayed and an old baseline/receipt cannot be used as a new attempt's qualification.
 
