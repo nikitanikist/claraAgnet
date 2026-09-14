@@ -4,14 +4,16 @@ Development implementation; the real Clearhouse RDP is not yet qualified. The us
 
 ## What is implemented
 
-Before a portal model task starts, Clara saves a read-only baseline from the separate desktop Python. It records the Windows account/session, boot and controller process identity, current account processes with creation times, visible window handles/classes, and current account print jobs. It omits document titles, command lines, printer names, credentials and client paths. The baseline is tied to the local job and is never replaced during recovery.
+Before a portal model task starts, Clara saves a read-only baseline from the separate desktop Python. It records the Windows account/session, boot and controller process identity, all current-session processes with creation times, visible window handles/classes, and current account print jobs. It omits document titles, command lines, printer names, credentials and client paths. The baseline is tied to the local job and is never replaced during recovery.
+
+Some RDP systems omit process owner SIDs from WTS enumeration. The probe attempts a limited token query and still tracks a process by PID and creation time when its SID stays unavailable; it never ignores a process based on its name. Missing creation identity remains an observation error. Diagnostic metadata identifies unresolved owners and window sizes. Zero-size shell helper windows are excluded from the visible app list; their processes remain tracked.
 
 After result reporting, WindowsHandoff takes fresh observations. Automatic release requires all of the following:
 
 - The configured session is dedicated and has passed Windows qualification.
 - The baseline was complete, interactive and clear of existing application windows, hidden TaxPrep/Chrome/Office instances and pending printing. Clara's startup console and Windows shell can stay open.
 - The same Windows account, session, boot and controller process remain. A reused PID with a different creation time is a different process.
-- Every new current-account process and visible window has gone, and all configured queues were readable with no remaining current-account print job. Paused, retained or failed print jobs are not treated as finished.
+- Every new current-session process and visible window has gone, and all configured queues were readable with no remaining current-account print job. Paused, retained or failed print jobs are not treated as finished.
 - A successful T1 TaxPrep preparation result for this exact attempt has an acknowledged portal receipt. General desktop tasks and interrupted/failed tasks still require review.
 - Two clear observations are separated by at least three seconds. Any activity or incomplete observation resets that settling interval.
 - The existing executor, tool, external-operation and attachment checks are also clear, and the portal returns its release receipt. Windows observations cannot clear another unresolved operation.

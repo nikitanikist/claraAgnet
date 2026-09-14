@@ -56,15 +56,33 @@ def snapshot(controller_pid):
               'owner': hashlib.sha256(str(sid).encode()).hexdigest(),
               'controller': [controller.pid, controller.create_time()],
               'ancestors': [p.pid for p in controller.parents()] + [controller.pid],
-              'processes': [], 'windows': [], 'print_jobs': [], 'errors': []}
+              'processes': [], 'windows': [], 'print_jobs': [], 'errors': [],
+              'unresolved_processes': [], 'window_details': []}
     for process_session, pid, name, process_sid in win32ts.WTSEnumerateProcesses():
         if process_session != session or pid in {0, os.getpid()}:
             continue
         if process_sid is None:
-            result['errors'].append('process-owner-unreadable:' + str(pid))
-            continue
-        if process_sid != sid:
-            continue
+            # WTS can omit a SID even when the process token is readable. Ask
+            # for limited query access only; never elevate or infer ownership
+            # from an executable name. Even with no SID, the process is tracked
+            # below by PID + creation time. No current-session process is omitted.
+            process_handle = process_token = None
+            try:
+                process_handle = win32api.OpenProcess(0x1000, False, pid)
+                process_token = win32security.OpenProcessToken(process_handle, win32security.TOKEN_QUERY)
+                process_sid = win32security.GetTokenInformation(process_token, win32security.TokenUser)[0]
+            except Exception:
+                if psutil.pid_exists(pid):
+                    result['unresolved_processes'].append({'pid': pid, 'name': name})
+            finally:
+                if process_token is not None:
+                    process_token.Close()
+                if process_handle is not None:
+                    process_handle.Close()
+        # Include SYSTEM/protected-account processes in this same session too.
+        # Ownership is not needed for before/after activity tracking, provided
+        # the process creation identity is readable. Missing identity remains
+        # an error; a new/reused PID is never waved through as a system process.
         try:
             process = psutil.Process(pid)
             result['processes'].append({'pid': pid, 'created': process.create_time(), 'name': process.name()})
@@ -77,7 +95,15 @@ def snapshot(controller_pid):
     def visit(hwnd, _):
         if win32gui.IsWindowVisible(hwnd):
             pid = win32process.GetWindowThreadProcessId(hwnd)[1]
-            result['windows'].append({'handle': hwnd, 'pid': pid, 'class': win32gui.GetClassName(hwnd)})
+            row = {'handle': hwnd, 'pid': pid, 'class': win32gui.GetClassName(hwnd)}
+            left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+            width, height = right - left, bottom - top
+            result['window_details'].append({**row, 'width': width, 'height': height})
+            # A WS_VISIBLE flag alone includes zero-size shell/console helper
+            # windows. These have no visible app surface. Processes and print
+            # queues are observed separately, including background applications.
+            if width > 0 and height > 0:
+                result['windows'].append(row)
     win32gui.EnumWindows(visit, None)
 
     # Enumerate every configured queue for this account's work. An unreadable
