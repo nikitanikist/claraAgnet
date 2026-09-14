@@ -36,6 +36,10 @@ use the optional legacy protocol documented in `PORTAL-PROTOCOL.md`.
   allocation on the configured portal's storage origin. Worker credentials are
   not sent to storage. Interrupted transfers retain an unknown outcome for
   object verification. Successful transfer is not tax-document verification.
+- `portal_documents.py` maps the complete verified PDF evidence set to the
+  assignment's exact member IDs, tax year and portal document types. It rejects
+  missing/conflicting files, rechecks source hashes, and reuses immutable local
+  published snapshots. It does not claim any file has reached OneDrive.
 - `portal_usage.py` maps one attempt's measured elapsed/waiting time, reported
   tokens and SDK API estimate. Missing values remain unknown. These figures
   cannot calculate remaining Max subscription allowance.
