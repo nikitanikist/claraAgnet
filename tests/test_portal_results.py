@@ -81,7 +81,7 @@ def test_complete_closeout_delivers_exact_pdf_set_and_remote_records(tmp_path):
             body = json.loads(request.content)
             if request.url.path.endswith('/clara-artifact-upload-url'):
                 path = f"{lease.identity.job_id}/{lease.identity.attempt_no}/{uuid4()}-{body['file_name']}"
-                return wire({'allocation_id':str(uuid4()),'storage_path':path,
+                return wire({'allocation_id':str(uuid4()),'storage_path':path,'original_file_name':body['file_name'],
                              'upload_url':'https://example.supabase.co/storage/v1/upload/sign/clara-artifacts/'+path+'?token=temporary',
                              'expires_at':'2026-09-14T00:05:00Z','server_time':'2026-09-14T00:00:00Z'})
             assert request.url.path.endswith('/clara-result')

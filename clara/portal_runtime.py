@@ -6,7 +6,7 @@ An interrupted execution is never automatically dispatched again.
 """
 import asyncio
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 import json
 import time
@@ -104,12 +104,21 @@ class PortalRuntime:
         except PortalUnavailable:
             self.error = 'The claim receipt was lost. Clara will recover the owned slot before accepting more work.'
             return 'claim_unknown'
-        except PortalRejected:
+        except (PortalRejected, ContractViolation):
             self._update(cid, 'held', error='The portal rejected the claim. Review the connection and existing worker hold.')
             return 'held'
         claim = reply.body
         if claim['claimed'] is not True:
-            if claim.get('owned_job_id') or claim.get('reason') in {'recovery_hold', 'slot_busy'}:
+            if claim.get('reason') == 'context_unavailable':
+                # A failed context transfer may already own a remote slot.
+                # Release only on the explicit, internally consistent receipt.
+                released = (claim.get('attempt_released') is True
+                            and claim.get('recovery_hold') is False
+                            and not claim.get('owned_job_id'))
+                if not released:
+                    self._update(cid, 'held', error='The portal could not deliver the task and has not confirmed release. Review the existing worker hold.')
+                    return 'held'
+            if claim.get('recovery_hold') is True or claim.get('owned_job_id') or claim.get('reason') in {'recovery_hold', 'slot_busy'}:
                 self._update(cid, 'held', error='The portal reports an existing worker hold. Review it before starting another task.')
                 return 'held'
             self._complete(cid)
@@ -195,8 +204,16 @@ class PortalRuntime:
             AND external_job_id=? AND worker_id=? AND attempt_no=? AND fence_token=?''',
             (self.transport.base_url, claim['job_id'], self.worker_id, claim['attempt_no'], claim['fence_token']))
         if not binding:
-            self._update(cycle['id'], 'held', error='Intake was interrupted before dispatch. Review the portal attempt before releasing this worker.')
-            return 'held'
+            if cycle['local_job_id'] or self.manager.active_job or not self.manager.queue.empty():
+                self._update(cycle['id'], 'held', error='The interrupted intake has conflicting local work. Review it before releasing this worker.')
+                return 'held'
+            # Bindings are persisted before dispatch. Without one, this claim
+            # could only have received inputs, never run model/desktop actions.
+            # Report that observed state; the server still decides whether the
+            # attempt is stopped and whether its remote slot can be released.
+            return await self._quiesce(cycle, None, report={
+                'finished':['intake:no-execution'], 'in_flight':[], 'unknown':[],
+                'observed_at':datetime.now(timezone.utc).isoformat(), 'complete':True})
         jid = binding['local_job_id']
         await self.manager.cancel(jid)
         if self.manager.active_job or not self.manager.queue.empty():
@@ -212,7 +229,10 @@ class PortalRuntime:
         if not result:
             self._update(cycle['id'], 'held', jid=jid,
                 error='The task was interrupted before its result was recorded. Review its existing outputs before resuming.')
-            return 'held'
+            # Recovery does not fabricate a successful result, zero usage or
+            # another model run. It must still deliver the actual stopped/unknown
+            # action inventory so a person can reconcile it in the portal.
+            return await self._quiesce(cycle, prepared)
         # PortalResults reuses the staged payload verbatim; timing here is not
         # used to manufacture a new usage report after a process restart.
         try:
@@ -222,9 +242,12 @@ class PortalRuntime:
             return 'held'
         return await self._quiesce(cycle, prepared)
 
-    async def _quiesce(self, cycle, prepared):
-        identity = prepared.lease.identity
-        report = self.observer(self.store, self.manager, self.transport.base_url, identity, prepared.local_job_id)
+    async def _quiesce(self, cycle, prepared, *, report=None):
+        claim = json.loads(cycle['claim_json'])
+        identity = (prepared.lease.identity if prepared else
+                    AttemptIdentity(claim['job_id'], self.worker_id, claim['attempt_no'], claim['fence_token']))
+        if report is None:
+            report = self.observer(self.store, self.manager, self.transport.base_url, identity, prepared.local_job_id)
         # Compare actual current observations with a previous pending report.
         # Retrying unchanged observations reuses their original timestamp/key.
         fingerprint = hashlib.sha256(json.dumps({k:v for k,v in report.items() if k != 'observed_at'},

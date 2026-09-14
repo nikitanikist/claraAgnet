@@ -34,7 +34,7 @@ def published(tmp_path):
     fid = result['id']
     snapshot = published_snapshot(config, store, job['id'], fid, expected_sha256=hashlib.sha256(data).hexdigest())
     allocation = PortalContract.bundled().document['fixtures']['clara-artifact-upload-url']['response'].copy()
-    allocation.update(storage_path=f'{IDENTITY.job_id}/3/example.pdf',
+    allocation.update(original_file_name=snapshot.name, storage_path=f'{IDENTITY.job_id}/3/example.pdf',
                       upload_url=f'https://example.supabase.co/storage/v1/upload/sign/clara-artifacts/{IDENTITY.job_id}/3/example.pdf?token=synthetic',
                       expires_at=(NOW + timedelta(minutes=15)).isoformat(), server_time=NOW.isoformat())
     clock = [0.0]
@@ -109,6 +109,18 @@ def test_upload_rejects_cross_portal_url_before_sending(published):
                 await uploader.upload(IDENTITY, lease, snapshot,
                                       {**allocation, 'upload_url': allocation['upload_url'].replace('example.supabase.co', 'other.invalid')},
                                       allocation_request_started=0)
+            assert store.rows('SELECT * FROM portal_v1_uploads') == []
+    asyncio.run(scenario())
+
+
+def test_upload_rejects_a_changed_original_filename_before_sending(published):
+    _, store, _, snapshot, allocation, lease, clock = published
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: pytest.fail('Must not upload a misnamed file'))) as client:
+            uploader = PortalUploads(store, PortalTransport(BASE, lambda:'test', client=client), client=client, clock=lambda:clock[0])
+            with pytest.raises(ValueError, match='original filename'):
+                await uploader.upload(IDENTITY, lease, snapshot,
+                    {**allocation, 'original_file_name':'different-client.pdf'}, allocation_request_started=0)
             assert store.rows('SELECT * FROM portal_v1_uploads') == []
     asyncio.run(scenario())
 

@@ -38,7 +38,7 @@ def observe_quiescence(store, manager, namespace, identity, local_job_id):
                 readonly = leaf in {'Snapshot', 'Screenshot', 'ListWindows', 'InspectControls',
                                    'ApplicationInfo', 'VerifyWindow', 'take_snapshot',
                                    'take_screenshot', 'list_pages'}
-                if name in {'Bash', 'PowerShell'} or (name.startswith(('mcp__windows__', 'mcp__chrome__')) and not readonly):
+                if name in {'Bash', 'PowerShell', 'mcp__clara__run_command'} or (name.startswith(('mcp__windows__', 'mcp__chrome__')) and not readonly):
                     external_actions = True
             else:
                 returned.add(ref)

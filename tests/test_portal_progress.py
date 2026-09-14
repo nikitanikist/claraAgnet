@@ -82,3 +82,16 @@ def test_quiescence_never_reports_idle_while_waiting_or_truncates_unknowns(tmp_p
         store.event(cid, jid, 'tool', {'id': str(i), 'name': 'Read'})
     with pytest.raises(ValueError, match='retain the worker hold'):
         observe_quiescence(store, manager, BASE, lease.identity, jid)
+
+
+def test_claras_command_tool_return_does_not_prove_its_external_actions_stopped(tmp_path):
+    config, store, claim, lease = setup(tmp_path)
+    jid = PortalBindings(store, BASE, WORKER).persist_claim(claim, 'Assigned task')['local_job_id']
+    cid = store.job(jid)['conversation_id']
+    manager = AgentManager(config, store)
+    store.status(jid, 'completed')
+    for kind in ('tool', 'tool_done'):
+        store.event(cid, jid, kind, {'id':'shell', 'name':'mcp__clara__run_command'})
+    report = observe_quiescence(store, manager, BASE, lease.identity, jid)
+    assert report['complete'] is False
+    assert 'external-desktop-state-unconfirmed' in report['unknown']

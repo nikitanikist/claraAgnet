@@ -106,6 +106,8 @@ class PortalUploads:
         if (not isinstance(file, PublishedFile) or not file.data or len(file.data) > MAX_BYTES
                 or hashlib.sha256(file.data).hexdigest() != file.sha256):
             raise ValueError('Provide the verified immutable attachment snapshot.')
+        if allocation['original_file_name'] != file.name:
+            raise ValueError('The allocation does not preserve this attachment\'s original filename.')
         args = (self.namespace, identity.job_id, identity.attempt_no, identity.fence_token, file.file_id)
         with self.store.connect() as db:
             db.execute('BEGIN IMMEDIATE')

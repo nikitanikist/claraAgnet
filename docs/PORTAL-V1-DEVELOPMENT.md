@@ -42,7 +42,9 @@ and this branch has not been accepted for Windows release.
   be reused. Lease loss cancels a blocked transfer and removes its partial file.
 - `portal_artifacts.py` snapshots a published attachment from the same
   conversation, verifies its recorded size/hash, and uploads exact bytes to an
-  allocation on the configured portal's storage origin. Worker credentials are
+  allocation on the configured portal's storage origin. The allocation must
+  preserve the original client filename, independently of its unique storage
+  path. Worker credentials are
   not sent to storage. Interrupted transfers retain an unknown outcome for
   object verification. Successful transfer is not tax-document verification.
 - `portal_documents.py` maps the complete verified PDF evidence set to the
@@ -82,8 +84,12 @@ and this branch has not been accepted for Windows release.
   a saved result can be reported again, but its model task cannot run again.
   Only confirmed local quiescence plus the server release receipt clears the
   reservation. An interrupted intake or execution without a staged result
-  retains its hold and currently requires operator recovery; automatic release
-  from the portal's reconciliation flow is not yet implemented.
+  reports its actual quiescence inventory without manufacturing a successful
+  result or zero usage. An intake with no persisted binding cannot have
+  dispatched execution. Unconfirmed actions retain their hold for operator
+  review; detecting that the portal's reconciliation flow released this hold
+  is not yet implemented. Failed context delivery releases locally only when
+  the server explicitly confirms release without a recovery hold.
 - `portal_progress.py` relays completed chat text and concise activity with
   stable message IDs and a durable cursor. It excludes raw tool arguments and
   output from activity, preserves paragraph breaks, and cannot cross into
@@ -91,7 +97,9 @@ and this branch has not been accepted for Windows release.
 - `portal_quiescence.py` inventories running calls, unreturned tools,
   uncertain external writes and interrupted uploads. A returned desktop click
   alone is insufficient: external desktop state stays unconfirmed until the
-  Windows observation/recovery integration is built. Oversized unresolved
+  Windows observation/recovery integration is built. This includes Clara's
+  actual `run_command` tool, whose return cannot prove detached work stopped.
+  Oversized unresolved
   reports retain the worker hold instead of silently losing actions.
 - The trusted portal preparation profile keeps required PDF/source-copy/
   application/signing/storage evidence and human review. Laureen handles
@@ -114,8 +122,7 @@ and this branch has not been accepted for Windows release.
    operator recovery path. The current conservative observer retains a hold
    after desktop/shell/browser actions; a successful tool return alone cannot
    confirm that printing, uploading or a detached process has stopped.
-4. Connect the implemented input/output/result components, align the final
-   original-filename and OneDrive manifest contract, and report observed Windows
+4. Align the final error and context-outcome contract, and report observed Windows
    quiescence before releasing the slot. The current general-task upload types
    are limited to the portal's PDF/PNG/CSV/DOCX/XLSX allowlist; unsupported output
    types must be resolved before general attachment delivery is enabled.
@@ -133,7 +140,7 @@ service restart; no model tool exposes the provider.
 
 ## Latest local validation
 
-The development branch's Python suite passes 228 tests. The result delivery
+The development branch's Python suite passes 237 tests. The result delivery
 tests use synthetic PDFs and mocked portal/storage receipts. They verify the
 outbound payload and retry behavior, not an actual Ready to Email transition.
 No real PandaDoc/OneDrive account, authenticated portal UI or Windows desktop
@@ -142,3 +149,5 @@ Runtime tests cover the serial cycle, complete final-message draining, lost
 claim/result receipts, reporting after a restart, Stop during blocked intake,
 and retaining a hold for unconfirmed desktop activity. Model execution and
 server receipts in these tests are simulated.
+Additional cases cover the original allocation filename, ambiguous failed
+context delivery, and reporting stopped intake/execution without a final result.
