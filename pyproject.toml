@@ -10,7 +10,8 @@ requires-python = ">=3.12"
 dependencies = [
   "claude-agent-sdk==0.2.152", "fastapi==0.141.1", "uvicorn==0.52.4",
   "python-multipart==0.0.32", "pypdf==6.18.0", "python-docx==1.2.0",
-  "python-pptx==1.0.2", "openpyxl==3.1.5", "httpx==0.28.1"
+  "python-pptx==1.0.2", "openpyxl==3.1.5", "httpx==0.28.1",
+  "jsonschema[format]==4.26.0", "referencing==0.37.0"
 ]
 
 [project.scripts]
