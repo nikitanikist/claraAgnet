@@ -21,7 +21,7 @@ ERROR_CODES = frozenset({
     'active_job_exists', 'resource_locked', 'unsupported_workflow',
     'execution_disabled', 'invalid_state', 'answer_expired',
     'artifact_unverified', 'snapshot_stale', 'incomplete_outputs',
-    'invoice_policy_unset', 'internal_error',
+    'invoice_policy_unset', 'finalization_in_progress', 'internal_error',
 })
 REPORT_OPERATIONS = frozenset({
     'clara-result', 'clara-quiesce', 'clara-events', 'clara-chat',

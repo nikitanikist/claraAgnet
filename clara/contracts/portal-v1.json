@@ -9,7 +9,28 @@
   "error": {
     "properties": {
       "error": {
-        "maxLength": 64,
+        "enum": [
+          "unsupported_contract",
+          "unauthorized",
+          "forbidden",
+          "not_found",
+          "invalid_request",
+          "idempotency_conflict",
+          "fenced",
+          "lease_expired",
+          "active_job_exists",
+          "resource_locked",
+          "unsupported_workflow",
+          "execution_disabled",
+          "invalid_state",
+          "answer_expired",
+          "artifact_unverified",
+          "snapshot_stale",
+          "incomplete_outputs",
+          "invoice_policy_unset",
+          "finalization_in_progress",
+          "internal_error"
+        ],
         "type": "string"
       },
       "message": {
@@ -678,6 +699,52 @@
               "reason"
             ],
             "additionalProperties": false,
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "reason": {
+                      "const": "context_unavailable"
+                    }
+                  },
+                  "required": [
+                    "reason"
+                  ]
+                },
+                "then": {
+                  "oneOf": [
+                    {
+                      "properties": {
+                        "attempt_released": {
+                          "const": true
+                        },
+                        "recovery_hold": {
+                          "const": false
+                        }
+                      },
+                      "required": [
+                        "attempt_released",
+                        "recovery_hold"
+                      ]
+                    },
+                    {
+                      "properties": {
+                        "attempt_released": {
+                          "const": false
+                        },
+                        "recovery_hold": {
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "attempt_released",
+                        "recovery_hold"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
             "type": "object"
           },
           {
@@ -3220,6 +3287,117 @@
         "reason": "no_work",
         "server_time": "2026-09-14T13:00:00Z",
         "heartbeat_interval_s": 60
+      }
+    },
+    {
+      "name": "claim_context_unavailable_requeued",
+      "operation": "clara-claim",
+      "direction": "response",
+      "valid": true,
+      "note": "The job is certainly back in the queue: released true, hold false.",
+      "payload": {
+        "claimed": false,
+        "reason": "context_unavailable",
+        "attempt_released": true,
+        "recovery_hold": false,
+        "server_time": "2026-09-14T13:00:00Z",
+        "heartbeat_interval_s": 60
+      }
+    },
+    {
+      "name": "claim_context_unavailable_held",
+      "operation": "clara-claim",
+      "direction": "response",
+      "valid": true,
+      "note": "The release was not certain, so the job is held for a human.",
+      "payload": {
+        "claimed": false,
+        "reason": "context_unavailable",
+        "attempt_released": false,
+        "recovery_hold": true,
+        "server_time": "2026-09-14T13:00:00Z",
+        "heartbeat_interval_s": 60
+      }
+    },
+    {
+      "name": "claim_context_unavailable_ambiguous",
+      "operation": "clara-claim",
+      "direction": "response",
+      "valid": false,
+      "note": "Both true is meaningless; a worker must never read a free slot from it.",
+      "payload": {
+        "claimed": false,
+        "reason": "context_unavailable",
+        "attempt_released": true,
+        "recovery_hold": true,
+        "server_time": "2026-09-14T13:00:00Z",
+        "heartbeat_interval_s": 60
+      }
+    },
+    {
+      "name": "claim_context_unavailable_silent",
+      "operation": "clara-claim",
+      "direction": "response",
+      "valid": false,
+      "note": "The two flags are mandatory for this reason; silence is refused.",
+      "payload": {
+        "claimed": false,
+        "reason": "context_unavailable",
+        "server_time": "2026-09-14T13:00:00Z",
+        "heartbeat_interval_s": 60
+      }
+    },
+    {
+      "name": "claim_context_unavailable_neither",
+      "operation": "clara-claim",
+      "direction": "response",
+      "valid": false,
+      "note": "Neither released nor held says nothing at all, so it is refused too.",
+      "payload": {
+        "claimed": false,
+        "reason": "context_unavailable",
+        "attempt_released": false,
+        "recovery_hold": false,
+        "server_time": "2026-09-14T13:00:00Z",
+        "heartbeat_interval_s": 60
+      }
+    },
+    {
+      "name": "claim_recovery_hold_other_reason",
+      "operation": "clara-claim",
+      "direction": "response",
+      "valid": true,
+      "note": "A hold reported for another reason stays valid without the release flag.",
+      "payload": {
+        "claimed": false,
+        "reason": "worker_unavailable",
+        "recovery_hold": true,
+        "server_time": "2026-09-14T13:00:00Z",
+        "heartbeat_interval_s": 60
+      }
+    },
+    {
+      "name": "error_finalization_in_progress",
+      "operation": "clara-result",
+      "direction": "error",
+      "valid": true,
+      "note": "Someone else is finishing this result right now; the worker may retry.",
+      "payload": {
+        "error": "finalization_in_progress",
+        "message": "another finalization owns this receipt",
+        "retryable": true
+      }
+    },
+    {
+      "name": "error_unknown_code",
+      "operation": "clara-result",
+      "direction": "error",
+      "valid": false,
+      "note": "Only published error codes may appear on the wire.",
+      "payload": {
+        "error": "finalisation_busy",
+        "message": "typo",
+        "retryable": true
       }
     },
     {

@@ -82,14 +82,15 @@ def test_incompatible_responses_and_redirects_do_not_pass_or_leak(response):
     asyncio.run(scenario())
 
 
-def test_lease_rejection_is_explicit_without_server_message():
+@pytest.mark.parametrize('code', ['lease_expired', 'finalization_in_progress'])
+def test_lease_rejection_is_explicit_without_server_message(code):
     async def scenario():
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: wire(
-                {'error': 'lease_expired', 'message': 'private-client-content', 'retryable': False}, 409))) as client:
+                {'error': code, 'message': 'private-client-content', 'retryable': False}, 409))) as client:
             transport = PortalTransport(BASE, lambda: KEY, client=client)
             with pytest.raises(PortalRejected) as caught:
                 await transport.request('clara-heartbeat', fixture('clara-heartbeat'))
-            assert caught.value.code == 'lease_expired'
+            assert caught.value.code == code
             assert 'private-client-content' not in str(caught.value)
     asyncio.run(scenario())
 

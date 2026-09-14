@@ -1,7 +1,7 @@
 # Reviewed portal wire contract
 
-Source: nikitanikist/clearform-hub, commit c4d3f96206089d36cb6ffa9a4d3fa59a0935c769, `contracts/clara.contract.v1.json`.
+Source: nikitanikist/clearform-hub, commit 5e48f5c8a67a4dbc7e546e9f3a6d263a0302dc7a, `contracts/clara.contract.v1.json`.
 
-SHA-256: 40e761b6cddfa21bc4a7b7a190e495fbe77a61fcee588ac94668e441b5fece79
+SHA-256: 46dd0eb978d94c738165c8c3623e4286f26d64cd88dfa36044f9670b5dacd678
 
-This is an offline snapshot, not a network-fetched schema. Contract conformance does not establish server behavioral correctness or live acceptance. The v1 adapter is connected only on the development branch and is not enabled for Windows release. The finalization error export and strict context-outcome flags remain under portal review. The client conservatively retains its hold for ambiguous context outcomes.
+This is an offline snapshot, not a network-fetched schema. Contract conformance does not establish server behavioral correctness or live acceptance. The v1 adapter is connected only on the development branch and is not enabled for Windows release. The finalization error is included; context delivery failure has exactly two valid release/hold outcomes. Generic recovery holds do not require context-only flags. Ambiguous receipts remain rejected and held.

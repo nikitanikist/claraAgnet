@@ -113,9 +113,10 @@ and this branch has not been accepted for Windows release.
 
 ## Integration still required
 
-1. Review the final portal contract and actual handlers. The current snapshot
-   fixes the busy-heartbeat discriminator and passes its Python positive and
-   negative fixtures; this is not validation of live server behavior.
+1. Confirm the deployed portal uses the reviewed contract/handlers. The bundled
+   snapshot now includes finalization errors and exact failed-context outcomes.
+   Its Python fixtures and runtime recovery tests pass; this is not validation
+   of live server behavior.
 2. Validate enrollment and the configured model account arrangement with the
    real Windows worker. Protocol v1 requires `protocol_version: 1`, the issued
    worker UUID, an HTTPS `/functions/v1` base URL, a `CLARA_PORTAL_` credential
@@ -126,8 +127,7 @@ and this branch has not been accepted for Windows release.
    operator recovery path end to end. The current conservative observer retains a hold
    after desktop/shell/browser actions; a successful tool return alone cannot
    confirm that printing, uploading or a detached process has stopped.
-4. Align the final error and context-outcome contract, and report observed Windows
-   quiescence before releasing the slot. The current general-task upload types
+4. Report observed Windows quiescence before releasing the slot. The current general-task upload types
    are limited to the portal's PDF/PNG/CSV/DOCX/XLSX allowlist; unsupported output
    types must be resolved before general attachment delivery is enabled.
    A server receipt and a completed model response are different facts.
@@ -144,7 +144,7 @@ service restart; no model tool exposes the provider.
 
 ## Latest local validation
 
-The development branch's Python suite passes 239 tests. The result delivery
+The development branch's Python suite passes 240 tests. The result delivery
 tests use synthetic PDFs and mocked portal/storage receipts. They verify the
 outbound payload and retry behavior, not an actual Ready to Email transition.
 No real PandaDoc/OneDrive account, authenticated portal UI or Windows desktop
@@ -160,3 +160,8 @@ Operator-reconciliation tests cover a retained server hold, newer-attempt
 resumption in the original conversation, lost newer-claim receipts, and
 rejection of a recovered old claim as permission to replay. Server operator
 reconciliation is simulated; no actual RDP action was observed.
+
+The reviewed contract now includes finalization_in_progress and rejects
+ambiguous failed-context outcomes while retaining generic recovery-hold replies.
+A finalization-busy response preserves pending reporting without exposing server
+message content; the local test verifies its explicit error classification.
