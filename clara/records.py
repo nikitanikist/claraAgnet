@@ -67,4 +67,12 @@ CREATE TABLE IF NOT EXISTS portal_receipts (
 CREATE TABLE IF NOT EXISTS execution_snapshots (
  job_id TEXT PRIMARY KEY REFERENCES jobs(id), last_tool TEXT, last_result TEXT, uncertain INTEGER NOT NULL DEFAULT 0, updated REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS portal_v1_outbox (
+ id INTEGER PRIMARY KEY, namespace TEXT NOT NULL, external_job_id TEXT NOT NULL,
+ worker_id TEXT NOT NULL, attempt_no INTEGER NOT NULL, fence_token INTEGER NOT NULL,
+ operation TEXT NOT NULL, request_key TEXT NOT NULL, request_hash TEXT NOT NULL,
+ payload TEXT NOT NULL, receipt TEXT, created REAL NOT NULL, acknowledged REAL,
+ UNIQUE(namespace,external_job_id,worker_id,attempt_no,fence_token,operation,request_key)
+);
+CREATE INDEX IF NOT EXISTS portal_v1_pending ON portal_v1_outbox(namespace,acknowledged,id);
 """
