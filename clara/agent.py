@@ -324,6 +324,31 @@ class AgentManager:
                 self.store.execute("UPDATE jobs SET usage=? WHERE id=?", (json.dumps(usage), job["id"]))
                 self.store.event(job["conversation_id"], job["id"], "usage", usage)
 
+    async def _workflow_budget(self, job, workflows):
+        budget = workflows.remaining(job['conversation_id'])
+        if not budget or not budget['requires_usage_review']:
+            return budget
+        if not self.store.one('SELECT local_job_id FROM portal_v1_attempts WHERE local_job_id=?', (job['id'],)):
+            raise ValueError('The stopped task has incomplete usage. Open Workflow review and choose Allow continuation with incomplete usage. Keep this conversation and its existing files.')
+        # Keep the review in the same staff conversation. A newly issued claim
+        # permits resumption, but does not acknowledge missing cost information.
+        # Bind the answer to this exact usage snapshot; a changed history must
+        # be reviewed again, and reported costs/limits remain untouched.
+        fingerprints = {row['job_id']: row['fingerprint'] for row in budget['unreviewed_usage']}
+        answer = await self.request_input(job, 'question', {
+            'question': 'Continue with incomplete usage information?',
+            'context': 'Some usage from the previous run is missing. Its token total and API cost estimate will remain incomplete. Existing task limits still apply.',
+            'choices': [
+                {'label': 'Continue', 'answer': 'Continue with incomplete usage'},
+                {'label': 'Keep paused', 'answer': 'Keep paused'},
+            ],
+        })
+        if answer != 'Continue with incomplete usage':
+            raise ValueError('The task remains paused. Existing work and incomplete usage were preserved.')
+        workflows.review_usage(job['conversation_id'], fingerprints,
+            'Portal staff explicitly chose Continue with incomplete usage in the task chat. Missing usage remains unknown; existing limits apply.')
+        return workflows.remaining(job['conversation_id'])
+
     async def _execute(self, job, tracker, started, limit):
         self.store.status(job["id"], "running", message="Checking native Claude sign-in")
         sanitize_process_environment()
@@ -334,10 +359,8 @@ class AgentManager:
         emit = lambda kind, data: self.store.event(job["conversation_id"], job["id"], kind, data)
         wf=Workflows(self.store,self.config)
         wf.attach(job)
-        budget=wf.remaining(job['conversation_id'])
+        budget=await self._workflow_budget(job, wf)
         if budget:
-            if budget['requires_usage_review']:
-                raise ValueError('The stopped task has incomplete usage. Open Workflow review and choose Allow continuation with incomplete usage. Keep this conversation and its existing files.')
             if budget['partial']:
                 emit('runtime',{'message':'Continuing after operator review of incomplete prior usage. Known totals are lower bounds; missing usage is not zero.'})
             if (budget['remaining_turns'] is not None and budget['remaining_turns']<1) or budget['remaining_ms']<1000 or budget['remaining_usd']==0:

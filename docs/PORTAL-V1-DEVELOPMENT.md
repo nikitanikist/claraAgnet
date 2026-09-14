@@ -144,7 +144,7 @@ service restart; no model tool exposes the provider.
 
 ## Latest local validation
 
-The development branch's Python suite passes 240 tests. The result delivery
+The development branch's Python suite passes 243 tests. The result delivery
 tests use synthetic PDFs and mocked portal/storage receipts. They verify the
 outbound payload and retry behavior, not an actual Ready to Email transition.
 No real PandaDoc/OneDrive account, authenticated portal UI or Windows desktop
@@ -165,3 +165,9 @@ The reviewed contract now includes finalization_in_progress and rejects
 ambiguous failed-context outcomes while retaining generic recovery-hold replies.
 A finalization-busy response preserves pending reporting without exposing server
 message content; the local test verifies its explicit error classification.
+
+When a portal continuation has unreviewed missing usage, Clara asks a short
+question in the same portal chat before querying the model. Continue records
+review of the exact usage snapshot without filling missing values or changing
+limits. Keep paused, cancellation, and changed usage history do not grant that
+review. Local-only workflows retain their existing Workflow review screen.
