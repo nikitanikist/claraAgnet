@@ -121,4 +121,11 @@ CREATE TABLE IF NOT EXISTS portal_v1_inputs (
  received REAL NOT NULL,
  PRIMARY KEY(namespace,external_job_id,worker_id,attempt_no,fence_token,attachment_id)
 );
+CREATE TABLE IF NOT EXISTS portal_v1_cycles (
+ id TEXT PRIMARY KEY, namespace TEXT NOT NULL, worker_id TEXT NOT NULL,
+ state TEXT NOT NULL, claim_json TEXT, local_job_id TEXT,
+ started REAL NOT NULL, finished REAL, error TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS portal_v1_one_cycle
+ ON portal_v1_cycles(namespace,worker_id) WHERE finished IS NULL;
 """

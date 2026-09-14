@@ -17,13 +17,39 @@ TERMINAL={'completed','needs_review','incomplete','failed','cancelled','interrup
 class PortalWorker:
     def __init__(self,config,store,manager):
         self.config,self.store,self.manager=config,store,manager
+        self.v1=None
         self.task=None;self.error=None
+
+    @property
+    def error(self):
+        return self.v1.error if self.v1 is not None else self._error
+
+    @error.setter
+    def error(self,value):
+        self._error=value
 
     def settings(self):
         path=self.config.data/'portal.json'
         if not path.exists(): return None
         data=json.loads(path.read_text())
         if not data.get('enabled'): return None
+        version=data.get('protocol_version','legacy')
+        if version==1 and type(version) is int:
+            from uuid import UUID
+            from .portal_transport import functions_base_url
+            data['base_url']=functions_base_url(data.get('base_url'))
+            try:
+                data['worker_id']=str(UUID(data['worker_id']))
+            except (KeyError,ValueError,TypeError,AttributeError):
+                raise ValueError('Configure the worker ID issued by the portal.') from None
+            env=data.get('token_env')
+            if not isinstance(env,str) or not env.startswith('CLARA_PORTAL_') or not env.replace('_','').isalnum():
+                raise ValueError('Configure a CLARA_PORTAL_ worker credential environment variable.')
+            if data.get('authentication_reviewed') is not True:
+                raise ValueError('Review the model account/authentication arrangement before enabling portal assignments.')
+            return data
+        if version!='legacy':
+            raise ValueError('Choose the reviewed portal protocol version 1 or the legacy protocol.')
         parsed=urlparse(data.get('base_url',''))
         if parsed.scheme!='https' or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise ValueError('Portal base_url must be HTTPS without credentials, query or fragment.')
@@ -62,10 +88,27 @@ class PortalWorker:
 
     async def start(self):
         try:
-            if self.settings(): self.task=asyncio.create_task(self.run())
+            settings=self.settings()
+            if settings and settings.get('protocol_version')==1:
+                from .portal_runtime import PortalRuntime
+                from .portal_transport import PortalTransport
+                transport=PortalTransport(settings['base_url'],lambda:portal_credential(settings['token_env']))
+                self.v1=PortalRuntime(self.config,self.store,self.manager,transport,settings['worker_id'])
+                try:
+                    await self.v1.start()
+                except Exception:
+                    await transport.close()
+                    self.v1=None
+                    raise
+                self.task=self.v1.task
+            elif settings:
+                self.task=asyncio.create_task(self.run())
         except (ValueError,OSError) as error: self.error=str(error)
 
     async def close(self):
+        if self.v1 is not None:
+            await self.v1.close()
+            return
         if self.task:
             self.task.cancel()
             try: await self.task

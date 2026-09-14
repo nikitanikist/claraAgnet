@@ -30,6 +30,7 @@ class PortalSession:
         self.tasks = []
         self.error = None
         self.closed = False
+        self.publish_lock = asyncio.Lock()
 
     def start(self):
         if self.tasks or self.closed:
@@ -41,8 +42,15 @@ class PortalSession:
                       asyncio.create_task(self._watch_lease())]
 
     async def _publish(self):
-        await self.control.publish_questions()
-        await self.progress.flush()
+        async with self.publish_lock:
+            await self.control.publish_questions()
+            await self.progress.flush()
+
+    async def flush_progress(self):
+        """Drain final text without racing the background cursor/report loop."""
+        async with self.publish_lock:
+            while await self.progress.flush():
+                pass
 
     async def _stop(self, reason):
         self.lease.fence(reason)

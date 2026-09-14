@@ -67,12 +67,12 @@ def test_lease_watchdog_stops_even_when_every_http_request_hangs(tmp_path):
     async def scenario():
         store, manager, prepared = environment(tmp_path)
         prepared.lease.clock = time.monotonic
-        prepared.lease.deadline = time.monotonic() + 0.05
         async def handle(request):
             await asyncio.Event().wait()
         async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
             session = PortalSession(store, manager,
                 PortalTransport(BASE, lambda: 'test-key', client=client), PortalJournal(store, BASE), prepared)
+            prepared.lease.deadline = time.monotonic() + 0.05
             session.start()
             job = await asyncio.wait_for(session.wait_for_execution(), 1)
             assert job['status'] == 'cancelled'

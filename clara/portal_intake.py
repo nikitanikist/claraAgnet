@@ -24,6 +24,20 @@ class PreparedAttempt:
     recovered: bool
 
 
+def claim_lease(transport, reply, worker_id):
+    claim = reply.body
+    transport.contract.validate('clara-claim', 'response', claim)
+    if claim.get('claimed') is not True:
+        raise ContractViolation('Intake requires an authenticated positive claim response.')
+    identity = AttemptIdentity(claim['job_id'], worker_id, claim['attempt_no'], claim['fence_token'])
+    lease = ExecutionLease(identity, clock=transport.clock)
+    lease.acknowledge(identity,
+        expires_at=datetime.fromisoformat(claim['lease_expires_at'].replace('Z', '+00:00')),
+        server_time=datetime.fromisoformat(claim['server_time'].replace('Z', '+00:00')),
+        request_started=reply.request_started)
+    return lease
+
+
 def task_prompt(claim, messages, source_files=None):
     context = None
     if claim['kind'] == 'closeout':
@@ -68,7 +82,7 @@ class PortalIntake:
         self.config, self.store, self.manager = config, store, manager
         self.transport, self.worker_id = transport, worker_id
 
-    async def start_claim(self, reply, *, reservation_id):
+    async def start_claim(self, reply, *, reservation_id, lease=None):
         if (not reservation_id or self.manager.execution_reservation != reservation_id
                 or self.manager.active_job or not self.manager.queue.empty()):
             raise ContractViolation('Reserve the idle executor before requesting a portal claim.')
@@ -77,11 +91,10 @@ class PortalIntake:
         if claim.get('claimed') is not True:
             raise ContractViolation('Intake requires an authenticated positive claim response.')
         identity = AttemptIdentity(claim['job_id'], self.worker_id, claim['attempt_no'], claim['fence_token'])
-        lease = ExecutionLease(identity, clock=self.transport.clock)
-        lease.acknowledge(identity,
-            expires_at=datetime.fromisoformat(claim['lease_expires_at'].replace('Z', '+00:00')),
-            server_time=datetime.fromisoformat(claim['server_time'].replace('Z', '+00:00')),
-            request_started=reply.request_started)
+        lease = lease or claim_lease(self.transport, reply, self.worker_id)
+        if lease.identity != identity:
+            raise ContractViolation('The intake lease belongs to another claim.')
+        lease.assert_active()
 
         # A restarted or repeated claim may describe a previously dispatched
         # task. Return its binding for recovery; NEVER enqueue it again here.

@@ -1,8 +1,10 @@
 # ClearForm Hub worker protocol v1
 
 The portal-v1 adapter is under development on `feat/clearhouse-portal-v1`.
-It is not connected to `PortalWorker` yet. Existing installations continue to
-use the optional legacy protocol documented in `PORTAL-PROTOCOL.md`.
+`PortalWorker` dispatches explicitly configured protocol-v1 connections to the
+new runtime. Existing installations retain the optional legacy protocol in
+`PORTAL-PROTOCOL.md`. No v1 configuration is enabled by installation or update,
+and this branch has not been accepted for Windows release.
 
 ## Implemented components
 
@@ -30,7 +32,7 @@ use the optional legacy protocol documented in `PORTAL-PROTOCOL.md`.
   the scoped task prompt, the correct workflow and dispatch. It requires an
   already reserved executor. A repeated claim returns its existing local task
   for recovery and never enqueues it again. It is not yet connected to a
-  production claim poller or Windows activation. Ordinary information requests
+  Windows release. Ordinary information requests
   do not create a formal tax workflow or need a closeout review checkpoint.
 - `portal_inputs.py` downloads every assigned source attachment before intake
   acknowledges delivery or dispatches execution. It verifies attachment identity,
@@ -73,6 +75,15 @@ use the optional legacy protocol documented in `PORTAL-PROTOCOL.md`.
   response cannot prevent Stop or the lease watchdog from cancelling work.
   Local completion keeps the connection and reservation for result delivery;
   closing the session never releases the desktop or replays execution.
+- `portal_runtime.py` serializes claim, complete intake, execution, final
+  progress draining, result reporting and observed quiescence. It persists the
+  worker reservation before a claim request and retains it on ambiguous errors.
+  Input downloading has its own heartbeat and stop watchdog. After restart,
+  a saved result can be reported again, but its model task cannot run again.
+  Only confirmed local quiescence plus the server release receipt clears the
+  reservation. An interrupted intake or execution without a staged result
+  retains its hold and currently requires operator recovery; automatic release
+  from the portal's reconciliation flow is not yet implemented.
 - `portal_progress.py` relays completed chat text and concise activity with
   stable message IDs and a durable cursor. It excludes raw tool arguments and
   output from activity, preserves paragraph breaks, and cannot cross into
@@ -93,12 +104,16 @@ use the optional legacy protocol documented in `PORTAL-PROTOCOL.md`.
 1. Review the final portal contract and actual handlers. The current snapshot
    fixes the busy-heartbeat discriminator and passes its Python positive and
    negative fixtures; this is not validation of live server behavior.
-2. Connect version dispatch, configuration and worker enrollment. Reserve the
-   local executor before claim, persist the stable claim/message window, fetch
-   every page and obtain the exact delivery acknowledgement before execution.
-3. Connect the implemented session and its independent control/progress loops
-   to the worker lifecycle. Stop takes precedence over an answer. A lost claim response
-   recovers its existing attempt; it never authorizes a second desktop task.
+2. Validate enrollment and the configured model account arrangement with the
+   real Windows worker. Protocol v1 requires `protocol_version: 1`, the issued
+   worker UUID, an HTTPS `/functions/v1` base URL, a `CLARA_PORTAL_` credential
+   variable, and `authentication_reviewed: true` in the local `portal.json`.
+   Configuration and credential changes require a restart. Keep `enabled: false`
+   until the remaining Windows and portal acceptance checks pass.
+3. Implement and verify the Windows external-state observer and the explicit
+   operator recovery path. The current conservative observer retains a hold
+   after desktop/shell/browser actions; a successful tool return alone cannot
+   confirm that printing, uploading or a detached process has stopped.
 4. Connect the implemented input/output/result components, align the final
    original-filename and OneDrive manifest contract, and report observed Windows
    quiescence before releasing the slot. The current general-task upload types
@@ -118,8 +133,12 @@ service restart; no model tool exposes the provider.
 
 ## Latest local validation
 
-The development branch's Python suite passes 214 tests. The result delivery
+The development branch's Python suite passes 228 tests. The result delivery
 tests use synthetic PDFs and mocked portal/storage receipts. They verify the
 outbound payload and retry behavior, not an actual Ready to Email transition.
 No real PandaDoc/OneDrive account, authenticated portal UI or Windows desktop
 was exercised by these tests. This is not an installation or release notice.
+Runtime tests cover the serial cycle, complete final-message draining, lost
+claim/result receipts, reporting after a restart, Stop during blocked intake,
+and retaining a hold for unconfirmed desktop activity. Model execution and
+server receipts in these tests are simulated.
