@@ -39,6 +39,16 @@ Keep `enabled: false` during deployment/setup. On an enabled portal worker, `exc
 
 With qualification enabled, an unavailable/dirty initial desktop fails before any model query or application action. Close task applications before the first queued run. Staff should use the portal on their own computers, leaving the dedicated worker desktop for Clara. Chrome's separate profile retains website sign-in storage when its task window closes.
 
+## Releasing a completed test after operator review
+
+Starting Clara opens its local dashboard and starts the configured outbound portal worker. The local URL is normal; it does not mean the portal worker is available. A saved recovery hold blocks new claims, and the portal's execution setting must separately be enabled. A held worker currently does not refresh idle claim heartbeats, so the portal may label it offline even though the local dashboard works.
+
+For a **finished T1 already acknowledged as Ready to Email**, `Release-ClaraPortalHold.ps1` provides an explicit operator review path. Stop the idle Clara process first; inspect the saved delivery and current dedicated desktop. Close task applications normally and settle printing. Unrelated or older controllers must be identified before stopping them; the recovery command never kills applications. Supply the exact job, worker, attempt and fence, a substantive inspection note, and `-ConfirmDesktopIdle`. For uncertain PandaDoc reservations, each `-Operation` value binds an operation ID to the verified remote-record evidence ID for its existing delivered packet (`operation-id=evidence-id`). The original business key and remote display title are retained in the review; neither is rewritten to make them match.
+
+The command checks two fresh stable Windows observations, rejects leftover controller/model processes, incomplete tools and unfinished uploads, saves a local inspection record, and sends only the normal exact-attempt `clara-quiesce` report. A successful portal release receipt is required before the local cycle is retired. It preserves the original Windows baseline, job result, files, packet links and usage. It never resumes the completed task, enables portal execution, changes worker credentials, or qualifies future automatic handoffs. A rejected or ambiguous request retains the local hold for inspection.
+
+After release, start Clara normally. Its idle claim check should refresh portal presence even when execution is disabled. Review the portal queue before enabling execution; verify a fresh portal chat before assigning another closeout.
+
 ## Read-only RDP check
 
 Run Test-ClaraWorker.ps1 from the reviewed source, using the installed desktop Python. It writes a dated worker-check JSON under `%LOCALAPPDATA%\Clara\diagnostics` and prints the exact path. It does not install/update Clara, alter portal settings, request model inference, print a document, click an application or open a port. Only its own read-only probe is stopped if it exceeds twelve seconds.
