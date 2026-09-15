@@ -156,6 +156,12 @@ class PortalResults:
         summary = text[:2000] or 'Local execution ended. Review the saved progress and outputs.'
         outcome = 'failed' if job['status'] == 'failed' else 'needs_review'
         reason = 'Execution stopped before all preparation steps were confirmed.'
+        # The local finish check names the stage or evidence that still blocks
+        # completion; the reviewer needs that sentence, not a generic one.
+        status = self.store.one("SELECT data FROM events WHERE job_id=? AND kind='status' ORDER BY id DESC LIMIT 1", (jid,))
+        detail = json.loads(status['data']).get('message') if status else None
+        if isinstance(detail, str) and detail.strip() and job['status'] != 'completed':
+            reason = detail.strip()[:600]
         artifacts = []
         if not prepared.recovered and job['status'] in {'completed', 'needs_review'}:
             if claim['kind'] == 'closeout':

@@ -115,7 +115,7 @@ def test_complete_closeout_hands_off_links_without_any_portal_pdf_upload(tmp_pat
 
 def test_unfinished_closeout_reports_review_without_requesting_handoff(tmp_path):
     config, store, job, lease, args = delivery(tmp_path)
-    store.status(job['id'], 'needs_review')
+    store.status(job['id'], 'incomplete', message='Workflow incomplete. Remaining stages: documents. Progress has been saved.')
     bodies = []
     async def scenario():
         def handle(request):
@@ -130,7 +130,8 @@ def test_unfinished_closeout_reports_review_without_requesting_handoff(tmp_path)
             finally:
                 await reporter.close()
         assert bodies[0]['outcome'] == 'needs_review'
-        assert bodies[0]['artifacts'] == [] and bodies[0]['needs_review_reason']
+        assert bodies[0]['artifacts'] == []
+        assert bodies[0]['needs_review_reason'] == 'Workflow incomplete. Remaining stages: documents. Progress has been saved.'
     asyncio.run(scenario())
 
 

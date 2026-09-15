@@ -178,9 +178,17 @@ class Workflows:
                 raise ValueError('Evidence is missing, unverified or belongs to another conversation.')
             if row['kind'] in {'document','source-copy'}:
                 from .tools import permitted_path
-                payload=row['payload'];path=permitted_path(self.config,payload['path'])
-                if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest()!=payload['sha256']:
-                    raise ValueError('An evidenced file changed or disappeared. Re-verify it before advancing.')
+                payload=row['payload']
+                if row['kind']=='source-copy' and payload.get('source') and payload.get('source_sha256'):
+                    # The copy is the tax application's working file and changes as soon as
+                    # it is opened or printed; the invariant is the untouched original.
+                    path=permitted_path(self.config,payload['source']);expected=payload['source_sha256']
+                    message='The original source file changed or disappeared since it was copied. Re-verify the source before advancing.'
+                else:
+                    path=permitted_path(self.config,payload['path']);expected=payload['sha256']
+                    message='An evidenced file changed or disappeared. Re-verify it before advancing.'
+                if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest()!=expected:
+                    raise ValueError(message)
             proofs.append(row)
         return proofs
 

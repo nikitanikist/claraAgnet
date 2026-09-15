@@ -87,6 +87,22 @@ def test_verified_print_package_waits_for_operator_and_preserves_progress(env):
     assert reloaded.finish_check(j) is None
 
 
+def test_source_copy_evidence_survives_edits_to_the_working_copy_but_not_to_the_original(env):
+    cfg,s,j,w=env;begin(w,j)
+    original=cfg.workspace/'client.125';original.write_bytes(b'original return')
+    copy=next(fn for name,desc,schema,fn in definitions(cfg,s,j) if name=='copy_file')
+    copied=asyncio.run(copy({'source':'client.125','destination':'work/CLARA TEST.125'}))
+    assert copied['verified']
+    w.checkpoint(j,'intake',[]);w.checkpoint(j,'source-copy',[copied['id']])
+    # The tax application rewrites its working file when it opens or prints it.
+    (cfg.workspace/'work/CLARA TEST.125').write_bytes(b'original return + application metadata')
+    assert w._proofs(j,[copied['id']])
+    assert 'source-copy' not in (w.finish_check(j) or '')
+    original.write_bytes(b'someone edited the client file')
+    with pytest.raises(ValueError,match='original source file changed'): w._proofs(j,[copied['id']])
+    assert w.finish_check(j).startswith('Workflow incomplete. Evidence for source-copy')
+
+
 def test_copy_never_overwrites_previous_run(env):
     cfg,s,j,w=env;p=cfg.workspace/'source';p.write_text('new')
     (cfg.workspace/'dest').write_text('previous')
