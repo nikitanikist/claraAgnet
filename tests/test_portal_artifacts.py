@@ -35,7 +35,7 @@ def published(tmp_path):
     snapshot = published_snapshot(config, store, job['id'], fid, expected_sha256=hashlib.sha256(data).hexdigest())
     allocation = PortalContract.bundled().document['fixtures']['clara-artifact-upload-url']['response'].copy()
     allocation.update(original_file_name=snapshot.name, storage_path=f'{IDENTITY.job_id}/3/example.pdf',
-                      upload_url=f'https://example.supabase.co/storage/v1/upload/sign/clara-artifacts/{IDENTITY.job_id}/3/example.pdf?token=synthetic',
+                      upload_url=f'https://example.supabase.co/storage/v1/object/upload/sign/clara-artifacts/{IDENTITY.job_id}/3/example.pdf?token=synthetic',
                       expires_at=(NOW + timedelta(minutes=15)).isoformat(), server_time=NOW.isoformat())
     clock = [0.0]
     lease = ExecutionLease(IDENTITY, clock=lambda: clock[0])
@@ -99,7 +99,15 @@ def test_lost_upload_receipt_survives_restart_and_does_not_trigger_another_put(p
     asyncio.run(scenario())
 
 
-def test_upload_rejects_cross_portal_url_before_sending(published):
+@pytest.mark.parametrize('original,replacement', [
+    ('example.supabase.co', 'other.invalid'),
+    ('/object/upload/sign/', '/upload/sign/'),
+    ('/clara-artifacts/', '/other-bucket/'),
+    ('/3/example.pdf', '/4/example.pdf'),
+    ('/example.pdf', '/different.pdf'),
+    ('https://', 'http://'),
+])
+def test_upload_rejects_unallocated_url_before_sending(published, original, replacement):
     _, store, _, snapshot, allocation, lease, clock = published
     async def scenario():
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: pytest.fail('Must not send'))) as client:
@@ -107,7 +115,7 @@ def test_upload_rejects_cross_portal_url_before_sending(published):
             uploader = PortalUploads(store, transport, client=client, clock=lambda: clock[0])
             with pytest.raises(ValueError):
                 await uploader.upload(IDENTITY, lease, snapshot,
-                                      {**allocation, 'upload_url': allocation['upload_url'].replace('example.supabase.co', 'other.invalid')},
+                                      {**allocation, 'upload_url': allocation['upload_url'].replace(original, replacement)},
                                       allocation_request_started=0)
             assert store.rows('SELECT * FROM portal_v1_uploads') == []
     asyncio.run(scenario())

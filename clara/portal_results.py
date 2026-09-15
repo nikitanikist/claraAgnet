@@ -10,6 +10,7 @@ from .portal_documents import collect_documents
 from .portal_progress import check_binding
 from .portal_transport import PortalUnavailable
 from .portal_usage import portal_usage
+from .usage import number
 from .workflows import Workflows
 
 
@@ -61,6 +62,76 @@ class PortalResults:
                                       identity, job['id'], delivery['document_evidence_ids'])
         return documents, delivery['artifacts']
 
+    def closeout_payload(self, identity, jid, timing):
+        """Check local PDFs, but hand off only the existing remote links/metadata."""
+        binding = check_binding(self.store, self.transport.base_url, identity, jid)
+        claim = json.loads(binding['claim_json'])
+        job = self.store.job(jid)
+        if (claim['kind'] != 'closeout' or claim['closeout']['software'] != 'taxprep'
+                or job['status'] not in {'completed', 'needs_review'} or not job['finished']):
+            raise ValueError('Only a finished TaxPrep closeout can hand off saved delivery links.')
+        documents, remotes = self._closeout(job, identity, claim)
+        folders = [a for a in remotes if a.get('kind') == 'onedrive_folder']
+        packets = [a for a in remotes if a.get('kind') == 'pandadoc']
+        members = {m['member_id'] for m in claim['closeout']['members']}
+        if (len(folders) != 1 or len(packets) != len(members)
+                or {a.get('member_id') for a in packets} != members
+                or len(remotes) != len(packets) + 1 or any(a.get('storage_path') for a in remotes)):
+            raise ValueError('The saved delivery must contain one folder and one packet per member.')
+        uploaded = folders[0].get('evidence', {}).get('uploaded', [])
+        expected = {(d.member_id, d.document_type, d.tax_year): d for d in documents}
+        observed = {}
+        for item in uploaded:
+            key = (item.get('member_id'), item.get('document_type'), item.get('tax_year'))
+            if key in observed or key not in expected:
+                raise ValueError('The saved OneDrive files do not match this family document set.')
+            doc = expected[key]
+            if (item.get('sha256') != doc.file.sha256 or item.get('bytes') != len(doc.file.data)
+                    or item.get('file_name') != doc.file.name
+                    or item.get('folder_id') != folders[0].get('remote_id')
+                    or not item.get('remote_file_id')):
+                raise ValueError('A saved OneDrive record no longer matches its verified local PDF.')
+            observed[key] = item
+        if (set(observed) != set(expected)
+                or len({f['remote_file_id'] for f in uploaded}) != len(uploaded)):
+            raise ValueError('The saved OneDrive files do not cover every required PDF distinctly.')
+        return {**asdict(identity), 'idempotency_key': 'result-' + jid,
+                'outcome': 'completed_prepared', 'needs_review_reason': None,
+                'summary': 'T1 documents are in OneDrive. Signing packets and folder links are ready for Laureen to review; no email was sent.',
+                'artifacts': remotes, 'usage': portal_usage(job['usage'], **timing)}
+
+    def saved_closeout_payload(self, identity, jid):
+        """Prepare reporting only; never invent timing or restart execution."""
+        check_binding(self.store, self.transport.base_url, identity, jid)
+        job = self.store.job(jid)
+        raw = json.loads(job['usage']) if isinstance(job['usage'], str) else job['usage']
+        raw = raw if isinstance(raw, dict) else {}
+        wall, waiting = number(raw.get('wall_duration_ms')), number(raw.get('user_wait_ms'))
+        if wall is None or waiting is None or waiting > wall:
+            raise ValueError('Saved measured task and waiting time are required to recover the report.')
+        return self.closeout_payload(identity, jid, {
+            'wall_seconds': wall / 1000, 'waiting_seconds': waiting / 1000})
+
+    async def report_saved_closeout(self, identity, jid):
+        """An operator invokes this with the service stopped and an instance lock.
+
+        The portal separately requires a current execution lease OR an audited
+        report-only authorization. This call grants no permission to run tools.
+        """
+        check_binding(self.store, self.transport.base_url, identity, jid)
+        key = 'result-' + jid
+        previous = self.store.one('''SELECT payload FROM portal_v1_outbox WHERE namespace=?
+            AND external_job_id=? AND worker_id=? AND attempt_no=? AND fence_token=?
+            AND operation='clara-result' AND request_key=?''',
+            (self.transport.base_url, identity.job_id, identity.worker_id,
+             identity.attempt_no, identity.fence_token, key))
+        payload = json.loads(previous['payload']) if previous else self.saved_closeout_payload(identity, jid)
+        if (payload.get('outcome') != 'completed_prepared' or not payload.get('artifacts')
+                or any(a.get('kind') not in {'pandadoc', 'onedrive_folder'}
+                       or a.get('storage_path') for a in payload['artifacts'])):
+            raise ValueError('The saved report is not a completed link-only closeout; preserve it for review.')
+        return await self.transport.report(self.journal, identity, 'clara-result', key, payload)
+
     async def deliver(self, prepared, timing):
         identity, lease, jid = prepared.lease.identity, prepared.lease, prepared.local_job_id
         binding = check_binding(self.store, self.transport.base_url, identity, jid)
@@ -89,14 +160,11 @@ class PortalResults:
         if not prepared.recovered and job['status'] in {'completed', 'needs_review'}:
             if claim['kind'] == 'closeout':
                 try:
-                    documents, remotes = self._closeout(job, identity, claim)
+                    payload = self.closeout_payload(identity, jid, timing)
                 except ValueError as error:
                     reason = str(error)[:600]
                 else:
-                    for document in documents:
-                        artifacts.append(await self._file(lease, document.file, document.allocation_fields()))
-                    artifacts.extend(remotes)
-                    outcome, reason = 'completed_prepared', None
+                    return await self.transport.report(self.journal, identity, 'clara-result', key, payload)
             else:
                 # Every file belongs to this task, not merely to a shared folder.
                 for row in self.store.rows("SELECT * FROM files WHERE job_id=? AND kind='artifact' ORDER BY created", (jid,)):

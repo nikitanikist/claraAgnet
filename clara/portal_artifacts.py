@@ -83,7 +83,7 @@ class PortalUploads:
         try:
             valid = (url.scheme == 'https' and url.hostname == base.hostname and url.port in (None, 443)
                      and not url.username and not url.password and not url.fragment
-                     and unquote(url.path) == '/storage/v1/upload/sign/clara-artifacts/' + path)
+                     and unquote(url.path) == '/storage/v1/object/upload/sign/clara-artifacts/' + path)
         except ValueError:
             valid = False
         if not valid:

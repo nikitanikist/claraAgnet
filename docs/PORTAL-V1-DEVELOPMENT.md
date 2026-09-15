@@ -57,11 +57,19 @@ and this branch has not been accepted for Windows release.
   IDs, original filenames and exact byte counts. These are worker observations;
   the reported source hashes are not independent OneDrive hash verification.
   The tool returns checkpoint proofs and cannot approve a workflow or send email.
-- `portal_results.py` prepares the exact PDF attachments and delivery records
-  for the result endpoint. A stopped or incomplete task reports review instead
+- `portal_results.py` rechecks the local PDF evidence and sends only the OneDrive
+  folder link, member-specific PandaDoc records and observed file metadata for
+  a T1 closeout. It never allocates or uploads T1 PDFs to portal storage. Requested
+  general-chat attachments keep their separate upload path. A stopped or incomplete task reports review instead
   of requesting successful handoff. The durable result is reused after a lost
   receipt or restart without recomputing usage, re-uploading files or starting
   another task. This component does not release the worker reservation.
+- `portal_recovery.py` can report a finished closeout whose result was not staged.
+  The operator must stop the service first; the command holds the same instance
+  lock, checks the exact saved job/attempt/fence and measured usage, and sends no
+  model, desktop, claim or heartbeat requests. The portal must authorize reporting
+  for an expired attempt. A rejected or ambiguous result stays in the journal;
+  retrying reuses its exact payload. It never releases the worker hold itself.
 - `portal_usage.py` maps one attempt's measured elapsed/waiting time, reported
   tokens and SDK API estimate. Missing values remain unknown. These figures
   cannot calculate remaining Max subscription allowance.

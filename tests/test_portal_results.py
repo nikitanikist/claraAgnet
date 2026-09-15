@@ -14,6 +14,7 @@ from clara.portal_outputs import record_delivery
 from clara.portal_results import PortalResults
 from clara.portal_transport import PortalTransport, PortalUnavailable
 from clara.store import Store
+from clara.tools import publish_artifact
 from clara.workflows import Workflows
 from test_portal_delivery import BASE, WORKER, CONTRACT, setup, wire
 from test_portal_outputs import delivery
@@ -62,7 +63,7 @@ def test_lost_result_receipt_retries_original_report_after_restart_without_new_w
     asyncio.run(scenario())
 
 
-def test_complete_closeout_delivers_exact_pdf_set_and_remote_records(tmp_path):
+def completed_delivery(tmp_path):
     config, store, job, lease, args = delivery(tmp_path)
     proof = record_delivery(config, store, job, args)
     wf = Workflows(store, config)
@@ -75,15 +76,15 @@ def test_complete_closeout_delivers_exact_pdf_set_and_remote_records(tmp_path):
                        ('delivery',[proof['storage_evidence_id']])]:
         wf.checkpoint(job, stage, ids)
     store.status(job['id'], 'needs_review')
+    return config, store, job, lease, args
+
+
+def test_complete_closeout_hands_off_links_without_any_portal_pdf_upload(tmp_path):
+    config, store, job, lease, args = completed_delivery(tmp_path)
     uploaded, result_bodies = [], []
     async def scenario():
         def handle(request):
             body = json.loads(request.content)
-            if request.url.path.endswith('/clara-artifact-upload-url'):
-                path = f"{lease.identity.job_id}/{lease.identity.attempt_no}/{uuid4()}-{body['file_name']}"
-                return wire({'allocation_id':str(uuid4()),'storage_path':path,'original_file_name':body['file_name'],
-                             'upload_url':'https://example.supabase.co/storage/v1/upload/sign/clara-artifacts/'+path+'?token=temporary',
-                             'expires_at':'2026-09-14T00:05:00Z','server_time':'2026-09-14T00:00:00Z'})
             assert request.url.path.endswith('/clara-result')
             result_bodies.append(body)
             return wire(CONTRACT.document['fixtures']['clara-result']['response'])
@@ -99,13 +100,16 @@ def test_complete_closeout_delivers_exact_pdf_set_and_remote_records(tmp_path):
             prepared = PreparedAttempt(job['id'], lease, False)
             result = await reporter.deliver(prepared, TIMING)
             assert result['handoff']['status'] == 'ready_to_email'
-            assert len(uploaded) == 3 and all(b.startswith(b'%PDF-') for b in uploaded)
+            assert uploaded == []
             body = result_bodies[0]
             assert body['outcome'] == 'completed_prepared'
-            assert [a['kind'] for a in body['artifacts']] == ['document']*3+['pandadoc','onedrive_folder']
-            assert all(a['member_id']=='m1' and a['tax_year']=='2024' for a in body['artifacts'][:3])
+            assert [a['kind'] for a in body['artifacts']] == ['pandadoc','onedrive_folder']
+            assert all('storage_path' not in a for a in body['artifacts'])
+            files = body['artifacts'][-1]['evidence']['uploaded']
+            assert len(files) == 3
+            assert all(f['member_id']=='m1' and f['tax_year']=='2024' for f in files)
             await reporter.deliver(prepared, {'wall_seconds':100,'waiting_seconds':0})
-            assert len(uploaded) == 3 and len(result_bodies) == 1
+            assert uploaded == [] and len(result_bodies) == 1
     asyncio.run(scenario())
 
 
@@ -127,4 +131,42 @@ def test_unfinished_closeout_reports_review_without_requesting_handoff(tmp_path)
                 await reporter.close()
         assert bodies[0]['outcome'] == 'needs_review'
         assert bodies[0]['artifacts'] == [] and bodies[0]['needs_review_reason']
+    asyncio.run(scenario())
+
+
+def test_explicit_general_chat_file_request_still_uploads_the_requested_file(tmp_path):
+    config, store, claim, lease = setup(tmp_path)
+    claim.update(kind='general', closeout=None, required_outputs=[])
+    claim['scope']['closeout_form_id'] = None
+    binding = PortalBindings(store, BASE, WORKER).persist_claim(claim, 'Find example.pdf and attach it here.')
+    job = store.job(binding['local_job_id'])
+    source = config.workspace / 'example.pdf'
+    source.write_bytes(b'%PDF-1.4\nRequested file transport fixture.')
+    publish_artifact(config, store, job, source)
+    store.status(job['id'], 'completed')
+    uploaded, reports = [], []
+    async def scenario():
+        def handle(request):
+            body = json.loads(request.content)
+            if request.url.path.endswith('/clara-artifact-upload-url'):
+                path = f'{lease.identity.job_id}/{lease.identity.attempt_no}/{uuid4()}-example.pdf'
+                return wire({'allocation_id':str(uuid4()), 'storage_path':path,
+                    'original_file_name':'example.pdf',
+                    'upload_url':'https://example.supabase.co/storage/v1/object/upload/sign/clara-artifacts/'+path+'?token=temporary',
+                    'expires_at':'2026-09-14T00:05:00Z','server_time':'2026-09-14T00:00:00Z'})
+            assert request.url.path.endswith('/clara-result')
+            reports.append(body)
+            return wire(CONTRACT.document['fixtures']['clara-result']['response'])
+        async def storage(request):
+            assert 'x-clara-worker-key' not in request.headers
+            uploaded.append(await request.aread())
+            return httpx.Response(200)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as api, \
+                httpx.AsyncClient(transport=httpx.MockTransport(storage)) as blobs:
+            transport = PortalTransport(BASE, lambda:'test', client=api, clock=lambda:100)
+            uploads = PortalUploads(store, transport, client=blobs, clock=lambda:100)
+            reporter = PortalResults(config, store, transport, PortalJournal(store, BASE), uploads=uploads)
+            await reporter.deliver(PreparedAttempt(job['id'], lease, False), TIMING)
+            assert uploaded == [source.read_bytes()]
+            assert reports[0]['artifacts'][0]['storage_path'].endswith('-example.pdf')
     asyncio.run(scenario())
