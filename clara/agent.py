@@ -18,6 +18,10 @@ from .desktop_lifecycle import DesktopLifecycle
 from .portal_lease import LeaseLost
 from .diagnostics import usable_snapshot, tool_diagnostic, limit_message
 
+# Desktop screenshots can exceed the SDK's default 1 MiB JSON-line limit.
+# Bound the transport separately from model turns, output tokens and budgets.
+SDK_MESSAGE_BUFFER_BYTES = 16 * 1024 * 1024
+
 SYSTEM = """You are Clara, a capable assistant working on this computer for its signed-in user.
 Complete the user's requested outcome by selecting tools, observing results, adjusting your plan,
 and verifying the result. There is no fixed tax-workflow script to follow. You can search files,
@@ -84,8 +88,16 @@ Prefer supported browser locators, fill_form and small read-only DOM summaries o
 After changing tabs, frames, documents or page state, refresh snapshot UIDs before using them.
 Combine related read-only observations into one concise result. Avoid repeated equivalent DOM probes
 or screenshots of unchanged state. Verify important actions; never trade recipient/field correctness for speed.
-If a requested page number conflicts with the live form/signature label, explain that specific mismatch
-and resolve it with one short question before placing signing fields or publishing the packet.
+Keep evaluate_script observations short: do not run long polling/sleep loops inside the browser.
+Observe the relevant frame, not just the outer page. If a short wait fails while a dialog is visibly
+present, inspect its live window/controls instead of repeating the same text detector for minutes.
+Use supported browser drag or native pointer actions to move signing fields; do not simulate
+drag-and-drop with JavaScript-dispatched PointerEvent, MouseEvent or DragEvent. After a drag,
+check the actual field position and recipient. Correct a misplaced existing field before adding another.
+Place signing fields on the requested signature/date lines in the current verified document.
+Historical skill page numbers are layout hints, not a reason to ask again when the correct labelled
+line is clear. If the user explicitly requires a conflicting page, or the document, recipient or
+target line is ambiguous, resolve that specific issue with one short question before proceeding.
 Keep evidence IDs returned by tools. Use compact list_evidence filters and get_evidence for exact details;
 do not query Clara's database or recursively include earlier tool logs inside new tool output.
 Retrieve reviewed procedural memory before rediscovery. Propose a sanitized, build-scoped procedure
@@ -483,6 +495,7 @@ class AgentManager:
                           f"Maximum model turns for this request: {settings['max_turns']}. Keep room for verification and a checkpoint.")
         options = ClaudeAgentOptions(
             cli_path=cli_path(), cwd=str(self.config.workspace),
+            max_buffer_size=SDK_MESSAGE_BUFFER_BYTES,
             system_prompt=SYSTEM + f"\nCurrent job-id: {job['id']}. Execution mode: {job['mode']}. "
                 + turn_instruction,
             tools=["Read", "Skill", "ToolSearch"], allowed_tools=[],

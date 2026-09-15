@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, StreamEvent
-from clara.agent import AgentManager
+from clara.agent import AgentManager, SDK_MESSAGE_BUFFER_BYTES
 from clara.config import Config
 from clara.store import Store
 from clara.instance import single_instance
@@ -49,6 +49,7 @@ def test_sdk_adapter_stream_session_and_error_state(tmp_path, monkeypatch, fail)
         assert [e['kind'] for e in store.events(cid)].count('delta') == 1
         assert json.loads((cfg.data/'model-health.json').read_text())['needs_login'] is fail
         opts=captured['options']
+        assert opts.max_buffer_size == SDK_MESSAGE_BUFFER_BYTES
         assert opts.fallback_model is None
         assert opts.max_budget_usd == 0.05
         assert 'Stop' in opts.hooks
