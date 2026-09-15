@@ -52,15 +52,19 @@ class PortalRuntime:
 
     async def run(self):
         while not self.closed:
+            delay = 5
             try:
-                await self.tick()
+                state = await self.tick()
+                # Pick up idle work promptly; after finishing, immediately ask
+                # for the next queued item. Recovery retains its slower retry.
+                delay = 2 if state == 'idle' else 0 if state == 'finished' else 5
             except asyncio.CancelledError:
                 raise
             except Exception:
                 # Provider bodies, URLs and arbitrary exception text are not
                 # suitable for the local status channel.
                 self.error = 'Portal work needs review. Existing work and the worker hold have been preserved.'
-            await asyncio.sleep(5)
+            await asyncio.sleep(delay)
 
     async def close(self):
         self.closed = True

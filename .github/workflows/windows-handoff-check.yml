@@ -7,6 +7,8 @@ on:
       - tests/test_windows_activity_native.py
       - Test-ClaraWorker.ps1
       - Start-Clara.ps1
+      - Run-ClaraAutomatic.ps1
+      - Set-ClaraAutostart.ps1
       - Connect-ClaraPortal.ps1
       - Update-ClaraPortalTest.ps1
       - scripts/Portal-Credential.ps1
@@ -47,6 +49,14 @@ jobs:
       - name: Check encrypted worker connection and startup
         shell: powershell
         run: .\tests\windows_portal_setup.ps1
+      - name: Parse automatic startup scripts with Windows PowerShell
+        shell: powershell
+        run: |
+          foreach ($ClaraFile in @('Run-ClaraAutomatic.ps1', 'Set-ClaraAutostart.ps1')) {
+            $ClaraTokens = $null; $ClaraErrors = $null
+            [void][Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD $ClaraFile), [ref]$ClaraTokens, [ref]$ClaraErrors)
+            if ($ClaraErrors.Count) { throw ($ClaraErrors | Out-String) }
+          }
       - name: Check the pinned integration updater
         shell: powershell
         run: .\tests\windows_portal_update.ps1
