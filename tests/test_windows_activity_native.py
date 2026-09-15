@@ -1,5 +1,6 @@
 """Native API smoke tests. CI does not qualify the firm's interactive RDP."""
 import os
+import json
 import subprocess
 import sys
 
@@ -8,6 +9,32 @@ import pytest
 from clara.windows_activity import snapshot
 
 pytestmark = pytest.mark.skipif(os.name != 'nt', reason='Requires real Windows APIs')
+
+
+def test_hidden_probe_does_not_count_its_own_console_as_application_work():
+    # RDP creates a conhost child even with CREATE_NO_WINDOW. The ordinary
+    # background process below must remain visible while the probe's own
+    # console helper is omitted.
+    child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'],
+                             creationflags=subprocess.CREATE_NO_WINDOW)
+    try:
+        code = (
+            'import os,json,psutil;from clara.windows_activity import snapshot;'
+            f'value=snapshot({os.getpid()});'
+            "helpers=[p.pid for p in psutil.Process().children() if p.name().lower()=='conhost.exe'];"
+            "print(json.dumps({'snapshot':value,'helpers':helpers,'probe':os.getpid()}))"
+        )
+        run = subprocess.run([sys.executable, '-c', code], capture_output=True,
+                             text=True, timeout=15, creationflags=subprocess.CREATE_NO_WINDOW)
+        assert run.returncode == 0, run.stderr
+        value = json.loads(run.stdout)
+        pids = {p['pid'] for p in value['snapshot']['processes']}
+        assert child.pid in pids
+        assert value['probe'] not in pids
+        assert not pids.intersection(value['helpers'])
+    finally:
+        child.terminate()
+        child.wait(timeout=5)
 
 
 def test_native_probe_tracks_a_background_process_without_client_content():

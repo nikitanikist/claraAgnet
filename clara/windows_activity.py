@@ -11,6 +11,18 @@ import sys
 import time
 
 
+def own_probe_console(process, observer_pid, observer_created, system_root):
+    """Exclude only the console host Windows creates for this read-only probe."""
+    try:
+        return (process.name().casefold() == 'conhost.exe'
+                and process.ppid() == observer_pid
+                and process.create_time() >= observer_created
+                and os.path.normcase(process.exe()) == os.path.normcase(
+                    os.path.join(system_root, 'System32', 'conhost.exe')))
+    except OSError:
+        return False
+
+
 def snapshot(controller_pid):
     import psutil
     import win32api
@@ -35,6 +47,7 @@ def snapshot(controller_pid):
     if session_of(controller_pid) != session:
         raise ValueError('The observer must run in the worker interactive session.')
     controller = psutil.Process(controller_pid)
+    observer_created = psutil.Process(os.getpid()).create_time()
     user32 = ctypes.WinDLL('user32', use_last_error=True)
     user32.OpenInputDesktop.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
     user32.OpenInputDesktop.restype = wintypes.HANDLE
@@ -89,6 +102,11 @@ def snapshot(controller_pid):
         # an error; a new/reused PID is never waved through as a system process.
         try:
             process = psutil.Process(pid)
+            # CREATE_NO_WINDOW can still create a private conhost on the RDP.
+            # Counting it makes every probe invent new unfinished work. Never
+            # exclude other console hosts or the controller's task children.
+            if own_probe_console(process, os.getpid(), observer_created, os.environ['SystemRoot']):
+                continue
             result['processes'].append({'pid': pid, 'created': process.create_time(), 'name': process.name()})
         except psutil.NoSuchProcess:
             continue
