@@ -1,12 +1,12 @@
 # Clara continuation context
 
-Updated: 15 September 2026. This is the handover for the existing Clearhouse integration work, including continuation in Claude or another assistant. Read this before older release notes. This file records the last verified state; inspect current state before any action. It is not a claim that a live test or deployment is complete.
+Updated: 16 September 2026 (Claude Code takeover session). This is the handover for the existing Clearhouse integration work, including continuation in Claude or another assistant. Read this before older release notes. This file records the last verified state; inspect current state before any action. It is not a claim that a live test or deployment is complete.
 
 For the ready-to-use Claude Code project prompt and detailed Mac/RDP/Lovable instructions, read [CLAUDE-CODE-HANDOFF.md](CLAUDE-CODE-HANDOFF.md). Codex's `continue-clara-working-demo` follow-up was paused for this takeover; Clara's Windows autostart was left unchanged.
 
 ## Start here
 
-The immediate objective is to finish the **existing TEST3 and TEST4 TaxPrep T1 closeouts**, using Clara to perform the work, and verify the portal handoff and availability for the next job. Do not create replacement test closeouts, restart all printing, or begin a UI redesign. TEST4 has finished document preparation but is blocked before Ready to Email. TEST3 is queued.
+The immediate objective is to finish the **TEST5 TaxPrep T1 closeout** to a real Ready to Email receipt and confirm the worker takes the next job. TEST3 and TEST4 were cancelled on 15 September (user decision: "leave them or delete them, we will do a new test"); do not recover them. TEST2 remains the manually reassigned Ready to Email item that must not be touched.
 
 Use this repository's **`feat/clearhouse-portal-v1` branch**, not `main`. The integration changes and this handover are on that branch:
 
@@ -14,27 +14,29 @@ Use this repository's **`feat/clearhouse-portal-v1` branch**, not `main`. The in
 git clone --branch feat/clearhouse-portal-v1 https://github.com/nikitanikist/claraAgnet.git
 ```
 
-The portal is a separate repository, `nikitanikist/clearform-hub`, branch `main`. Test site: https://testclearhouse.nikist.ai. Portal frontend/backend/database changes must go through Lovable. This handover does not authorize direct portal edits.
+The portal is a separate repository, `nikitanikist/clearform-hub`, branch `main`. Test site: https://testclearhouse.nikist.ai. Portal frontend/backend/database changes must go through Lovable (plan mode, review, one approval). This handover does not authorize direct portal edits. Read-only database diagnosis through the Supabase SQL connector is authorized by the user; `clara_continue_job` and `clara_record_answer` were also invoked through SQL as the assigning super admin when the portal UI could not.
 
-The user has limited remaining assistant allowance and wants a working demo quickly. Keep changes focused on observed blockers. Give brief, honest progress updates; distinguish prepared code, pushed code, installed code, and verified live behavior. Avoid repeating passed tests without a new reason. Do not use Lovable credits for routine testing or cosmetic changes.
+The user has limited assistant and Lovable credit; keep changes focused on observed blockers, no experiments. Distinguish prepared code, pushed code, installed code and verified live behaviour.
 
 ## Current source and deployment state
 
 | Surface | Last verified state |
 | --- | --- |
-| Clara GitHub integration branch | `805083821c93d63485a862ef9552acfd9a39a70d` before this documentation commit; local source and remote matched, with a clean checkout |
-| Windows installed Clara | `25c7679535ab90b082d64ba0c6e76677000427a5`; later owner guidance and source-copy guidance are **not yet installed** |
-| Portal GitHub `main` | `f9edae8` — corrected Ready to Email owner selection |
-| Portal backend deployment | Lovable reported `clara-result` and `clara-handoff-retry` deployed, with 92 checks passed; code diff independently reviewed, suite not independently rerun |
-| Test frontend | v3.9 published; existing Review and continue UI available |
-| Actual next owner handoff | Still unverified: TEST4 has not reached a successful handoff after the owner fix |
+| Clara GitHub integration branch | `dbd4b4e6bd826e27eb0b181f310944f12f1d3155` (16 Sep 2026); 386 tests pass |
+| Windows installed Clara | `b7eb0bfb182724d87e77d7dc5d57740d2a79796d` (installed 16 Sep ~02:08 IST). `ef167b1` (source-copy re-check by original, finish-check text in the portal reason) and `dbd4b4e` (stage names on checkpoint events) are **pushed, not installed**: the Mac locked and the RDP session dropped before they could be installed |
+| Portal database | Lovable migration `20260915190732` (late quiescence reports for cancelled/reviewed attempts are superseded, no re-hold); `clara-quiesce` and `clara-result` redeployed |
+| Test frontend | v4.0 published (Review and continue for needs_review, "Held for review" mood). A Lovable build for the Clara workspace redesign ("Clara workspace: live agent experience", plan approved 15 Sep 22:48 UTC) was in progress when this file was written; check `.lovable/plan.md` and the Lovable message list before assuming it landed |
+| TEST5 | Portal job `80bb13ae-2506-44a1-b5fd-700945d9abe4` in `needs_review` after attempt 3 (fence 17): all outputs exist and were bound by `record_portal_delivery`; the local finish check still failed on the source-copy hash (fixed in `ef167b1`). Next: install, Review and continue (attempt 4), expect `completed_prepared` and Ready to Email for T Super Admin `69af37fd-…` |
 
-Relevant Clara commits already pushed:
+Clara commits pushed on 15/16 September, in order:
 
-- `3d798a3307f69d786ea84d7663ad577bbe02d270`: bounded SDK message buffer raised from 1 MiB to 16 MiB; TaxPrep visible-dialog and PandaDoc/Part F navigation corrections. Installed.
-- `25c7679535ab90b082d64ba0c6e76677000427a5`: stopped/failed task desktop observations can be reviewed while genuine executors and print jobs remain blocking. Installed.
-- `f06e8a8b261792982213831bbdfb428bed67bedd`: Ready to Email assignment-owner guidance in intake, results, output instructions and skills. **Not installed.**
-- `805083821c93d63485a862ef9552acfd9a39a70d`: preserve an untouched TaxPrep snapshot as source evidence, separate from the editable live copy. **Not installed.**
+- `b3d05fd`…`5db651b`: interrupted-status review of `incomplete` jobs, storage hold review, idle `busy:false` heartbeat while held, claim retry every 30 s, redacted `portal-runtime.log`, canonical reservation triples, sidecar-hash starter-skill refresh. Installed.
+- `904a34d`, `6aa4c76`: a held cycle with nothing in flight asks the portal for work again. Installed.
+- `0508ade`: `record_portal_delivery` no longer demands the reservation key on the page; exact identity vocabulary in the tool description, task prompt, skill and error messages; 20-minute readback window. Installed.
+- `c6a3023`: executor reaper. After any task ends, the desktop Python ends the Claude CLI and its MCP bridges left under the task (applications are never touched) and records an `executors_reaped` event. Installed.
+- `b7eb0bf`: review fixes: URL-only spelling tolerance with token boundaries, values may be proven across several fresh Chrome readbacks, `external_key` must equal the canonical key. Installed.
+- `ef167b1`: source-copy evidence is re-checked against the untouched original (path + hash recorded at copy time) instead of the TaxPrep working copy; the portal `needs_review_reason` carries the local finish-check sentence. **Not installed.**
+- `dbd4b4e`: checkpoint events carry `meta.stage`/`meta.status` and the message `Saved workflow progress: <stage> <status>.` **Not installed.**
 
 The next assistant must check for later commits and live changes instead of assuming these revisions remain current. Do not use generic older update instructions that pull `main` for this integration worker.
 
@@ -53,55 +55,19 @@ The next assistant must check for later commits and live changes instead of assu
 - Server-to-Mac clipboard/file export is not allowed directly. If a transfer is necessary, the user authorized the existing WhatsApp **Clear House Agent project** group and native Mac WhatsApp route. Do not send secrets or client documents to GitHub.
 - Uploaded transcripts/maps are reference material. The improved TaxPrep map/guide takes precedence over errors in the older transcript. Actual visible form layout takes precedence over a historical fixed page number.
 
-## TEST4: output completed, final handoff blocked
+## TEST5: outputs complete, one code fix away from Ready to Email
 
-Last portal state: **Needs review**. Last local job state: **`incomplete`**. The outbound worker cycle is held. The most recent accepted portal result is `needs_review`, with `handoff.attempted=false`; this is not a successful Ready to Email receipt.
+Fixture `ZZ TEST 5` (form `00000000-0000-4023-8473-000000000005`, job `80bb13ae-2506-44a1-b5fd-700945d9abe4`, conversation `90364591-84ed-45f7-a965-3230bcd5d364`), assigned by T Super Admin on 15 Sep 19:22 UTC with TEST4's instructions adapted.
 
-Clara's run and subsequent observations established:
+- Attempt 1 (fence 15): printing, verification, OneDrive folder `CLARA-TEST5-23473-2025-Erica-Carlos-20260916-0105` and both PandaDoc packets completed in about 22 minutes. It then looped for 11 minutes on `record_portal_delivery` because the canonical reservation key never appears on a page (fixed in `0508ade`/`b7eb0bf`). The user stopped it; the stop left the Claude CLI, node and python bridge processes alive, which the observer reported as in-flight for ever (fixed in `c6a3023`; 14 leaked `claude.exe` from earlier runs were also killed by hand).
+- Attempt 2 (fence 16): asked "Continue with incomplete usage information?" (answered through `clara_record_answer`), then failed within 20 seconds: the server's native Claude login had hit its 5-hour session limit ("resets 4am Asia/Kolkata"). Clara has no API fallback; a heavy day can stall the worker for hours. Discuss the plan or an API key fallback with the user.
+- Attempt 3 (fence 17, after the limit reset): recorded delivery on the first call, saved the signature, delivery and review checkpoints, published the handoff and reported. The local finish check still returned incomplete because it re-hashed the source-copy evidence against the TaxPrep working copy (the same as TEST4's first blocker); the portal therefore shows `needs_review` with a generic reason and the form is still `pending`. `ef167b1` fixes both the check and the reason text.
 
-- Six final PDFs: two client returns, two T183s and two engagement letters.
-- Client copies have 80 and 47 pages after removing the respective internal Note Summary page; T183s have two pages each; engagement letters one each. Keep raw prints separately.
-- All six uploaded to the TEST4 OneDrive folder; remote names/sizes matched the local output manifest.
-- Two PandaDoc packets and signing links created for the assigned test recipients. Part F and engagement-letter signature/date fields were placed. An initial misplaced field was corrected; an accidental signing dialog was cancelled. Nothing was signed or emailed.
-- The former SDK message-size crash did not recur in this run. Some unnecessary waits and field-placement correction remained; speed is not yet consistently qualified.
+Recovery path: install `dbd4b4e` at idle, post a short reuse message in the conversation, run Review and continue (or `clara_continue_job` with every unknown resolved, as done for attempts 1 and 2), and let attempt 4 finish. Expected result: outcome `completed_prepared`, form `ready_to_email` assigned to T Super Admin, three manifest artifacts (two PandaDoc, one OneDrive folder). Outputs and reservations must not be recreated.
 
-### Confirmed blocker 1: source evidence points at an editable copy
+## TEST3 and TEST4: cancelled
 
-Exact terminal message:
-
-> Workflow incomplete. Evidence for source-copy no longer matches: An evidenced file changed or disappeared. Re-verify it before advancing.
-
-Read-only inspection found both copies still present under the TEST4 job's output directory:
-
-- `working/live/<test-return>.125`: the evidence target, opened in TaxPrep; its current hash differs from the saved proof.
-- `working/<test-return>.125`: the preserved snapshot; its current hash still matches the original proof.
-
-No file was restored or edited during diagnosis. The reason for the live file's byte change has not been pinpointed. Do not claim it was only metadata or that its tax contents are unchanged. Clara reported the original O: source unchanged; the later independent check verified the local preserved snapshot, not O: again.
-
-The workflow incorrectly used the mutable live copy as enduring source proof. Commit `8050838` corrects future guidance. It does **not** retroactively repair this existing run. Re-verify the preserved snapshot and establish valid evidence in an authorized continuation; do not rewrite the old hash or waive the check.
-
-### Confirmed blocker 2: three external operations remain unresolved
-
-There are three uncertain reservations: one storage operation and two PandaDoc packet operations. Existing outputs were verified, but reservation business keys differ from the keys used in the remote-record evidence. `Operations.reconcile` requires matching `system` and exact `external_key`, as well as sufficiently fresh evidence.
-
-Resolve the existing identities with evidence and an auditable mapping. Do not mark them absent, fabricate confirmation, or create replacement folders/packets. These reservations independently keep the worker held even after source evidence is corrected.
-
-### Recovery limitations already investigated
-
-- A confident final model narrative does not override `finish_check` or the actual receipt.
-- The accepted TEST4 result is already `needs_review` with no deliverable artifacts in that accepted result. Result reporting is immutable/idempotent for that local job. Do not replace its journal payload or alter job status to pretend it was completed.
-- `Finish-ClaraPortalReport.ps1` is for a qualifying saved result, not for replacing this already accepted incomplete result.
-- `Release-ClaraPortalHold.ps1` currently supports a finished T1 already acknowledged Ready to Email. Its external-operation review handles PandaDoc, not this unresolved storage case. It is not a direct solution for TEST4's current state.
-- Prefer the existing **Review and continue** flow. It preserves job/conversation history but creates a **new attempt/fence**. Read exact current identities; never reuse an old attempt's authority.
-- `portal_windows.py` currently classifies failed/stopped/interrupted/cancelled attempts for interrupted review; `incomplete` is not in that set. Inspect the actual current dialog/report first. This is a possible next obstacle, not a confirmed reason to patch preemptively.
-
-## TEST3: queued, preserve earlier work
-
-The first execution failed after six verified PDFs and an unfinished PandaDoc draft, when a Claude SDK JSON message exceeded 1 MiB. Local workflow checkpoints survived. The exact oversized payload was not retained, so it was not proven to be a screenshot alone.
-
-The buffer/navigation update was installed. The old attempt was reviewed through the portal, a real continuation message requiring reuse was sent, and Review and continue accepted. TEST4 was older in the queue and ran first; TEST3 remains queued behind the held worker.
-
-Reuse the existing TEST3 PDFs and unfinished draft. Discover its current attempt/fence in the portal/runtime before doing anything. Do not reorder the queue. If continuing TEST4 gives it a newer queue time, TEST3 may run first; that is expected with oldest-first scheduling.
+Both were cancelled on 15 Sep 19:02–19:04 UTC after the user chose a fresh test over recovery. Their outputs (TEST4 folder and packets, TEST3 PDFs and draft) still exist remotely and locally; leave them.
 
 ## Why the failures and delays happened
 
@@ -112,6 +78,9 @@ The observed problems are mostly workflow/tool/integration defects, not evidence
 - Synthetic drag actions misplaced fields. Current guidance requires supported drag/native pointer actions and a visual check against the actual signature line.
 - The SDK transport buffer was too small for a large tool message.
 - Completion evidence, remote-operation identity and portal handoff/release rules did not fit together reliably. The current editable-copy proof and reservation-key mismatch are concrete examples.
+- `record_portal_delivery` demanded the reservation key in page text; PandaDoc and OneDrive never show it, so the model re-read pages for ten minutes. Rejections now name the exact identities and the missing value.
+- A portal stop cancelled the SDK task but the Claude CLI subprocess tree survived; the observer reported it as unfinished execution and the portal refused every continuation. The worker now reaps its own executors after each task.
+- The finish check re-hashed the TaxPrep working copy, which the application rewrites; it now checks the untouched original.
 - A held worker did not refresh idle claim presence, so the portal could say **offline** while the local server was still running. Now a held or claim-unknown worker sends an idle `busy: false` heartbeat at most every `heartbeat_interval_s` (capped at 120 s, default 60 s), a rejected or ambiguous first claim is retried every 30 s, and unexpected runtime exceptions are logged (redacted) to `<data>/logs/portal-runtime.log` with the exception class name shown in the local status. Starting another Clara process does not resolve the underlying hold.
 
 The Windows model setting was read as **`opus`**, with medium reasoning configured. The exact resolved Claude model version was not captured. Do not invent a version or claim changing the model will fix these state/verification defects.
@@ -122,7 +91,11 @@ Windows application: `%LOCALAPPDATA%\ClaraAgent`.
 
 Windows persistent data: `%LOCALAPPDATA%\Clara`, including `clara.sqlite3`, skills, configuration, logs, workspace outputs and dedicated browser state. Backups remain under `%LOCALAPPDATA%\ClaraBackups`.
 
-The last check found the local listener running at `127.0.0.1:8876` while the worker cycle was held. Do not infer a current process ID from an old observation. Native model login and encrypted portal worker credentials are already configured in the dedicated account; preserve them. Do not create a new runner or request a new key without a demonstrated need.
+The last check (16 Sep 02:09 IST) found the local listener running at `127.0.0.1:8876` on revision `b7eb0bf` as a single `python` process, with no stray `claude`/`node` executors; the worker cycle was held for TEST5 review. Do not infer a current process ID from an old observation. Native model login and encrypted portal worker credentials are already configured in the dedicated account; preserve them. Do not create a new runner or request a new key without a demonstrated need.
+
+The native Claude login is a subscription session with a 5-hour usage window. On 15 Sep it ran out during TEST5 ("You've hit your session limit · resets 4am Asia/Kolkata") and the running attempt failed within seconds. Clara has no API-key fallback (`fallback_model=None`); raise this with the user before relying on Clara for a full working day.
+
+Server access from the Mac goes through the Windows App session "Clearhouse Clara.agent". When the Mac locks, that session window disappears and both the RDP typing route and the app-window screenshots stop working until the Mac is unlocked and the session reopened; the Windows desktop session itself must stay signed in for Clara's desktop work. Typing lessons: per-key `key` actions work, `_ ? > + /` cannot be typed (use wildcards, `[char]95`, `-join`, `Where-Object`, backslashes), never press Escape (it leaves full screen). Do not type into the session while Clara is doing desktop work; observe with window screenshots only. A maximized PowerShell window (Windows Terminal tab 2) was left open on the desktop; minimize or close it at idle.
 
 Autostart is already implemented and registered using `Set-ClaraAutostart.ps1` and `Run-ClaraAutomatic.ps1`. It uses the Windows account identity, includes restart behavior and a roaming-profile Startup hook, and does not hard-code the RDP hostname. It still requires a usable signed-in desktop. Portal login cannot start/unlock Windows. Dynamic-host and disconnect behavior are not fully qualified.
 
@@ -134,16 +107,13 @@ On the original Mac, detailed private notes are at `~/Downloads/Clearhouse-Lovab
 
 ## Next actions, in order
 
-1. Read current user messages, this file, Git revisions and existing TEST3/TEST4 states. Confirm no other assistant/worker executor is actively operating the desktop.
-2. Inspect TEST4's existing Review and continue requirements and fresh desktop report. Retain the current result, original baseline and all outputs; do not force-release locks or alter queue rows.
-3. Install the reviewed Clara source updates when the executor is idle. Pause autostart during maintenance, stop only the identified Clara service, make the normal local backup, and use the explicitly reviewed integration revision. See `Update-ClaraPortalTest.ps1`; do not accidentally pull `main`.
-4. **Verify effective installed skills too.** `Config.initialize` refreshes unmodified starter skill installs on start: each `<skill>/.clara-starter.sha256` sidecar records the packaged `SKILL.md` Clara last installed, and an install that still matches it is overwritten when the package changes. Locally edited skills (and legacy installs with no sidecar whose content differs) are preserved and listed in `<data>/skills-update-pending.json` and on startup stderr with reason `locally_edited` or `legacy_unknown`. Managed skill updates likewise preserve user edits. So a Git update alone does not guarantee an edited data-folder skill changed: check the pending list, compare the installed `taxprep-fast-path` and delivery guidance with source, preserve custom content, and to adopt a packaged update over a local edit replace the file deliberately, after which the sidecar takes over again.
-5. Resolve TEST4 source proof and the three existing operation identities using the narrowest supported recovery. If a code gap is confirmed, fix that specific gap and test it; do not create a new generic recovery framework. Continue through the existing portal mechanism with the actual new attempt/fence and reuse instructions in the conversation.
-6. Let Clara complete existing work in actual queue order. Preserve TEST3's earlier PDFs/draft and TEST4's completed remote outputs. No duplicate test assignments.
-7. Verify a real Ready to Email receipt and the assigning staff member's queue, OneDrive folder, per-member PandaDoc links and prepared draft. No actual sending. Verify normal chat stays distinct from closeouts.
-8. Confirm the worker becomes available and starts the next queued job, with honest online/busy/held behavior. Report each test separately. Both tests are not complete until these observed outcomes pass.
+1. Unlock the Mac, reopen the Windows App session "Clearhouse Clara.agent", and install `dbd4b4e` at idle: `.\Set-ClaraAutostart.ps1 -Disable`, `Stop-ScheduledTask -TaskName Clara-S-1-5-21-1046630959-3975722937-3647023733-1650`, stop the Clara python process, `.\Update-ClaraPortalTest.ps1 -Revision dbd4b4e6bd826e27eb0b181f310944f12f1d3155`, `.\Set-ClaraAutostart.ps1 -Start`, then check `%LOCALAPPDATA%\Clara\logs\automatic-start.log` and that exactly one `python` and no stray `claude`/`node` processes run.
+2. Post a short reuse message in the TEST5 conversation (outputs exist, do not recreate, record delivery and finish), then Review and continue. Watch `clara_events`; attempt 4 should end within a few minutes with `completed_prepared`.
+3. Verify the Ready to Email receipt: form `ready_to_email`, `assigned_to` = T Super Admin, manifest with the OneDrive folder and both PandaDoc links, no email sent. Confirm the worker returns to idle without a hold and claims the next job.
+4. Review the Lovable redesign build (tests, preview at 2560 and 375 px, publish) and report to the user; do not start new Lovable work without a plan-mode round.
+5. Keep this file, `CLAUDE-CODE-HANDOFF.md` and memory current with installed revisions and verified behaviour.
 
-Deferred: cosmetic UI cleanup, skill-management portal screens, ProFile, extra workers and unrelated feature expansion. No reliable completion-time estimate has been established; do not invent one.
+Deferred: ProFile, extra workers, unrelated feature expansion. Do not invent completion-time estimates.
 
 ## Lovable workflow
 
@@ -163,7 +133,7 @@ The owner fix already went through this process. It uses original `clara_jobs.cr
 | Worker / held cycles / reporting | `clara/portal_runtime.py`, `clara/portal_journal.py`, `clara/portal_results.py`, `clara/portal_quiescence.py` |
 | Evidence / workflow completion | `clara/evidence.py`, `clara/workflows.py`, `clara/portal_delivery.py`, `clara/portal_outputs.py` |
 | External reservation reconciliation | `clara/operations.py`, `clara/portal_hold_review.py` |
-| Windows observations / startup | `clara/portal_windows.py`, `clara/windows_activity.py`, `Set-ClaraAutostart.ps1`, `Run-ClaraAutomatic.ps1` |
+| Windows observations / startup / executor reaper | `clara/portal_windows.py`, `clara/windows_activity.py`, `clara/windows_reap.py`, `Set-ClaraAutostart.ps1`, `Run-ClaraAutomatic.ps1` |
 | Effective skill installation | `clara/config.py`, `clara/skill_pack.py`, `clara/starter_skills/taxprep-fast-path/SKILL.md` |
 | Portal owner implementation (other repo) | `supabase/functions/_shared/claraServer.ts`, `claraHandoff.ts`; deployed entrypoints `clara-result`, `clara-handoff-retry` |
 

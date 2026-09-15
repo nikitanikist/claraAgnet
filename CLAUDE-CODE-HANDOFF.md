@@ -158,15 +158,14 @@ When installing code: verify no active executor; pause the **Windows** automatic
 
 The authoritative detailed record is `CONTEXT.md`. These are last verified observations, not fresh checks made by this prompt.
 
-| Surface | State at handover |
+| Surface | State at handover (updated 16 Sep 2026; `CONTEXT.md` has the detail) |
 | --- | --- |
-| Clara integration source | Functional changes through `8050838`; context/entrypoints added in `3b79a63`; this prompt is a later docs-only addition |
-| Windows installed code | `25c7679`; latest owner/source-copy guidance still needs installation |
-| Portal code | `main` at `f9edae8`; assigner-routing fix landed |
-| Portal deployment | Lovable reported `clara-result` and `clara-handoff-retry` deployed and 92 checks passed |
-| Test frontend | v3.9; Review and continue already published |
-| TEST4 | Documents/OneDrive/PandaDoc prepared; local `incomplete`, portal Needs review, worker held |
-| TEST3 | Queued after prior approved continuation; earlier PDFs/checkpoints/draft preserved |
+| Clara integration source | `dbd4b4e` on `feat/clearhouse-portal-v1`; 386 tests pass |
+| Windows installed code | `b7eb0bf`; `ef167b1` (source-copy re-check by original, finish-check text in the portal reason) and `dbd4b4e` (stage names on checkpoint events) still need installation |
+| Portal database | Lovable migration `20260915190732`: late quiescence reports for cancelled or reviewed attempts are superseded and never re-hold the worker |
+| Test frontend | v4.0 published; a Lovable redesign of the Clara workspace (plan approved 15 Sep 22:48 UTC) may have landed since; check the Lovable message list |
+| TEST5 | All outputs exist and are bound; portal `needs_review` after attempt 3 because of the source-copy hash check fixed in `ef167b1`; install, then Review and continue |
+| TEST3 / TEST4 | Cancelled on 15 Sep by user decision; outputs preserved, do not recover |
 
 ### TEST4 confirmed blockers
 
