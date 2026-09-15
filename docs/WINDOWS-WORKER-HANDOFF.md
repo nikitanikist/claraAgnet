@@ -1,5 +1,21 @@
 # Dedicated Windows worker handoff
 
+## Ordinary portal requests
+
+General conversations use their own completed-result receipt (`not_applicable`
+for closeout handoff). They do not need a T1 or Ready-to-Email receipt. The local
+executor and all tool calls must finish, external operation reservations and
+attachments must settle, and fresh observations must show the same unlocked
+dedicated Windows session with no printing. Existing application windows may
+remain open. A newly opened visible application may be the requested result;
+its presence alone does not reserve the computer forever. Newly observed
+background processes and script/model controllers still require review, even
+when they have a window. Three seconds of settled observations are required.
+
+This does not qualify the separate TaxPrep handoff or release an interrupted
+attempt. The original baseline and result receipt remain unchanged. General
+requests also skip the TaxPrep-specific document/upload cleanup instruction.
+
 Development implementation; the real Clearhouse RDP is not yet qualified. The user confirmed on 2026-09-15 that the Windows account clara.agent will be dedicated to Clara.
 
 ## What is implemented

@@ -77,6 +77,10 @@ def validate_snapshot(value):
     for field in ('processes', 'windows', 'print_jobs', 'ancestors'):
         if not isinstance(value.get(field), list) or len(value[field]) > 10000:
             raise ValueError('Windows activity list is incomplete.')
+    if 'ui_process_ids' in value and (not isinstance(value['ui_process_ids'], list)
+            or len(value['ui_process_ids']) > 10000
+            or any(type(pid) is not int or pid < 1 for pid in value['ui_process_ids'])):
+        raise ValueError('Windows application surface identity is incomplete.')
     for process in value['processes']:
         if (type(process.get('pid')) is not int or process['pid'] < 1 or
                 type(process.get('created')) not in {int, float} or not math.isfinite(process['created'])):
@@ -114,6 +118,26 @@ class WindowsHandoff:
         self.probe, self.clock = probe, clock
         self.clear_since = {}
 
+    def general_task(self, jid):
+        row = self.store.one('SELECT claim_json FROM portal_v1_attempts WHERE local_job_id=?', (jid,))
+        return bool(row and json.loads(row['claim_json']).get('kind') == 'general')
+
+    def completed_general(self, jid):
+        binding = self.store.one('SELECT * FROM portal_v1_attempts WHERE local_job_id=?', (jid,))
+        if not binding or not self.general_task(jid) or self.store.job(jid)['status'] != 'completed':
+            return False
+        row = self.store.one('''SELECT payload,receipt FROM portal_v1_outbox WHERE namespace=? AND external_job_id=?
+            AND worker_id=? AND attempt_no=? AND fence_token=? AND operation='clara-result'
+            AND request_key=? AND acknowledged IS NOT NULL''',
+            (binding['namespace'], binding['external_job_id'], binding['worker_id'], binding['attempt_no'],
+             binding['fence_token'], 'result-' + jid))
+        if not row:
+            return False
+        payload, receipt = json.loads(row['payload']), json.loads(row['receipt'])
+        return (payload.get('outcome') == 'completed_prepared' and receipt.get('result_recorded') is True
+                and receipt.get('job_state') == 'completed_prepared'
+                and receipt.get('handoff', {}).get('status') == 'not_applicable')
+
     def prepared_closeout(self, jid):
         binding = self.store.one('SELECT * FROM portal_v1_attempts WHERE local_job_id=?', (jid,))
         if not binding:
@@ -141,12 +165,19 @@ class WindowsHandoff:
         try:
             value = await self.take()
             value['baseline_issues'] = baseline_issues(value)
+            if self.general_task(jid):
+                # An already-open application in the dedicated account is not
+                # another task. Keep its identity as the immutable baseline.
+                value['baseline_issues'] = [v for v in value['baseline_issues'] if v not in {
+                    'windows-baseline-applications-open', 'windows-baseline-task-application-running'}]
         except Exception:
             value = {'baseline_issues': ['windows-baseline-unavailable']}
         self.store.execute('INSERT OR IGNORE INTO portal_windows_baselines VALUES(?,?)', (jid, json.dumps(value)))
         return value['baseline_issues']
 
     async def observe(self, jid):
+        if self.general_task(jid):
+            return await self.observe_general(jid)
         unknown, running = [], []
         row = self.store.one('SELECT snapshot FROM portal_windows_baselines WHERE job_id=?', (jid,))
         if not self.exclusive or not self.qualified:
@@ -173,6 +204,46 @@ class WindowsHandoff:
             unknown.append('windows-interrupted-task-needs-review')
         if not self.prepared_closeout(jid):
             unknown.append('windows-prepared-closeout-receipt-required')
+        if unknown or running:
+            self.clear_since.pop(jid, None)
+        else:
+            first = self.clear_since.setdefault(jid, self.clock())
+            if self.clock() - first < 3:
+                running.append('windows-settling')
+        return {'in_flight': sorted(set(running)), 'unknown': sorted(set(unknown)),
+                'complete': not running and not unknown}
+
+    async def observe_general(self, jid):
+        """A finished ordinary request may leave its requested app visible.
+
+        Called alongside the runtime's outstanding-tool/operation inventory.
+        It never releases interrupted work or an unacknowledged result. The
+        separate TaxPrep qualification and document checks are unchanged.
+        """
+        unknown, running = [], []
+        if not self.exclusive:
+            unknown.append('windows-dedicated-session-required')
+        row = self.store.one('SELECT snapshot FROM portal_windows_baselines WHERE job_id=?', (jid,))
+        if not row:
+            return {'in_flight': [], 'unknown': unknown + ['windows-baseline-missing'], 'complete': False}
+        baseline = json.loads(row['snapshot'])
+        unknown.extend(baseline.get('baseline_issues', ['windows-baseline-unavailable']))
+        if not self.completed_general(jid):
+            unknown.append('windows-completed-general-receipt-required')
+        try:
+            current = await self.take()
+            if not same_execution_session(current, baseline):
+                unknown.append('windows-session-or-controller-changed')
+            before = {process_key(p) for p in baseline.get('processes', [])}
+            visible = set(current.get('ui_process_ids', [])) | {w['pid'] for w in current['windows']}
+            controllers = {'python.exe', 'pythonw.exe', 'node.exe', 'claude.exe', 'powershell.exe',
+                           'pwsh.exe', 'cmd.exe', 'wscript.exe', 'cscript.exe'}
+            for p in current['processes']:
+                if process_key(p) not in before and (p['pid'] not in visible or p.get('name', '').casefold() in controllers):
+                    running.append(f"windows-process:{p['pid']}:{p['created']}")
+            running.extend(f"windows-print:{p['queue']}:{p['id']}" for p in current['print_jobs'])
+        except Exception:
+            unknown.append('windows-observation-unavailable')
         if unknown or running:
             self.clear_since.pop(jid, None)
         else:

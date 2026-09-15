@@ -182,3 +182,69 @@ def test_shell_helpers_require_actual_shell_pid_and_explorer_folders_still_block
     current['windows'].pop()
     current['windows'][1]['pid'] = 30
     assert 'windows-baseline-applications-open' in baseline_issues(current)
+
+
+def general_task(tmp_path):
+    _, store, claim, lease = setup(tmp_path)
+    claim.update(kind='general', closeout=None, required_outputs=[])
+    claim['scope']['closeout_form_id'] = None
+    jid = PortalBindings(store, BASE, WORKER).persist_claim(claim, 'Open the requested application')['local_job_id']
+    store.status(jid, 'completed')
+    journal = PortalJournal(store, BASE)
+    row = journal.stage(lease.identity, 'clara-result', 'result-' + jid,
+                        {**asdict(lease.identity), 'outcome': 'completed_prepared'})
+    journal.acknowledge(row['id'], {'result_recorded': True, 'job_state': 'completed_prepared',
+                                  'handoff': {'status': 'not_applicable'}})
+    return store, jid
+
+
+def test_completed_general_request_can_leave_its_app_visible_and_preserve_preexisting_chat(tmp_path):
+    store, jid = general_task(tmp_path)
+    current, clock = sample(), [0]
+    current['processes'].append({'pid': 40, 'created': 150, 'name': 'messenger.exe'})
+    current['windows'].append({'handle': 40, 'pid': 40, 'class': 'Messenger'})
+    observer = WindowsHandoff(store, exclusive=True, qualified=False,
+                              probe=lambda: copy.deepcopy(current), clock=lambda: clock[0])
+    async def scenario():
+        assert await observer.begin(jid) == []
+        baseline = store.one('SELECT snapshot FROM portal_windows_baselines')['snapshot']
+        current['processes'].append({'pid': 55, 'created': 200, 'name': 'CalculatorApp.exe'})
+        current['windows'].append({'handle': 55, 'pid': 55, 'class': 'Calculator'})
+        assert (await observer.observe(jid))['in_flight'] == ['windows-settling']
+        clock[0] = 4
+        assert (await observer.observe(jid))['complete']
+        assert store.one('SELECT snapshot FROM portal_windows_baselines')['snapshot'] == baseline
+        assert len(current['windows']) == 3  # No automatic close of requested results.
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('blocker', ['background-command', 'visible-controller', 'printing', 'interrupted',
+                                   'missing-receipt', 'wrong-handoff', 'shared', 'changed-controller', 'locked'])
+def test_general_completion_still_requires_finished_work_receipt_and_current_desktop(tmp_path, blocker):
+    store, jid = general_task(tmp_path)
+    current = sample()
+    observer = WindowsHandoff(store, exclusive=blocker != 'shared', probe=lambda: copy.deepcopy(current))
+    async def scenario():
+        await observer.begin(jid)
+        if blocker in {'background-command', 'visible-controller'}:
+            current['processes'].append({'pid': 55, 'created': 200, 'name': 'python.exe'})
+            if blocker == 'visible-controller':
+                current['windows'].append({'handle': 55, 'pid': 55, 'class': 'ConsoleWindowClass'})
+        elif blocker == 'printing':
+            current['print_jobs'].append({'queue': 'printer', 'id': 4, 'status': 0})
+        elif blocker == 'interrupted':
+            store.status(jid, 'interrupted')
+        elif blocker == 'missing-receipt':
+            store.execute("UPDATE portal_v1_outbox SET acknowledged=NULL")
+        elif blocker == 'wrong-handoff':
+            store.execute('UPDATE portal_v1_outbox SET receipt=?', (json.dumps({
+                'result_recorded': True, 'job_state': 'completed_prepared', 'handoff': {'status': 'ready_to_email'}}),))
+        elif blocker == 'changed-controller':
+            current['controller'] = [999, 999]
+        elif blocker == 'locked':
+            current['interactive'] = False
+        report = await observer.observe(jid)
+        assert not report['complete']
+        assert 'windows-settling' not in report['in_flight']
+        assert report['unknown'] or report['in_flight']
+    asyncio.run(scenario())

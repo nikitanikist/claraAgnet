@@ -299,7 +299,10 @@ class AgentManager:
             if guard is not None and self.windows_handoff is not None:
                 issues = await self.windows_handoff.begin(job['id'])
                 self.assert_execution_permitted(job)
-                if issues and self.windows_handoff.qualified:
+                if issues and (self.windows_handoff.qualified or self.windows_handoff.general_task(job['id'])):
+                    if self.windows_handoff.general_task(job['id']):
+                        raise ValueError('Clara could not confirm that her Windows desktop is ready. '
+                                         'Keep it signed in and unlocked, and finish any active printing. No model work started.')
                     raise ValueError('Windows is not ready for an automatic handoff. Close existing application windows, '
                                      'finish printing and check the unlocked worker session. No model work started.')
             if guard is None:
@@ -394,6 +397,7 @@ class AgentManager:
             except LeaseLost:
                 return {}
             if (self.windows_handoff is not None and job['id'] in self.execution_guards
+                    and not self.windows_handoff.general_task(job['id'])
                     and not handoff_cleanup_prompted and not data.get('stop_hook_active')):
                 handoff_cleanup_prompted = True
                 windows = await self.windows_handoff.cleanup_hint(job['id'])

@@ -61,7 +61,7 @@ def snapshot(controller_pid):
               'controller': [controller.pid, controller.create_time()],
               'ancestors': [p.pid for p in controller.parents()] + [controller.pid],
               'processes': [], 'windows': [], 'print_jobs': [], 'errors': [], 'shell_pid': shell_pid,
-              'unresolved_processes': [], 'window_details': []}
+              'unresolved_processes': [], 'window_details': [], 'ui_process_ids': []}
     for process_session, pid, name, process_sid in win32ts.WTSEnumerateProcesses():
         if process_session != session or pid in {0, os.getpid()}:
             continue
@@ -108,7 +108,18 @@ def snapshot(controller_pid):
             # queues are observed separately, including background applications.
             if width > 0 and height > 0:
                 result['windows'].append(row)
+                result['ui_process_ids'].append(pid)
+                # Hosted Windows apps can own a child surface while the top
+                # window belongs to ApplicationFrameHost. Record IDs only.
+                def child_surface(child, _):
+                    if win32gui.IsWindowVisible(child):
+                        x1, y1, x2, y2 = win32gui.GetWindowRect(child)
+                        if x2 > x1 and y2 > y1:
+                            result['ui_process_ids'].append(win32process.GetWindowThreadProcessId(child)[1])
+                    return True
+                win32gui.EnumChildWindows(hwnd, child_surface, None)
     win32gui.EnumWindows(visit, None)
+    result['ui_process_ids'] = sorted(set(result['ui_process_ids']))
 
     # Enumerate every configured queue for this account's work. An unreadable
     # queue is unknown, not empty. Retained/paused jobs remain blockers.
