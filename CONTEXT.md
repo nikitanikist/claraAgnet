@@ -2,6 +2,8 @@
 
 Updated: 15 September 2026. This is the handover for the existing Clearhouse integration work, including continuation in Claude or another assistant. Read this before older release notes. This file records the last verified state; inspect current state before any action. It is not a claim that a live test or deployment is complete.
 
+For the ready-to-use Claude Code project prompt and detailed Mac/RDP/Lovable instructions, read [CLAUDE-CODE-HANDOFF.md](CLAUDE-CODE-HANDOFF.md). Codex's `continue-clara-working-demo` follow-up was paused for this takeover; Clara's Windows autostart was left unchanged.
+
 ## Start here
 
 The immediate objective is to finish the **existing TEST3 and TEST4 TaxPrep T1 closeouts**, using Clara to perform the work, and verify the portal handoff and availability for the next job. Do not create replacement test closeouts, restart all printing, or begin a UI redesign. TEST4 has finished document preparation but is blocked before Ready to Email. TEST3 is queued.
@@ -128,7 +130,7 @@ GitHub carries source, committed skills and this sanitized context. It does **no
 
 Discover exact job IDs, attempts, fences, source paths, output folders and signing links from the existing TEST3/TEST4 conversations and local bindings/evidence. Do not post them in a public repository. For read-only database diagnosis, use a SQLite `mode=ro` connection; constructing a normal Store may initialize/migrate data.
 
-On the original Mac, detailed private notes are at `~/Downloads/Clearhouse-Lovable-Review/TaxPrep-Fast-Path-Test-Run.md`, with targeted screenshots and `portal-return-current.txt` alongside it. Those are local references, not prerequisites for a new cloud checkout. The original automation `continue-clara-working-demo` was active every 15 minutes; coordinate/pause overlapping work if another assistant takes over. Do not create a second scheduler or competing desktop controller.
+On the original Mac, detailed private notes are at `~/Downloads/Clearhouse-Lovable-Review/TaxPrep-Fast-Path-Test-Run.md`, with targeted screenshots and `portal-return-current.txt` alongside it. Those are local references, not prerequisites for a new cloud checkout. The Codex automation `continue-clara-working-demo` previously ran every 15 minutes and was paused for the Claude takeover. Verify if that state has since changed; do not create a second scheduler or competing desktop controller.
 
 ## Next actions, in order
 
