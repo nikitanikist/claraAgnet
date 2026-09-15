@@ -130,6 +130,43 @@ def test_failed_probe_persists_unknown_baseline_instead_of_retrying_it_as_clean(
     asyncio.run(scenario())
 
 
+def test_failed_restart_reviews_apps_without_counting_current_worker_as_old_execution(tmp_path):
+    store, jid = task(tmp_path)
+    store.status(jid, 'failed')
+    current = sample()
+    observer = WindowsHandoff(store, exclusive=True, qualified=False,
+                              probe=lambda: copy.deepcopy(current))
+    async def scenario():
+        await observer.begin(jid)
+        baseline = store.one('SELECT snapshot FROM portal_windows_baselines')['snapshot']
+        current.update(controller=[20, 220], ancestors=[19, 20])
+        current['processes'] = [
+            {'pid': 20, 'created': 220, 'name': 'python.exe'},
+            {'pid': 19, 'created': 219, 'name': 'powershell.exe'},
+            {'pid': 30, 'created': 230, 'name': 'msedge.exe'},
+            {'pid': 31, 'created': 231, 'name': 'conhost.exe'},
+        ]
+        current['windows'] = [
+            {'handle': 20, 'pid': 19, 'class': 'ConsoleWindowClass'},
+            {'handle': 30, 'pid': 30, 'class': 'Chrome_WidgetWin_1'},
+        ]
+        report = await observer.observe(jid)
+        assert report['in_flight'] == []
+        assert not report['complete']
+        assert {'windows-process:30:230', 'windows-process:31:231',
+                'windows-window:30:30', 'windows-session-or-controller-changed',
+                'windows-interrupted-task-needs-review', 'windows-handoff-not-qualified'} <= set(report['unknown'])
+        assert not any(ref.startswith(('windows-process:20:', 'windows-process:19:', 'windows-window:20:'))
+                       for ref in report['unknown'])
+        assert store.one('SELECT snapshot FROM portal_windows_baselines')['snapshot'] == baseline
+        # A detached executor or print job cannot be dismissed as an idle app.
+        current['processes'].append({'pid': 40, 'created': 240, 'name': 'node.exe'})
+        current['print_jobs'] = [{'queue': 'printer', 'id': 5, 'status': 0}]
+        report = await observer.observe(jid)
+        assert set(report['in_flight']) == {'windows-process:40:240', 'windows-print:printer:5'}
+    asyncio.run(scenario())
+
+
 @pytest.mark.parametrize('update', [{'processes': None}, {'owner': None}, {'version': True}, {'observed_at': float('nan')}])
 def test_snapshot_requires_complete_typed_observation(update):
     with pytest.raises(ValueError):

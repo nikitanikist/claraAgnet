@@ -179,6 +179,7 @@ class WindowsHandoff:
         if self.general_task(jid):
             return await self.observe_general(jid)
         unknown, running = [], []
+        interrupted = self.store.job(jid)['status'] in {'failed', 'stopped', 'interrupted', 'cancelled'}
         row = self.store.one('SELECT snapshot FROM portal_windows_baselines WHERE job_id=?', (jid,))
         if not self.exclusive or not self.qualified:
             unknown.append('windows-handoff-not-qualified')
@@ -191,10 +192,32 @@ class WindowsHandoff:
             if not same_execution_session(current, baseline):
                 unknown.append('windows-session-or-controller-changed')
             before = {process_key(p) for p in baseline.get('processes', [])}
-            running.extend(f"windows-process:{p['pid']}:{p['created']}" for p in current['processes'] if process_key(p) not in before)
+            # After a stopped attempt, an open app is an unresolved observation,
+            # not proof that it is still executing a tool. Let the existing
+            # operator reconciliation review those exact identities. Detached
+            # model/script executors and printing still block continuation.
+            # The restarted observer and its own launch ancestors cannot be
+            # unfinished work from the old attempt. Its changed identity stays
+            # in unknown above; this never grants automatic handoff.
+            executors = {'python.exe', 'pythonw.exe', 'node.exe', 'claude.exe',
+                         'powershell.exe', 'pwsh.exe', 'cmd.exe', 'wscript.exe', 'cscript.exe'}
+            for p in current['processes']:
+                if process_key(p) in before:
+                    continue
+                if interrupted and p['pid'] in current['ancestors']:
+                    continue
+                ref = f"windows-process:{p['pid']}:{p['created']}"
+                if interrupted and p.get('name', '').casefold() not in executors:
+                    unknown.append(ref)
+                else:
+                    running.append(ref)
             windows = {window_key(w) for w in baseline.get('windows', [])}
-            running.extend(f"windows-window:{w['handle']}:{w['pid']}" for w in current['windows']
-                           if window_key(w) not in windows and not shell_surface(current, w))
+            for w in current['windows']:
+                if window_key(w) in windows or shell_surface(current, w):
+                    continue
+                if interrupted and w['pid'] in current['ancestors'] and w['class'] in CONSOLE_CLASSES:
+                    continue
+                (unknown if interrupted else running).append(f"windows-window:{w['handle']}:{w['pid']}")
             running.extend(f"windows-print:{p['queue']}:{p['id']}" for p in current['print_jobs'])
         except Exception:
             unknown.append('windows-observation-unavailable')
