@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 import time
 
 import pytest
@@ -22,12 +23,15 @@ def delivery(tmp_path):
     def observed(text):
         return wf.evidence(job, 'tool_observation', 'Chrome',
                            {'tool':'mcp__chrome__take_snapshot','text':text,'error':False}, True)['id']
-    pid = observed(panda_url + ' packet-001 John Smith john@example.com case-2024')
-    fid = observed(folder_url + ' folder-001 case-2024')
+    claim = json.loads(store.one('SELECT claim_json FROM portal_v1_attempts WHERE local_job_id=?', (job['id'],))['claim_json'])
+    keys = closeout_reservation_keys(claim)
+    # Pages never show the canonical reservation keys; the packet and folder readbacks carry only page facts.
+    pid = observed(panda_url + ' packet-001 John Smith john@example.com')
+    fid = observed(folder_url + ' folder-001')
     args = {'document_evidence_ids':proofs,
             'pandadoc':[{'member_id':'m1','remote_id':'packet-001','url':panda_url,
-                         'external_key':'case-2024','observation_id':pid}],
-            'folder':{'remote_id':'folder-001','url':folder_url,'external_key':'case-2024','observation_id':fid},
+                         'external_key':keys['pandadoc']['m1'],'observation_id':pid}],
+            'folder':{'remote_id':'folder-001','url':folder_url,'external_key':keys['storage']['folder'],'observation_id':fid},
             'files':[]}
     for n, doc in enumerate(docs):
         oid = observed(f'folder-001 file-{n} {doc.file.name} {len(doc.file.data):,} bytes')
@@ -93,8 +97,8 @@ def test_delivery_reconciles_canonical_reservations_and_reports_leftovers(tmp_pa
     result = record_delivery(config, store, job, args)
     signing = json.loads(store.one('SELECT payload FROM evidence WHERE id=?', (result['signature_evidence_ids'][0],))['payload'])
     storage = json.loads(store.one('SELECT payload FROM evidence WHERE id=?', (result['storage_evidence_id'],))['payload'])
-    assert signing['external_key'] == 'case-2024' and signing['reservation_key'] == keys['pandadoc']['m1']
-    assert storage['external_key'] == 'case-2024' and storage['reservation_key'] == keys['storage']['folder']
+    assert signing['external_key'] == keys['pandadoc']['m1'] == signing['reservation_key']
+    assert storage['external_key'] == keys['storage']['folder'] == storage['reservation_key']
     assert sorted(result['reconciled_operation_ids']) == sorted([packet['id'], folder['id']])
     assert result['unresolved_operation_ids'] == [drifted['id'], renamed['id']]
     assert drifted['id'] in result['next'] and renamed['id'] in result['next']
@@ -161,17 +165,29 @@ def _set_text(store, eid, text):
 
 
 def test_business_keys_are_bound_by_reservations_not_by_page_text(tmp_path):
-    # A PandaDoc page or OneDrive folder never shows closeout:<form>:... keys.
+    # A PandaDoc page or OneDrive folder never shows closeout:<form>:... keys, and the
+    # model cannot substitute a key of its own for the canonical one.
     config, store, job, lease, args = delivery(tmp_path)
-    for eid in (args['pandadoc'][0]['observation_id'], args['folder']['observation_id']):
-        _set_text(store, eid, _payload_text(store, eid).replace(' case-2024', ''))
     claim = json.loads(store.one('SELECT claim_json FROM portal_v1_attempts WHERE local_job_id=?', (job['id'],))['claim_json'])
     keys = closeout_reservation_keys(claim)
-    args['pandadoc'][0]['external_key'] = keys['pandadoc']['m1']
-    args['folder']['external_key'] = keys['storage']['folder']
+    for eid in (args['pandadoc'][0]['observation_id'], args['folder']['observation_id']):
+        assert 'closeout:' not in _payload_text(store, eid)
     result = record_delivery(config, store, job, args)
     signing = json.loads(store.one('SELECT payload FROM evidence WHERE id=?', (result['signature_evidence_ids'][0],))['payload'])
     assert signing['external_key'] == keys['pandadoc']['m1'] == signing['reservation_key']
+    for record, expected in ((args['pandadoc'][0], keys['pandadoc']['m1']), (args['folder'], keys['storage']['folder'])):
+        record['external_key'] = 'John Smith T1 2024 - packet (v2)'
+        with pytest.raises(ValueError, match='canonical reservation key ' + re.escape(expected)):
+            record_delivery(config, store, job, args)
+        record['external_key'] = expected
+
+
+def test_encoded_url_spellings_match_case_insensitively(tmp_path):
+    config, store, job, lease, args = delivery(tmp_path)
+    fid = args['folder']['observation_id']
+    args['folder']['url'] = 'https://example.sharepoint.com/personal/laureen/Documents/Müller {2024}'
+    _set_text(store, fid, 'https://example.sharepoint.com/personal/laureen/documents/m%c3%bcller%20%7b2024%7d folder-001')
+    assert record_delivery(config, store, job, args)['storage_evidence_id']
 
 
 def test_observations_within_twenty_minutes_and_encoded_urls_are_accepted(tmp_path):
@@ -189,8 +205,8 @@ def test_observations_within_twenty_minutes_and_encoded_urls_are_accepted(tmp_pa
 @pytest.mark.parametrize('change, expected', [
     ('wrong_document_type', 'm1/client_copy/2024'),
     ('missing_packet', 'member_id (m1)'),
-    ('rounded_size', 'exact file size'),
-    ('wrong_url', 'does not show "https://app.pandadoc.com/a/#/documents/packet-999"'),
+    ('rounded_size', 'exact OneDrive file size'),
+    ('wrong_url', 'shows the PandaDoc packet value "https://app.pandadoc.com/a/#/documents/packet-999"'),
     ('malformed_field', 'bounded remote_file_id'),
 ])
 def test_rejections_name_what_the_model_must_correct(tmp_path, change, expected):
@@ -210,3 +226,51 @@ def test_rejections_name_what_the_model_must_correct(tmp_path, change, expected)
         record_delivery(config, store, job, args)
     assert expected in str(failure.value)
     assert store.rows("SELECT id FROM evidence WHERE kind='portal_delivery'") == []
+
+
+def test_a_record_may_span_a_navigation_readback_and_a_snapshot(tmp_path):
+    config, store, job, lease, args = delivery(tmp_path)
+    wf = Workflows(store, config)
+    def observed(tool, text):
+        return wf.evidence(job, 'tool_observation', 'Chrome', {'tool': tool, 'text': text, 'error': False}, True)['id']
+    # chrome-devtools-mcp: navigate_page prints the URL, take_snapshot prints the page without it.
+    nav = observed('mcp__chrome__navigate_page', 'Successfully navigated to https://app.pandadoc.com/a/#/documents/packet-001')
+    snap = observed('mcp__chrome__take_snapshot', 'uid=1 heading "2024 T1 John Smith T183" uid=2 John Smith john@example.com Signer')
+    args['pandadoc'][0]['observation_id'] = snap
+    result = record_delivery(config, store, job, args)
+    saved = json.loads(store.one('SELECT payload FROM evidence WHERE id=?', (result['delivery_evidence_id'],))['payload'])
+    assert set(saved['artifacts'][0]['evidence']['observation_ids']) == {snap, nav}
+    signing = json.loads(store.one('SELECT payload FROM evidence WHERE id=?', (result['signature_evidence_ids'][0],))['payload'])
+    assert signing['observation_id'] == snap and set(signing['observation_ids']) == {snap, nav}
+
+
+def test_values_missing_from_every_fresh_readback_are_named(tmp_path):
+    config, store, job, lease, args = delivery(tmp_path)
+    args['pandadoc'][0]['remote_id'] = 'packet-777'
+    with pytest.raises(ValueError, match='No fresh Chrome readback from this task shows the PandaDoc packet value "packet-777"'):
+        record_delivery(config, store, job, args)
+
+
+@pytest.mark.parametrize('change', ['encoded_id', 'id_prefix', 'url_prefix', 'name_prefix'])
+def test_spelling_tolerance_applies_to_urls_only_and_never_to_prefixes(tmp_path, change):
+    config, store, job, lease, args = delivery(tmp_path)
+    if change == 'encoded_id':
+        args['pandadoc'][0]['remote_id'] = 'packet%2D001'   # decodes to packet-001; an ID is matched verbatim
+    elif change == 'id_prefix':
+        _set_text(store, args['files'][0]['observation_id'],
+                  _payload_text(store, args['files'][0]['observation_id']).replace('file-0 ', 'file-01 '))
+    elif change == 'url_prefix':
+        _set_text(store, args['folder']['observation_id'], 'https://example.sharepoint.com/sites/clients/Smithson folder-001')
+    else:
+        _set_text(store, args['pandadoc'][0]['observation_id'],
+                  _payload_text(store, args['pandadoc'][0]['observation_id']).replace('John Smith ', 'John Smithson '))
+    with pytest.raises(ValueError, match='No fresh Chrome readback'):
+        record_delivery(config, store, job, args)
+
+
+def test_sharp_s_and_upper_case_escapes_still_match_an_encoded_page(tmp_path):
+    config, store, job, lease, args = delivery(tmp_path)
+    args['folder']['url'] = 'https://example.sharepoint.com/personal/laureen/Documents/Straße {2024}/'
+    _set_text(store, args['folder']['observation_id'],
+              'Title (https://example.sharepoint.com/personal/laureen/Documents/Stra%C3%9Fe%20%7B2024%7D) folder-001')
+    assert record_delivery(config, store, job, args)['storage_evidence_id']
