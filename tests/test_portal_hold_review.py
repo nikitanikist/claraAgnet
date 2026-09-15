@@ -54,7 +54,12 @@ def test_review_releases_only_completed_slot_preserving_original_baseline(tmp_pa
     async def scenario():
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             monkeypatch.setattr(review, 'PortalTransport', lambda base, provider: PortalTransport(base, lambda:'test', client=client))
-            async def probe(): return snapshot()
+            observations = []
+            async def probe():
+                value = snapshot()
+                value['processes'].append({'pid':80 + len(observations),'created':102.,'name':'conhost.exe'})
+                observations.append(value)
+                return value
             async def pause(seconds): assert seconds == 3
             result = await review.release(config, identity, {}, 'Operator checked completed outputs and idle dedicated desktop.', probe=probe,pause=pause)
             assert result['released'] and not result['task_restarted']
@@ -90,15 +95,22 @@ def test_review_blocks_unresolved_work_without_network(tmp_path, monkeypatch, ch
     assert store.one('SELECT finished FROM portal_v1_cycles')['finished'] is None
 
 
-@pytest.mark.parametrize('change',['printer','window','executor','locked','incomplete'])
+@pytest.mark.parametrize('change',['printer','task_app','executor','locked','incomplete'])
 def test_native_activity_cannot_be_waved_through(change):
     value = snapshot()
     if change == 'printer': value['print_jobs'] = [{'queue':'x','id':1}]
-    if change == 'window': value['windows'] = [{'class':'TaskWindow','pid':8}]
+    if change == 'task_app': value['processes'].append({'pid':8,'created':102.,'name':'t1txp.exe'})
     if change == 'executor': value['processes'].append({'pid':8,'created':102.,'name':'claude.exe'})
     if change == 'locked': value['interactive'] = False
     if change == 'incomplete': value['errors'] = ['unreadable']
     with pytest.raises(ValueError): review.check_desktop(value)
+
+
+def test_unrelated_chat_window_does_not_block_reviewed_completed_task():
+    value = snapshot()
+    value['processes'].append({'pid':8,'created':102.,'name':'Messenger.exe'})
+    value['windows'] = [{'handle':80,'class':'TSoftrosLANMessenger','pid':8}]
+    review.check_desktop(value)
 
 
 @pytest.mark.parametrize('wrong', [False, True])

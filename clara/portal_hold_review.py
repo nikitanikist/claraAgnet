@@ -20,7 +20,7 @@ from .portal_lease import AttemptIdentity
 from .portal_quiescence import observe_quiescence
 from .portal_recovery import saved_attempt
 from .portal_transport import PortalTransport, PortalRejected, PortalUnavailable
-from .portal_windows import native_snapshot, validate_snapshot, baseline_issues, process_key
+from .portal_windows import native_snapshot, validate_snapshot
 from .store import Store
 
 
@@ -67,11 +67,13 @@ def reviewed_operations(store, namespace, identity, jid, mappings):
 
 def check_desktop(snapshot):
     validate_snapshot(snapshot)
-    if baseline_issues(snapshot):
-        raise ValueError('Close task application windows and settle printing before review.')
+    if snapshot['print_jobs']:
+        raise ValueError('Settle printing before review.')
     # A stopped service must not leave a model/browser/controller running. A
     # name is only a blocker here; it never authorizes terminating a process.
-    executors = {'claude.exe', 'node.exe', 'python.exe', 'pythonw.exe'}
+    executors = {'claude.exe', 'node.exe', 'python.exe', 'pythonw.exe',
+                 'chrome.exe', 'msedge.exe', 't1txp.exe', 'profile.exe',
+                 'winword.exe', 'excel.exe', 'acrord32.exe', 'acrobat.exe'}
     if any(p.get('name', '').casefold() in executors and p['pid'] not in snapshot['ancestors']
            for p in snapshot['processes']):
         raise ValueError('A separate model or controller process still needs review.')
@@ -100,9 +102,13 @@ async def release(config, identity, mappings, note, *, probe=native_snapshot, pa
     second = await probe()
     check_desktop(second)
     if (any(first[k] != second[k] for k in ('owner', 'session', 'controller')) or
-            abs(first['boot'] - second['boot']) > 2 or
-            {process_key(p) for p in first['processes']} != {process_key(p) for p in second['processes']}):
+            abs(first['boot'] - second['boot']) > 2):
         raise ValueError('The observed desktop changed; inspect it again.')
+    # This is an explicit review of an acknowledged completed task. Both fresh
+    # observations must have no task controllers/apps or pending printing.
+    # Whole-session PID equality is not a readiness signal: Windows can create
+    # and retire conhost processes for the observation itself. Unrelated chat
+    # windows and background processes are retained in the audit, not blockers.
     # Save the actual old uncertainties and fresh inspection. This is an
     # explicit operator review, never automatic qualification of future tasks
     # and never a replacement of the original Windows baseline.
