@@ -1,5 +1,7 @@
 # Clara · CPA workspace agent
 
+**Continuing the Clearhouse integration?** Use branch `feat/clearhouse-portal-v1` and read [the current handover](CONTEXT.md) first. It records the latest deployment state, existing test blockers and user decisions; older release notes below describe earlier milestones.
+
 Clara is a local chat application backed by the Claude Agent SDK. The model chooses tools and loads skills to work toward a requested outcome. It is independent of the existing fixed T1 pipeline.
 
 **Version 0.2.5 makes questions easier to answer** with short headings, readable context, optional details and reply buttons. It adds a Balanced reasoning setting, compact evidence retrieval, corrected desktop/browser diagnostics and separate waiting/working time. [Changes and repeat-test instructions](docs/DELIVERY-IMPROVEMENTS.md).
