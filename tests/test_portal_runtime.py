@@ -381,3 +381,119 @@ def test_operator_reconciliation_accepts_only_a_new_attempt_and_keeps_previous_w
                 await runtime.close()
                 await manager.close()
     asyncio.run(scenario())
+
+
+def test_held_cycle_with_in_flight_work_announces_presence_once_per_interval(tmp_path):
+    config, store, claim, _ = setup(tmp_path)
+    general(claim)
+    jid = PortalBindings(store, BASE, WORKER).persist_claim(claim, 'Synthetic interrupted task')['local_job_id']
+    store.status(jid, 'interrupted')
+    cycle_id = str(uuid4())
+    store.execute('INSERT INTO portal_v1_cycles VALUES(?,?,?,?,?,?,?,NULL,NULL)',
+                  (cycle_id, BASE, WORKER, 'held', json.dumps(claim), jid, time.time()))
+    def observer(store, manager, namespace, identity, local_job_id):
+        return {'finished':[], 'in_flight':['tool:printing'], 'unknown':[],
+                'observed_at':'2026-09-14T00:00:00Z', 'complete':False}
+    calls, executions, now = [], [], [100]
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(portal_handler(claim, calls))) as client:
+            manager = simulated_manager(config, store, executions)
+            await manager.start()
+            runtime = PortalRuntime(config, store, manager,
+                PortalTransport(BASE, lambda:'test', client=client, clock=lambda:now[0]), WORKER, observer=observer)
+            try:
+                # The fixture heartbeat response advertises a 20 s interval.
+                for tick, expected in [(100, 1), (110, 1), (121, 2), (130, 2), (141, 3)]:
+                    now[0] = tick
+                    assert await runtime.poll() == 'held'
+                    assert len([b for op,b in calls if op == 'clara-heartbeat']) == expected
+                beats = [b for op,b in calls if op == 'clara-heartbeat']
+                assert all(b == {'worker_id':WORKER, 'busy':False} for b in beats)
+                assert 'clara-claim' not in [op for op,_ in calls]
+                assert not executions and manager.execution_reservation == cycle_id
+                assert runtime.pending()['state'] == 'held'
+                assert 'unconfirmed' in runtime.error
+            finally:
+                await runtime.close()
+                await manager.close()
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('answer,outcome', [('released', 'idle'), ('hold', 'held'), ('claimed', 'finished')])
+def test_held_cycle_without_claim_retries_the_claim_after_thirty_seconds(tmp_path, answer, outcome):
+    config, store, claim, _ = setup(tmp_path)
+    general(claim)
+    cycle_id = str(uuid4())
+    store.execute('INSERT INTO portal_v1_cycles VALUES(?,?,?,?,NULL,NULL,?,NULL,?)',
+                  (cycle_id, BASE, WORKER, 'held', time.time(), 'The portal rejected the claim.'))
+    calls, executions, now = [], [], [100]
+    original_handler = portal_handler(claim, calls)
+    def handle(request):
+        if request.url.path.endswith('clara-claim') and answer != 'claimed':
+            calls.append(('clara-claim', json.loads(request.content)))
+            hold = {'reason':'recovery_hold', 'recovery_hold':True} if answer == 'hold' else {'reason':'no_work'}
+            return wire({'claimed':False, 'heartbeat_interval_s':10, 'server_time':'2026-09-14T00:00:00Z', **hold})
+        return original_handler(request)
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+            manager = simulated_manager(config, store, executions)
+            await manager.start()
+            runtime = PortalRuntime(config, store, manager,
+                PortalTransport(BASE, lambda:'test', client=client, clock=lambda:now[0]), WORKER)
+            try:
+                for now[0] in (100, 115, 129):
+                    assert await runtime.tick() == 'held'
+                assert calls == [] and manager.execution_reservation == cycle_id
+                now[0] = 130
+                assert await asyncio.wait_for(runtime.tick(), 3) == outcome
+                claims = [b for op,b in calls if op == 'clara-claim']
+                assert len(claims) == 1 and claims[0]['worker_id'] == WORKER
+                cycle = store.one('SELECT * FROM portal_v1_cycles WHERE id=?', (cycle_id,))
+                if answer == 'released':
+                    assert cycle['state'] == 'finished' and cycle['finished'] and cycle['error'] is None
+                    assert manager.execution_reservation is None and not executions
+                elif answer == 'hold':
+                    assert cycle['state'] == 'held' and cycle['finished'] is None
+                    assert 'existing worker hold' in cycle['error'] and runtime.error == cycle['error']
+                    assert manager.execution_reservation == cycle_id and not executions
+                    now[0] = 145
+                    assert await runtime.tick() == 'held' and len(calls) == 1
+                    now[0] = 160
+                    assert await runtime.tick() == 'held' and len(calls) == 2
+                else:
+                    assert cycle['state'] == 'finished' and json.loads(cycle['claim_json'])['job_id'] == claim['job_id']
+                    assert len(executions) == 1 and manager.execution_reservation is None
+            finally:
+                await runtime.close()
+                await manager.close()
+    asyncio.run(scenario())
+
+
+def test_unexpected_runtime_exception_logs_a_redacted_line_and_names_the_class(tmp_path):
+    config, store, _, _ = setup(tmp_path)
+    executions = []
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: wire({}))) as client:
+            manager = simulated_manager(config, store, executions)
+            await manager.start()
+            runtime = PortalRuntime(config, store, manager,
+                PortalTransport(BASE, lambda:'test', client=client, clock=lambda:100), WORKER)
+            async def broken():
+                raise RuntimeError('Authorization: Bearer SECRETBEARER1 key sk-ant-SECRETKEY0123456789 '
+                                   'https://example.supabase.co/functions/v1/x?token=SECRETQUERY\nline two')
+            runtime.tick = broken
+            try:
+                await runtime.start()
+                async with asyncio.timeout(3):
+                    while runtime.error is None:
+                        await asyncio.sleep(0.01)
+                assert runtime.error == ('Portal work needs review. Existing work and the worker hold have been preserved. (RuntimeError)')
+                assert 'Traceback' not in runtime.error and 'SECRET' not in runtime.error
+                lines = (config.data / 'logs' / 'portal-runtime.log').read_text().splitlines()
+                assert len(lines) == 1 and ' RuntimeError ' in lines[0]
+                assert lines[0].startswith('20') and 'SECRET' not in lines[0] and 'line two' in lines[0]
+                assert not executions
+            finally:
+                await runtime.close()
+                await manager.close()
+    asyncio.run(scenario())

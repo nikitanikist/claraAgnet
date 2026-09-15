@@ -9,10 +9,12 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 import hashlib
 import json
+import re
 import time
 from uuid import uuid4
 
 from . import __version__
+from .diagnostics import redact_text
 from .portal_contract import ContractViolation
 from .portal_intake import PortalIntake, PreparedAttempt, claim_lease
 from .portal_journal import PortalJournal
@@ -23,6 +25,11 @@ from .portal_session import PortalSession
 from .portal_transport import PortalRejected, PortalUnavailable
 
 
+CLAIM_RETRY_S = 30
+PRESENCE_INTERVAL_S = 60
+RUNTIME_LOG_BYTES = 5 * 1024 * 1024
+
+
 class PortalRuntime:
     def __init__(self, config, store, manager, transport, worker_id, *, observer=observe_quiescence):
         self.config, self.store, self.manager = config, store, manager
@@ -31,6 +38,9 @@ class PortalRuntime:
         self.task = self.session = self.lease = None
         self.error = None
         self.closed = False
+        # Transport-clock timers: next unclaimed-hold claim retry, last idle heartbeat.
+        self._claim_retry_at = None
+        self._presence_at, self._presence_interval = None, PRESENCE_INTERVAL_S
 
     def pending(self):
         return self.store.one('''SELECT * FROM portal_v1_cycles WHERE namespace=?
@@ -54,17 +64,58 @@ class PortalRuntime:
         while not self.closed:
             delay = 5
             try:
-                state = await self.tick()
+                state = await self.poll()
                 # Pick up idle work promptly; after finishing, immediately ask
                 # for the next queued item. Recovery retains its slower retry.
                 delay = 2 if state == 'idle' else 0 if state == 'finished' else 5
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as error:
                 # Provider bodies, URLs and arbitrary exception text are not
-                # suitable for the local status channel.
-                self.error = 'Portal work needs review. Existing work and the worker hold have been preserved.'
+                # suitable for the local status channel; a redacted line goes
+                # to the local log so the cause can still be found.
+                self._diagnose(error)
+                self.error = ('Portal work needs review. Existing work and the worker hold have been preserved. ('
+                              + type(error).__name__ + ')')
             await asyncio.sleep(delay)
+
+    async def poll(self):
+        state = await self.tick()
+        if state in {'held', 'claim_unknown'}:
+            await self._presence()
+        return state
+
+    async def _presence(self):
+        """A held worker sends nothing else, and quiesce replays do not count as
+        a heartbeat, so the portal would label the live process offline. This
+        announces presence only; it never claims, releases or changes state."""
+        if self.session:
+            return  # A session already sends busy heartbeats for its attempt.
+        now = self.transport.clock()
+        if self._presence_at is not None and now - self._presence_at < self._presence_interval:
+            return
+        self._presence_at = now
+        try:
+            reply = await self.transport.request('clara-heartbeat', {'worker_id': self.worker_id, 'busy': False})
+        except (PortalUnavailable, PortalRejected, ContractViolation):
+            return
+        interval = reply.body.get('heartbeat_interval_s')
+        if type(interval) is int and interval >= 1:
+            self._presence_interval = interval
+
+    def _diagnose(self, error):
+        message = redact_text(str(error))
+        message = re.sub(r'https?://\S+', '[url]', message)
+        message = re.sub(r'\s+', ' ', message).strip()[:500]
+        try:
+            path = self.config.data / 'logs' / 'portal-runtime.log'
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if path.exists() and path.stat().st_size > RUNTIME_LOG_BYTES:
+                path.write_text('')
+            with path.open('a', encoding='utf-8') as log:
+                log.write(f'{datetime.now(timezone.utc).isoformat()} {type(error).__name__} {message}\n')
+        except OSError:
+            pass
 
     async def close(self):
         self.closed = True
@@ -101,7 +152,15 @@ class PortalRuntime:
         if cycle['claim_json'] is not None:
             return await self._recover(cycle)
         if cycle['state'] != 'claiming':
-            return 'held'
+            # A rejected or ambiguous first claim leaves a hold without a claim.
+            # The portal may have cleared it since; ask again slowly instead of
+            # waiting for a manual edit. Between retries nothing is sent.
+            now = self.transport.clock()
+            if self._claim_retry_at is None:
+                self._claim_retry_at = now + CLAIM_RETRY_S
+            if now < self._claim_retry_at:
+                return 'held'
+        self._claim_retry_at = self.transport.clock() + CLAIM_RETRY_S
         try:
             reply = await self.transport.request('clara-claim',
                 {'worker_id': self.worker_id, 'agent_version': __version__})
