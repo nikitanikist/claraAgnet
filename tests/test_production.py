@@ -239,6 +239,14 @@ def test_starter_skill_legacy_install_with_equal_content_gets_sidecar(tmp_path,m
     assert (target/'.clara-starter.sha256').read_text()==digest+'\n' and not (cfg.data/'skills-update-pending.json').exists()
 
 
+def test_starter_skill_windows_line_endings_count_as_equal_content(tmp_path,monkeypatch):
+    text,digest=starter(tmp_path,monkeypatch,'Version one');cfg=Config(tmp_path/'data')
+    target=cfg.skills/'taxprep-fast-path';target.mkdir(parents=True)
+    (target/'SKILL.md').write_bytes(text.replace('\n','\r\n').encode('utf-8'))
+    assert cfg.initialize()==[]
+    assert (target/'.clara-starter.sha256').read_text()==digest+'\n' and not (cfg.data/'skills-update-pending.json').exists()
+
+
 def test_starter_skill_legacy_install_with_different_content_is_preserved_and_reported(tmp_path,monkeypatch):
     _,digest=starter(tmp_path,monkeypatch,'Version two');cfg=Config(tmp_path/'data')
     target=cfg.skills/'taxprep-fast-path';target.mkdir(parents=True);(target/'SKILL.md').write_text('Old or edited text')

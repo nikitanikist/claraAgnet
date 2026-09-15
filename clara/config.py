@@ -100,7 +100,8 @@ class Config:
 
 
 def _sha256(path: Path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    # Windows checkouts carry CRLF; compare skill text, not line endings.
+    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
 
 
 def _atomic_text(path: Path, text: str):
