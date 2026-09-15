@@ -47,10 +47,10 @@ class PortalProgress:
                         'clara-chat', part, {**asdict(self.lease.identity),
                             'message_uid': part, 'body': body[offset:offset+16000], 'final': False})
             elif event['kind'] in {'tool', 'tool_done', 'status', 'checkpoint'}:
-                level, stage, message = self._activity(event['kind'], data)
+                level, stage, message, meta = self._activity(event['kind'], data)
                 await self.transport.report(self.journal, self.lease.identity,
                     'clara-events', uid, {**asdict(self.lease.identity), 'events': [{
-                        'event_uid': uid, 'level': level, 'stage': stage, 'message': message,
+                        'event_uid': uid, 'level': level, 'stage': stage, 'message': message, 'meta': meta,
                         'at': datetime.fromtimestamp(event['created'], timezone.utc).isoformat()}]})
             # Only acknowledged events (or deliberately local-only diagnostics)
             # advance this cursor. A crash between receipt and cursor repeats a
@@ -62,15 +62,20 @@ class PortalProgress:
 
     @staticmethod
     def _activity(kind, data):
-        # Deliberately exclude command input/output, login data and signed URLs.
+        """(level, stage, message, meta) for the portal; never command input/output, login data or signed URLs."""
         if kind in {'tool', 'tool_done'}:
             name = str(data.get('name', 'Action')).rsplit('__', 1)[-1][:100]
             if kind == 'tool':
-                return 'info', 'working', 'Using ' + name + '.'
+                return 'info', 'working', 'Using ' + name + '.', None
             failed = data.get('failed') is True
-            return ('warn' if failed else 'info'), 'working', name + (' reported a problem.' if failed else ' returned.')
+            return ('warn' if failed else 'info'), 'working', name + (' reported a problem.' if failed else ' returned.'), None
         if kind == 'checkpoint':
-            return 'info', 'checkpoint', 'Saved workflow progress.'
+            # The stage name and status let the portal show honest progress chips.
+            stage = str(data.get('stage', ''))[:64]
+            status = str(data.get('status', ''))[:32]
+            if stage and status:
+                return 'info', 'checkpoint', f'Saved workflow progress: {stage} {status}.', {'stage': stage, 'status': status}
+            return 'info', 'checkpoint', 'Saved workflow progress.', None
         status = data.get('status')
         messages = {'queued': 'Queued for this computer.', 'running': 'Clara is working.',
                     'waiting': 'Waiting for your answer.', 'cancelling': 'Stopping current work.',
@@ -80,4 +85,4 @@ class PortalProgress:
                     'incomplete': 'Some workflow steps remain unfinished.',
                     'needs_review': 'The task needs review.',
                     'completed': 'Local execution finished. Portal verification follows.'}
-        return ('warn' if status in {'failed', 'interrupted', 'incomplete'} else 'info'), 'execution', messages.get(status, 'Task state changed.')
+        return ('warn' if status in {'failed', 'interrupted', 'incomplete'} else 'info'), 'execution', messages.get(status, 'Task state changed.'), None

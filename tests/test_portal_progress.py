@@ -95,3 +95,13 @@ def test_claras_command_tool_return_does_not_prove_its_external_actions_stopped(
     report = observe_quiescence(store, manager, BASE, lease.identity, jid)
     assert report['complete'] is False
     assert 'external-desktop-state-unconfirmed' in report['unknown']
+
+
+def test_checkpoint_events_carry_the_stage_and_status_for_progress_chips():
+    from clara.portal_progress import PortalProgress
+    level, stage, message, meta = PortalProgress._activity('checkpoint', {'stage': 'documents', 'status': 'verified', 'note': 'x'})
+    assert (level, stage, message) == ('info', 'checkpoint', 'Saved workflow progress: documents verified.')
+    assert meta == {'stage': 'documents', 'status': 'verified'}
+    assert PortalProgress._activity('checkpoint', {}) == ('info', 'checkpoint', 'Saved workflow progress.', None)
+    assert PortalProgress._activity('tool', {'name': 'mcp__clara__save_checkpoint'})[3] is None
+    assert PortalProgress._activity('status', {'status': 'incomplete'})[3] is None
