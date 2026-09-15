@@ -29,7 +29,9 @@ CLAIM_RETRY_S = 30
 PRESENCE_INTERVAL_S, PRESENCE_MIN_S, PRESENCE_MAX_S = 60, 10, 120
 RUNTIME_LOG_BYTES = 5 * 1024 * 1024
 # Quoted strings holding a separator, absolute POSIX paths, Windows drive and UNC paths.
-PATH_TOKEN = re.compile(r'''["'][^"'\n]*[/\\][^"'\n]*["']|(?<![\w:/])/[^\s"'/][^\s"']*|\b[A-Za-z]:[\\/][^\s"']*|\\\\[^\s"']+''')
+# Bare paths run to the end of the line: a client folder may contain spaces, and
+# over-masking trailing prose is fine for a cause-only log line.
+PATH_TOKEN = re.compile(r'''["'][^"'\n]*[/\\][^"'\n]*["']|(?<![\w/])/[^\s"'/][^"'\n]*|\b[A-Za-z]:[\\/][^"'\n]*|\\\\[^"'\n]*''')
 
 
 class PortalRuntime:
@@ -91,8 +93,8 @@ class PortalRuntime:
         """A held worker sends nothing else, and quiesce replays do not count as
         a heartbeat, so the portal would label the live process offline. This
         announces presence only; it never claims, releases or changes state."""
-        if self.session:
-            return  # A session already sends busy heartbeats for its attempt.
+        if self.session or self.manager.active_job or not self.manager.queue.empty():
+            return  # A session sends busy heartbeats; local work in hand is not idle either.
         now = self.transport.clock()
         if self._presence_at is not None and now - self._presence_at < self._presence_interval:
             return
@@ -111,7 +113,7 @@ class PortalRuntime:
             message = f'errno={error.errno} {error.strerror or ""}'
         else:
             message = redact_text(str(error))
-        message = re.sub(r'https?://\S+', '[url]', message)
+        message = re.sub(r'\b\w+://\S+', '[url]', message)
         message = PATH_TOKEN.sub('[path]', message)
         message = re.sub(r'\s+', ' ', message).strip()[:500]
         try:

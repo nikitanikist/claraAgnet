@@ -523,14 +523,19 @@ def test_unexpected_os_error_logs_no_file_name_or_path(tmp_path):
     'Cannot open C:\\Users\\clara\\Clients\\Smith\\T1.pdf for the report',
     'Cannot open \\\\server\\share\\Smith\\T1.pdf for the report',
     'Cannot open "Clients\\Smith\\T1.pdf" for the report',
-    'Cannot open /Users/clara/Clients/Smith/T1.pdf for the report'])
+    'Cannot open /Users/clara/Clients/Smith/T1.pdf for the report',
+    'Cannot open /Users/clara/Clients/Smith Family/2025 T1 Return.pdf for the report',
+    'Cannot open C:\\Users\\Nikist Device\\Clients\\Smith Family\\T1.pdf for the report',
+    'Cannot open \\\\server\\Client Share\\Smith Family\\T1.pdf for the report',
+    'Cannot open file:///Users/clara/Clients/Smith/T1.pdf for the report',
+    'Cannot open input:/Users/clara/Clients/Smith/T1.pdf for the report'])
 def test_diagnose_masks_path_like_tokens(tmp_path, text):
     config, store, _, _ = setup(tmp_path)
     runtime = PortalRuntime(config, store, None, PortalTransport(BASE, lambda:'test', client=httpx.AsyncClient()), WORKER)
     runtime._diagnose(RuntimeError(text))
     line = (config.data / 'logs' / 'portal-runtime.log').read_text()
-    assert line.endswith(' RuntimeError Cannot open [path] for the report\n')
-    assert 'Smith' not in line and 'T1.pdf' not in line
+    assert ' RuntimeError Cannot open ' in line and ('[path]' in line or '[url]' in line)
+    assert not any(word in line for word in ('Smith', 'Family', 'Device', 'Share', 'T1.pdf', 'Return'))
 
 
 @pytest.mark.parametrize('answer,outcome', [('released', 'idle'), ('hold', 'held'), ('claimed', 'finished')])
