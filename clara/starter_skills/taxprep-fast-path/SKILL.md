@@ -52,4 +52,6 @@ Use the assigned naming convention, normally `{Year} T1 {FirstName}.pdf`, `{Year
 
 Verify the complete package together after printing, retaining member/type/path/hash evidence. Use the existing signature and OneDrive delivery skills and portal checkpoints; PDF verification is not permission to skip the remaining workflow. PDFs go to OneDrive; the portal receives its folder link and each member's PandaDoc link for Ready to Email. Laureen handles invoicing and sends the email.
 
+For T183 signing fields, locate **Part F — Declaration and authorization** and its actual signature/date lines in each final PDF. Do not infer their page from the total page count: the observed 2025 two-page print has Part F on page 1 and instructions on page 2. Current visible form content takes precedence over a historical skill's fixed page number. A clearly identified signature line on a different page is a layout difference, not a new approval requirement; never sign the document yourself.
+
 At completion, close only task-owned temporary dialogs/apps once their outputs are verified. Preserve pre-existing apps and the source return. Record the first unfinished step on interruption; resume that step without recreating completed PDFs, folders or signature packets. Report stage durations, retries and model usage from actual logs so consecutive runs can be compared.
