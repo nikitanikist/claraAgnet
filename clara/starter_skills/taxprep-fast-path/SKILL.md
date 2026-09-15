@@ -9,7 +9,7 @@ Use this navigation for Personal Taxprep T1 closeouts, alongside the assigned cl
 
 ## Read once, then execute
 
-Resolve the source, tax year, exact full member names, required documents and output folder once. Copy the source to this run's working folder and open that copy once. Preserve the original and its hash. Keep the member list and completed-file manifest in the checkpoint instead of discovering them again at each form.
+Resolve the source, tax year, exact full member names, required documents and output folder once. Use `copy_file` to retain an untouched source snapshot in this run's folder, then make a separate live working copy for TaxPrep. Save the untouched snapshot's evidence ID in the source-copy checkpoint; never use the live editable return as the only source-copy proof. Open only the live copy, once. Preserve the original and the untouched snapshot with their hashes. Print settings or application metadata can change the live copy, so a final mismatch must be examined, not dismissed or used to replace an old proof's hash. Keep the member list and completed-file manifest in the checkpoint instead of discovering them again at each form.
 
 Do not search for `Summary` or browse candidate summary forms. Obtain the current-year refund/balance from the printed client letter/return and compare it with the assigned closeout. Distinguish current-year balance from older arrears; missing figures are unknown, not zero. T183 is the signature authorization form, not a replacement for this comparison.
 
