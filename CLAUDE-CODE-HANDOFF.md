@@ -152,7 +152,7 @@ Autostart already starts Clara in the signed-in Windows account and retries proc
 
 When installing code: verify no active executor; pause the **Windows** automatic restart only for maintenance, stop the identified idle Clara service, make its normal backup, install the reviewed integration revision, verify effective skills, then restore startup. Read the existing updater rather than inventing commands. Do not reset/delete the data folder, clear the instance lock manually, overwrite local edits, or restart an active task to install a documentation-only change.
 
-`Config.initialize` only copies an absent starter skill. Managed skill updates preserve local edits. Therefore a Git update alone does not guarantee that the active skill changed: inspect the actual data-folder skill, preserve custom material, and apply the specific reviewed corrections.
+`Config.initialize` refreshes unmodified starter skill installs on start, using the `<skill>/.clara-starter.sha256` sidecar that records the packaged `SKILL.md` Clara last installed. Locally edited skills are preserved and listed in `<data>/skills-update-pending.json` and on startup stderr with reason `locally_edited` (sidecar present, content changed) or `legacy_unknown` (no sidecar, content differs from the package). Managed skill updates preserve local edits too. Therefore a Git update alone does not guarantee that an edited active skill changed: read the pending list, inspect the actual data-folder skill, preserve custom material, and to adopt a packaged update over a local edit replace the file deliberately, after which the sidecar takes over again.
 
 ## 8. Exact handover status and failures
 

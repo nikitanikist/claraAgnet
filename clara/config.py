@@ -62,32 +62,22 @@ class Config:
             target = self.skills / source.name
             sidecar = target / SIDECAR
             packaged = _sha256(source / "SKILL.md")
-            if not target.exists():
-                shutil.copytree(source, target)
-                sidecar.write_text(packaged + "\n", encoding="utf-8")
-                continue
             current = _sha256(target / "SKILL.md") if (target / "SKILL.md").is_file() else None
             installed = sidecar.read_text(encoding="utf-8").strip() if sidecar.is_file() else None
-            if installed is None:
-                if current == packaged:
-                    sidecar.write_text(packaged + "\n", encoding="utf-8")
-                else:
-                    pending.append({"skill": source.name, "installed_sha256": current,
-                                    "packaged_sha256": packaged, "reason": "legacy_unknown"})
-            elif current != installed:
-                if packaged != installed:
-                    pending.append({"skill": source.name, "installed_sha256": current,
-                                    "packaged_sha256": packaged, "reason": "locally_edited"})
-            elif packaged != installed:
+            if current == packaged:
+                if installed != packaged:
+                    _atomic_text(sidecar, packaged + "\n")
+            elif current is None or (installed is not None and current == installed):
                 for file in sorted(source.rglob("*")):
-                    if not file.is_file():
-                        continue
-                    destination = target / file.relative_to(source)
-                    destination.parent.mkdir(parents=True, exist_ok=True)
-                    temporary = destination.with_name(destination.name + ".tmp")
-                    shutil.copyfile(file, temporary)
-                    temporary.replace(destination)
-                sidecar.write_text(packaged + "\n", encoding="utf-8")
+                    if file.is_file():
+                        _atomic_copy(file, target / file.relative_to(source))
+                _atomic_text(sidecar, packaged + "\n")
+            elif installed is None:
+                pending.append({"skill": source.name, "installed_sha256": current,
+                                "packaged_sha256": packaged, "reason": "legacy_unknown"})
+            elif packaged != installed:
+                pending.append({"skill": source.name, "installed_sha256": current,
+                                "packaged_sha256": packaged, "reason": "locally_edited"})
         report = self.data / "skills-update-pending.json"
         if pending:
             atomic_json(report, pending)
@@ -111,6 +101,20 @@ class Config:
 
 def _sha256(path: Path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _atomic_text(path: Path, text: str):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(text, encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def _atomic_copy(source: Path, destination: Path):
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(destination.name + ".tmp")
+    shutil.copyfile(source, temporary)
+    os.replace(temporary, destination)
 
 
 def default_data():

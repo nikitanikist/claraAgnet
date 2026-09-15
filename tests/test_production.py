@@ -250,6 +250,36 @@ def test_starter_skill_legacy_install_with_different_content_is_preserved_and_re
     assert (cfg.skills/'cpa-t1-closeout'/'SKILL.md').exists()
 
 
+def test_starter_skill_equal_content_with_stale_sidecar_is_in_sync(tmp_path,monkeypatch):
+    text,digest=starter(tmp_path,monkeypatch,'Version one');cfg=Config(tmp_path/'data');cfg.initialize()
+    target=cfg.skills/'taxprep-fast-path';(target/'.clara-starter.sha256').write_text('0'*64+'\n')
+    assert cfg.initialize()==[]
+    assert (target/'SKILL.md').read_text(encoding='utf-8')==text and (target/'.clara-starter.sha256').read_text()==digest+'\n'
+    assert not (cfg.data/'skills-update-pending.json').exists()
+    text,digest=starter(tmp_path,monkeypatch,'Version two')
+    assert cfg.initialize()==[]
+    assert (target/'SKILL.md').read_text(encoding='utf-8')==text and (target/'.clara-starter.sha256').read_text()==digest+'\n'
+
+
+def test_starter_skill_missing_skill_md_with_sidecar_is_reinstalled(tmp_path,monkeypatch):
+    starter(tmp_path,monkeypatch,'Version one');cfg=Config(tmp_path/'data');cfg.initialize()
+    target=cfg.skills/'taxprep-fast-path';(target/'SKILL.md').unlink()
+    text,digest=starter(tmp_path,monkeypatch,'Version two')
+    assert cfg.initialize()==[]
+    assert (target/'SKILL.md').read_text(encoding='utf-8')==text and (target/'.clara-starter.sha256').read_text()==digest+'\n'
+    assert not (cfg.data/'skills-update-pending.json').exists()
+
+
+def test_starter_skill_refresh_leaves_only_packaged_files_and_sidecar(tmp_path,monkeypatch):
+    starter(tmp_path,monkeypatch,'Version one');package=tmp_path/'package'/'taxprep-fast-path'
+    (package/'reference.md').write_text('ref one');cfg=Config(tmp_path/'data');cfg.initialize()
+    starter(tmp_path,monkeypatch,'Version two');(package/'reference.md').write_text('ref two')
+    assert cfg.initialize()==[]
+    target=cfg.skills/'taxprep-fast-path'
+    assert sorted(f.name for f in target.iterdir())==['.clara-starter.sha256','SKILL.md','reference.md']
+    assert (target/'reference.md').read_text()=='ref two'
+
+
 def test_portal_assignment_retries_do_not_duplicate_tasks(env):
     cfg,s,j,w=env
     class Manager:
