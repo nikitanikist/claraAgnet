@@ -52,7 +52,9 @@ def task_prompt(claim, messages, source_files=None):
     prompt = (
         'Work on the assigned Clearhouse portal task within its recorded scope. '
         'For a closeout, use the installed T1 TaxPrep skill and the workflow already initialized '
-        'for this exact closeout and family. Laureen handles invoicing. Prepare the verified '
+        'for this exact closeout and family. For Personal Taxprep, load taxprep-fast-path: '
+        'select exact LW/T183/ECL rows, use Ctrl+R/Ctrl+P, and print by form across members. '
+        'Laureen handles invoicing. Prepare the verified '
         'documents, recipient-specific PandaDoc shared links and OneDrive folder for human review. '
         'The portal performs the Ready to Email handoff after verification. Never email the client, '
         'sign, e-file, or mark the closeout finally completed. ProFile, T2 and T3 execution are unavailable. '
