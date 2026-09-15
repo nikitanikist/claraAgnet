@@ -419,6 +419,44 @@ def test_held_cycle_with_in_flight_work_announces_presence_once_per_interval(tmp
     asyncio.run(scenario())
 
 
+def test_superseded_incomplete_report_still_asks_the_portal_for_work(tmp_path):
+    # A person cancelled or continued the old job in the portal, which now answers the
+    # stale not-quiet report with superseded/no hold. The runtime must ask for work
+    # (the portal refuses while held); nothing local is released by a negative reply.
+    config, store, claim, _ = setup(tmp_path)
+    general(claim)
+    cycle_id = held_in_flight_cycle(store, claim)
+    def quiet_desktop(store, manager, namespace, identity, local_job_id):
+        return {'finished':[], 'in_flight':[], 'unknown':['windows-handoff-not-qualified'],
+                'observed_at':'2026-09-14T00:00:00Z', 'complete':False}
+    calls, executions = [], []
+    def handle(request):
+        op = request.url.path.rsplit('/', 1)[-1]
+        body = json.loads(request.content)
+        calls.append((op, body))
+        if op == 'clara-quiesce':
+            return wire({**CONTRACT.document['fixtures'][op]['response'], 'quiescent':False, 'recovery_hold':False, 'superseded':True})
+        if op == 'clara-claim':
+            return wire({'claimed':False, 'reason':'no_work', 'heartbeat_interval_s':10, 'server_time':'2026-09-14T00:00:00Z'})
+        return wire(CONTRACT.document['fixtures'][op]['response'])
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+            manager = simulated_manager(config, store, executions)
+            await manager.start()
+            runtime = PortalRuntime(config, store, manager,
+                PortalTransport(BASE, lambda:'test', client=client, clock=lambda:100), WORKER, observer=quiet_desktop)
+            try:
+                assert await runtime.tick() == 'held'
+                ops = [op for op,_ in calls]
+                assert ops.count('clara-quiesce') == 1 and ops.count('clara-claim') == 1
+                assert manager.execution_reservation == cycle_id and not executions
+                assert runtime.pending()['state'] == 'held'
+            finally:
+                await runtime.close()
+                await manager.close()
+    asyncio.run(scenario())
+
+
 def held_in_flight_cycle(store, claim):
     jid = PortalBindings(store, BASE, WORKER).persist_claim(claim, 'Synthetic interrupted task')['local_job_id']
     store.status(jid, 'interrupted')

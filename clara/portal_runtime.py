@@ -350,7 +350,11 @@ class PortalRuntime:
             self._complete(cycle['id'])
             return 'finished'
         self._update(cycle['id'], 'held', error='Some desktop actions are still unconfirmed. The worker remains reserved for review.')
-        if not report['in_flight'] and receipt['recovery_hold']:
+        # Whenever nothing is in flight, ask the portal for work: it refuses while
+        # it still holds this worker, and a positive claim means a person has
+        # settled the old attempt (continued or cancelled it), so the runtime can
+        # move on. A negative reply changes nothing locally.
+        if not report['in_flight']:
             return await self._reconciled_claim(cycle, identity)
         return 'held'
 
