@@ -13,7 +13,7 @@ from .portal_contract import ContractViolation
 from .portal_delivery import PortalDelivery
 from .portal_lease import AttemptIdentity, ExecutionLease
 from .portal_inputs import PortalInputs
-from .portal_outputs import closeout_reservation_keys
+from .portal_outputs import closeout_reservations
 from .portal_transport import PortalUnavailable
 from .workflows import Workflows
 
@@ -45,10 +45,9 @@ def task_prompt(claim, messages, source_files=None):
         closeout = claim['closeout']
         context = {'client_key': closeout['closeout_form_id'], 'year': closeout['tax_year'],
                    'members': [m['member_name'] for m in closeout['members']]}
-        keys = closeout_reservation_keys(claim)
         reservations = ('Before creating each PandaDoc packet or the OneDrive folder, reserve_external_write '
-                        'with exactly these keys (record_portal_delivery reconciles them): pandadoc '
-                        + ', '.join(keys['pandadoc'].values()) + '; storage ' + keys['storage']['folder'] + '. ')
+                        'with exactly one of these system, operation and key triples (record_portal_delivery '
+                        'reconciles them): ' + '; '.join(' '.join(t) for t in closeout_reservations(claim)) + '. ')
     payload = {'kind': claim['kind'], 'assignment': claim['closeout'],
                'assigned_by': claim['scope']['assigned_by'],
                'required_outputs': claim['required_outputs'],

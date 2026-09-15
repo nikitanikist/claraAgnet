@@ -82,14 +82,13 @@ def definitions(config,store,job):
     portal_claim=json.loads(attempt['claim_json']) if attempt else None
     portal_claim=portal_claim if portal_claim and portal_claim.get('kind')=='closeout' else None
     def reserve(a):
-        if portal_claim:
-            from .portal_outputs import closeout_reservation_keys
-            keys=closeout_reservation_keys(portal_claim)
-            allowed=sorted(keys.get(a.get('system'),{}).values())
-            if a.get('key') not in allowed:
-                raise ValueError('A portal closeout reserves only its canonical keys. '+
-                    ('Allowed for %s: %s.'%(a.get('system'),', '.join(allowed)) if allowed else
-                     'Allowed systems: '+'; '.join('%s: %s'%(s,', '.join(sorted(v.values()))) for s,v in keys.items())+'.'))
+        triple=tuple(a.get(k) for k in ('system','operation','key'))
+        if portal_claim and all(isinstance(v,str) for v in triple):  # malformed arguments get the shared shape error below
+            from .portal_outputs import closeout_reservations
+            allowed=closeout_reservations(portal_claim)
+            if triple not in allowed:
+                raise ValueError('A portal closeout reserves only its canonical writes (system operation key): '+
+                                 '; '.join(' '.join(t) for t in allowed)+'.')
         return ops.reserve(job,**a)
     items=[
       ('stat_file','Get file size, modification time and SHA-256 without opening Explorer.',schema({'path':'s'},['path']),file_info),

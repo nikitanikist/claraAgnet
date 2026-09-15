@@ -33,12 +33,21 @@ def _remote_url(value, system):
     return value
 
 
+CLOSEOUT_OPERATIONS = {'pandadoc': 'create_signature_packet', 'storage': 'create_folder'}
+
+
 def closeout_reservation_keys(claim):
     """Canonical external-write keys for one assigned closeout, independent of page titles or timestamps."""
     closeout = claim['closeout']
     prefix = 'closeout:' + closeout['closeout_form_id']
     return {'pandadoc': {m['member_id']: f"{prefix}:pandadoc:{m['member_id']}" for m in closeout['members']},
             'storage': {'folder': prefix + ':storage:folder'}}
+
+
+def closeout_reservations(claim):
+    """The (system, operation, key) triples a portal closeout may reserve; no other write is accepted."""
+    keys = closeout_reservation_keys(claim)
+    return [(system, CLOSEOUT_OPERATIONS[system], key) for system in ('pandadoc', 'storage') for key in keys[system].values()]
 
 
 def _observation(store, job, eid, values):
@@ -149,23 +158,24 @@ def record_delivery(config, store, job, args):
     proof = wf.evidence(job, 'portal_delivery', identity.job_id, {
         'attempt_no': identity.attempt_no, 'fence_token': identity.fence_token,
         'document_evidence_ids': args['document_evidence_ids'], 'artifacts': artifacts}, True)
-    # Reservations made under the canonical keys are confirmed by this delivery's own proofs.
-    delivered = {('pandadoc', keys['pandadoc'][member['member_id']]): eid
+    # Only reservations under a canonical (system, operation, key) triple are confirmed by this delivery's own proofs.
+    delivered = {('pandadoc', CLOSEOUT_OPERATIONS['pandadoc'], keys['pandadoc'][member['member_id']]): eid
                  for (_, member, _), eid in zip(packet_proofs, signing)}
-    delivered[('storage', keys['storage']['folder'])] = storage['id']
+    delivered[('storage', CLOSEOUT_OPERATIONS['storage'], keys['storage']['folder'])] = storage['id']
     ops, reconciled, unresolved = Operations(store), [], []
-    for op in store.rows("SELECT id,system,external_key FROM operations WHERE scope_key=? AND state='uncertain' ORDER BY created",
+    for op in store.rows("SELECT id,system,operation,external_key FROM operations WHERE scope_key=? AND state='uncertain' ORDER BY created",
                          (job_scope(store, job),)):
-        eid = delivered.get((op['system'], op['external_key']))
-        if eid:
-            ops.reconcile(job, op['id'], eid, auto='record_portal_delivery')
-            reconciled.append(op['id'])
-        else:
-            unresolved.append(op['id'])
+        eid = delivered.get((op['system'], op['operation'], op['external_key']))
+        try:
+            if eid:
+                ops.reconcile(job, op['id'], eid, auto='record_portal_delivery')
+        except ValueError:
+            eid = None  # The delivery proofs stand; the reservation stays uncertain for the model to inspect.
+        (reconciled if eid else unresolved).append(op['id'])
     leftover = (' Uncertain reservations remain (' + ', '.join(unresolved) +
                 '): inspect their remote state before finishing.') if unresolved else ''
     return {'delivery_evidence_id': proof['id'], 'signature_evidence_ids': signing,
             'storage_evidence_id': storage['id'],
             'reconciled_operation_ids': reconciled, 'unresolved_operation_ids': unresolved,
-            'next': 'Reservations under the canonical keys are reconciled; save the remaining checkpoints.'
+            'next': 'Reservations under the canonical triples are reconciled; save the remaining checkpoints.'
                     + leftover + ' The staff member who assigned this closeout to Clara receives it in Ready to Email for review.'}
