@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import json
 import re
 import time
-from urllib.parse import urlsplit
+from urllib.parse import quote, unquote, urlsplit
 
 from .knowledge import decode, job_scope
 from .operations import Operations
@@ -16,9 +16,9 @@ from .portal_lease import AttemptIdentity
 from .workflows import Workflows
 
 
-def _text(value, limit=200):
+def _text(value, limit=200, field='record identity'):
     if not isinstance(value, str) or not value.strip() or len(value) > limit:
-        raise ValueError('Provide a complete, bounded record identity from the observed page.')
+        raise ValueError(f'Provide a complete, bounded {field} from the observed page (text of 1-{limit} characters).')
     return value.strip()
 
 
@@ -50,22 +50,42 @@ def closeout_reservations(claim):
     return [(system, CLOSEOUT_OPERATIONS[system], key) for system in ('pandadoc', 'storage') for key in keys[system].values()]
 
 
-def _observation(store, job, eid, values):
+# A delivery binds nine or more separate Chrome readbacks (two packets, the
+# folder and six files). Five minutes forced the model to re-read everything
+# whenever one call was rejected; this window still keeps every proof inside
+# the current attempt.
+FRESH_OBSERVATION_S = 1200
+
+
+def _spellings(value):
+    """Ways a page may spell the same URL or identifier: percent-encoded, decoded, with or without a trailing slash."""
+    base = re.sub(r'\s+', ' ', value).casefold()
+    forms = set()
+    for text in (base, base.rstrip('/')):
+        forms.update({text, unquote(text), quote(text, safe=":/#?&=%+@!$,;()*[]~'")})
+    return {form for form in forms if form}
+
+
+def _observation(store, job, eid, values, what='record'):
     proof = decode(store.one('SELECT * FROM evidence WHERE id=? AND job_id=?',
-                             (_text(eid), job['id'])), 'payload')
+                             (_text(eid, field='observation_id'), job['id'])), 'payload')
     now = time.time()
     if (not proof or proof['kind'] != 'tool_observation' or proof['payload'].get('error')
             or not proof['payload'].get('tool', '').startswith('mcp__chrome__')
-            or not max(job['created'], now - 300) <= proof['created'] <= now):
-        raise ValueError('Read the remote record again in Chrome and use that fresh observation ID.')
+            or not max(job['created'], now - FRESH_OBSERVATION_S) <= proof['created'] <= now):
+        raise ValueError(f'Read the {what} again in Chrome and use that fresh observation ID '
+                         f'(a successful Chrome readback from this task, at most {FRESH_OBSERVATION_S // 60} minutes old).')
     text = re.sub(r'\s+', ' ', str(proof['payload'].get('text', ''))).casefold()
     for value in values:
         if isinstance(value, int):
             if not any(re.search(r'(?<!\d)' + re.escape(v) + r'(?!\d)', text)
                        for v in (str(value), f'{value:,}')):
-                raise ValueError('The exact file size in bytes must appear in the browser observation.')
-        elif re.sub(r'\s+', ' ', _text(value, 2000)).casefold() not in text:
-            raise ValueError('The record identity does not match the browser observation. Read the actual record again.')
+                raise ValueError(f'The {what} observation does not show the exact file size {value} bytes. '
+                                 'Read the item details or the storage API; a rounded size like "245 KB" is not enough.')
+        elif not any(form in text for form in _spellings(_text(value, 2000))):
+            shown = value if len(value) <= 120 else value[:117] + '...'
+            raise ValueError(f'The {what} observation does not show "{shown}". Read the actual record again '
+                             'and pass the values exactly as they appear there.')
     return proof
 
 
@@ -87,30 +107,31 @@ def record_delivery(config, store, job, args):
             raise ValueError('Provide a list of complete observed delivery records.')
         for record in records:
             for field in fields:
-                _text(record.get(field), 2000 if field == 'url' else 200)
+                _text(record.get(field), 2000 if field == 'url' else 200, field)
     if not isinstance(args.get('folder'), dict):
         raise ValueError('Provide the observed OneDrive folder record.')
     for field in ('remote_id', 'url', 'external_key', 'observation_id'):
-        _text(args['folder'].get(field), 2000 if field == 'url' else 200)
-    if (not isinstance(packets, list) or not all(isinstance(p, dict) for p in packets)
-            or len(packets) != len(members) or {p.get('member_id') for p in packets} != set(members)
-            or len({p.get('remote_id') for p in packets}) != len(packets)):
-        raise ValueError('Provide exactly one distinct PandaDoc packet for every assigned family member.')
-    if not isinstance(files, list) or not all(isinstance(f, dict) for f in files) or len(files) != len(documents):
-        raise ValueError('Provide an observed OneDrive record for every required PDF.')
+        _text(args['folder'].get(field), 2000 if field == 'url' else 200, 'folder ' + field)
+    if (len(packets) != len(members) or {p['member_id'] for p in packets} != set(members)
+            or len({p['remote_id'] for p in packets}) != len(packets)):
+        raise ValueError('pandadoc needs exactly one packet, each with a distinct remote_id, per member_id ('
+                         + ', '.join(sorted(members)) + '); received member_id: '
+                         + (', '.join(p['member_id'] for p in packets) or 'none') + '.')
     expected = {(d.member_id, d.document_type, d.tax_year): d for d in documents}
-    if (len({(f.get('member_id'), f.get('document_type'), f.get('tax_year')) for f in files}) != len(files)
-            or {(f.get('member_id'), f.get('document_type'), f.get('tax_year')) for f in files} != set(expected)
-            or len({f.get('remote_file_id') for f in files}) != len(files)):
-        raise ValueError('Each OneDrive record must identify a distinct member, document and remote file.')
+    received = [(f['member_id'], f['document_type'], f['tax_year']) for f in files]
+    if sorted(received) != sorted(expected) or len({f['remote_file_id'] for f in files}) != len(files):
+        raise ValueError('files needs exactly these member_id/document_type/tax_year records, each with a distinct '
+                         'remote_file_id: ' + ', '.join('/'.join(k) for k in sorted(expected))
+                         + '; received: ' + (', '.join('/'.join(k) for k in received) or 'none') + '.')
 
     artifacts, packet_proofs = [], []
     for packet in packets:
         member = members[packet['member_id']]
         remote_id = _text(packet['remote_id'])
         url = _remote_url(packet['url'], 'pandadoc')
+        # The reservation records bind the business key; a page never shows it.
         observation = _observation(store, job, packet['observation_id'],
-            [url, remote_id, member['member_name'], _text(member['member_email'], 320), _text(packet['external_key'])])
+            [url, remote_id, member['member_name'], _text(member['member_email'], 320)], 'PandaDoc packet')
         packet_proofs.append((packet, member, observation))
         artifacts.append({'kind': 'pandadoc', 'member_id': member['member_id'],
                           'remote_id': remote_id, 'url': url, 'verification': 'worker_observed',
@@ -119,14 +140,13 @@ def record_delivery(config, store, job, args):
 
     folder = args['folder']
     folder_id, folder_url = _text(folder['remote_id']), _remote_url(folder['url'], 'storage')
-    folder_observation = _observation(store, job, folder['observation_id'],
-                                      [folder_url, folder_id, _text(folder['external_key'])])
+    folder_observation = _observation(store, job, folder['observation_id'], [folder_url, folder_id], 'OneDrive folder')
     uploaded = []
     for file in files:
         doc = expected[(file['member_id'], file['document_type'], file['tax_year'])]
         file_id = _text(file['remote_file_id'])
         observation = _observation(store, job, file['observation_id'],
-                                   [folder_id, file_id, doc.file.name, len(doc.file.data)])
+                                   [folder_id, file_id, doc.file.name, len(doc.file.data)], 'OneDrive file')
         uploaded.append({'member_id': doc.member_id, 'document_type': doc.document_type,
                          'tax_year': doc.tax_year, 'file_name': doc.file.name,
                          'bytes': len(doc.file.data), 'sha256': doc.file.sha256,

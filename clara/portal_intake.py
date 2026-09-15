@@ -47,7 +47,11 @@ def task_prompt(claim, messages, source_files=None):
                    'members': [m['member_name'] for m in closeout['members']]}
         reservations = ('Before creating each PandaDoc packet or the OneDrive folder, reserve_external_write '
                         'with exactly one of these system, operation and key triples (record_portal_delivery '
-                        'reconciles them): ' + '; '.join(' '.join(t) for t in closeout_reservations(claim)) + '. ')
+                        'reconciles them): ' + '; '.join(' '.join(t) for t in closeout_reservations(claim)) + '. '
+                        'record_portal_delivery identities: member_id is one of '
+                        + ', '.join(m['member_id'] for m in closeout['members'])
+                        + '; document_type is one of client_copy, t183, engagement_letter; tax_year is '
+                        + str(closeout['tax_year']) + '. ')
     payload = {'kind': claim['kind'], 'assignment': claim['closeout'],
                'assigned_by': claim['scope']['assigned_by'],
                'required_outputs': claim['required_outputs'],

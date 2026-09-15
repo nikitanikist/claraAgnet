@@ -116,12 +116,19 @@ def definitions(config,store,job):
                                   'maxLength': 2000 if field == 'url' else 200}
                            for field in fields}, fields)
         items.append(('record_portal_delivery',
-            'Record assigned T1 delivery using current Chrome observations. Supply document evidence IDs, '
-            'one PandaDoc per member (member_id, remote_id, url, external_key, observation_id), '
-            'folder (remote_id, url, external_key, observation_id), and files '
-            '(member_id, document_type, tax_year, remote_file_id, observation_id). Observations must '
-            'show recipient, business key, remote file name, exact byte size, file ID and folder ID. '
-            'Returns checkpoint proofs; does not send email or approve the workflow.',
+            'Record assigned T1 delivery from Chrome observations taken in this task within the last '
+            '20 minutes. document_evidence_ids: the verified document evidence of every required PDF. '
+            'pandadoc: one record per family member with member_id exactly as listed in the assignment, '
+            'remote_id (the PandaDoc document ID from its /documents/ URL), url, external_key (the '
+            'canonical reservation key closeout:<form>:pandadoc:<member_id>) and the observation_id of a '
+            'Chrome readback showing that url, document ID, member name and member email. folder: remote_id '
+            '(the OneDrive item ID), url, external_key closeout:<form>:storage:folder and an observation '
+            'showing the folder url and ID. files: one record per required PDF with member_id, document_type '
+            'exactly one of client_copy, t183 or engagement_letter, tax_year, remote_file_id (the OneDrive '
+            'item ID) and an observation showing the folder ID, file ID, exact file name and exact size in '
+            'bytes (item details or the storage API; a rounded "245 KB" is rejected). Business keys are '
+            'bound by the reservation records, never by page text. Returns checkpoint proofs; does not send '
+            'email or approve the workflow.',
             schema({'document_evidence_ids': {'type':'array', 'items':{'type':'string'}, 'maxItems':100},
                     'pandadoc': {'type':'array', 'maxItems':100, 'items':record_schema(
                         ['member_id','remote_id','url','external_key','observation_id'])},

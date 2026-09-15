@@ -66,7 +66,7 @@ def test_unmatched_or_unobserved_delivery_cannot_be_registered(tmp_path, change)
         args['files'].pop()
     elif change == 'stale_observation':
         store.execute('UPDATE evidence SET created=? WHERE id=?',
-                      (time.time()-301,args['files'][0]['observation_id']))
+                      (time.time()-1201,args['files'][0]['observation_id']))
     elif change == 'malformed_identity':
         args['files'][0]['remote_file_id'] = {'unexpected':'object'}
     else:
@@ -147,3 +147,66 @@ def test_portal_closeout_reservation_accepts_only_canonical_triples(tmp_path):
     other = store.create_job(store.create_conversation()['id'], 'Not a portal task', 'ask', [])
     plain = next(fn for name, _, _, fn in definitions(config, store, other) if name == 'reserve_external_write')
     assert asyncio.run(plain({'system':'pandadoc','operation':'create','key':'free-form key','request':{}}))['execute_allowed']
+
+
+def _payload_text(store, eid):
+    row = store.one('SELECT payload FROM evidence WHERE id=?', (eid,))
+    return json.loads(row['payload'])['text']
+
+
+def _set_text(store, eid, text):
+    row = store.one('SELECT payload FROM evidence WHERE id=?', (eid,))
+    data = json.loads(row['payload']); data['text'] = text
+    store.execute('UPDATE evidence SET payload=? WHERE id=?', (json.dumps(data), eid))
+
+
+def test_business_keys_are_bound_by_reservations_not_by_page_text(tmp_path):
+    # A PandaDoc page or OneDrive folder never shows closeout:<form>:... keys.
+    config, store, job, lease, args = delivery(tmp_path)
+    for eid in (args['pandadoc'][0]['observation_id'], args['folder']['observation_id']):
+        _set_text(store, eid, _payload_text(store, eid).replace(' case-2024', ''))
+    claim = json.loads(store.one('SELECT claim_json FROM portal_v1_attempts WHERE local_job_id=?', (job['id'],))['claim_json'])
+    keys = closeout_reservation_keys(claim)
+    args['pandadoc'][0]['external_key'] = keys['pandadoc']['m1']
+    args['folder']['external_key'] = keys['storage']['folder']
+    result = record_delivery(config, store, job, args)
+    signing = json.loads(store.one('SELECT payload FROM evidence WHERE id=?', (result['signature_evidence_ids'][0],))['payload'])
+    assert signing['external_key'] == keys['pandadoc']['m1'] == signing['reservation_key']
+
+
+def test_observations_within_twenty_minutes_and_encoded_urls_are_accepted(tmp_path):
+    config, store, job, lease, args = delivery(tmp_path)
+    fid = args['folder']['observation_id']
+    args['folder']['url'] = 'https://example.sharepoint.com/personal/laureen/Documents/CH Clients Share/CLARA-TEST/'
+    _set_text(store, fid, 'https://example.sharepoint.com/personal/laureen/Documents/CH%20Clients%20Share/CLARA-TEST folder-001')
+    # A readback from earlier in this task (15 minutes ago) is still usable.
+    store.execute('UPDATE jobs SET created=? WHERE id=?', (time.time() - 1000, job['id']))
+    store.execute('UPDATE evidence SET created=? WHERE id=?', (time.time() - 900, args['files'][0]['observation_id']))
+    result = record_delivery(config, store, store.job(job['id']), args)
+    assert result['storage_evidence_id']
+
+
+@pytest.mark.parametrize('change, expected', [
+    ('wrong_document_type', 'm1/client_copy/2024'),
+    ('missing_packet', 'member_id (m1)'),
+    ('rounded_size', 'exact file size'),
+    ('wrong_url', 'does not show "https://app.pandadoc.com/a/#/documents/packet-999"'),
+    ('malformed_field', 'bounded remote_file_id'),
+])
+def test_rejections_name_what_the_model_must_correct(tmp_path, change, expected):
+    config, store, job, lease, args = delivery(tmp_path)
+    if change == 'wrong_document_type':
+        args['files'][0]['document_type'] = 'client-copy'
+    elif change == 'missing_packet':
+        args['pandadoc'] = []
+    elif change == 'rounded_size':
+        oid = args['files'][0]['observation_id']
+        _set_text(store, oid, ' '.join(w for w in _payload_text(store, oid).split() if not w[0].isdigit()) + ' 245 KB')
+    elif change == 'wrong_url':
+        args['pandadoc'][0]['url'] = 'https://app.pandadoc.com/a/#/documents/packet-999'
+    else:
+        args['files'][0]['remote_file_id'] = ''
+    with pytest.raises(ValueError) as failure:
+        record_delivery(config, store, job, args)
+    assert expected in str(failure.value)
+    assert store.rows("SELECT id FROM evidence WHERE kind='portal_delivery'") == []

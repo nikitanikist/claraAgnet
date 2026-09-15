@@ -134,5 +134,7 @@ def test_task_prompt_names_the_canonical_reservation_keys(tmp_path):
     assert f'pandadoc create_signature_packet closeout:{form}:pandadoc:m1' in prompt
     assert f'storage create_folder closeout:{form}:storage:folder' in prompt
     assert all(' '.join(t) in prompt for t in closeout_reservations(claim)) and context['client_key'] == form
+    assert ('record_portal_delivery identities: member_id is one of m1; document_type is one of client_copy, '
+            't183, engagement_letter; tax_year is ' + str(claim['closeout']['tax_year']) + '.') in prompt
     general = {**claim, 'kind':'general', 'closeout':None, 'required_outputs':[]}
     assert 'reserve_external_write' not in task_prompt(general, [])[0]
