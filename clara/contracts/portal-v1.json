@@ -2572,7 +2572,8 @@
                   "ready_to_email",
                   "needs_review",
                   "failed",
-                  "skipped"
+                  "skipped",
+                  "not_applicable"
                 ],
                 "type": "string"
               },

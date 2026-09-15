@@ -95,7 +95,8 @@ def test_lease_rejection_is_explicit_without_server_message(code):
     asyncio.run(scenario())
 
 
-def test_lost_result_response_retries_original_report_after_restart(tmp_path):
+@pytest.mark.parametrize('handoff_status', ['ready_to_email', 'not_applicable'])
+def test_lost_result_response_retries_original_report_after_restart(tmp_path, handoff_status):
     path = tmp_path / 'db'
     body = fixture('clara-result')
     identity = AttemptIdentity(**{f.name: body[f.name] for f in fields(AttemptIdentity)})
@@ -104,7 +105,10 @@ def test_lost_result_response_retries_original_report_after_restart(tmp_path):
         calls.append(request)
         if len(calls) == 1:
             raise httpx.ReadError('sensitive response details', request=request)
-        return wire(fixture('clara-result', 'response'))
+        response = fixture('clara-result', 'response')
+        if handoff_status == 'not_applicable':
+            response['handoff'] = {'attempted': False, 'status': 'not_applicable', 'reason': None}
+        return wire(response)
     async def scenario():
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             transport = PortalTransport(BASE, lambda: KEY, client=client)
