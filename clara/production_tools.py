@@ -78,6 +78,19 @@ def definitions(config,store,job):
             if not m or m['scope_key'] not in {'firm',job_scope(store,job)}: raise ValueError('Memory outside this scope.')
             return memory.review(a['id'],'suspend',a.get('reason','Failed live verification'))
         raise ValueError('Choose begin_use, validate or invalidate. Operator approval is in the dashboard.')
+    attempt=store.one('SELECT claim_json FROM portal_v1_attempts WHERE local_job_id=?',(job['id'],))
+    portal_claim=json.loads(attempt['claim_json']) if attempt else None
+    portal_claim=portal_claim if portal_claim and portal_claim.get('kind')=='closeout' else None
+    def reserve(a):
+        if portal_claim:
+            from .portal_outputs import closeout_reservation_keys
+            keys=closeout_reservation_keys(portal_claim)
+            allowed=sorted(keys.get(a.get('system'),{}).values())
+            if a.get('key') not in allowed:
+                raise ValueError('A portal closeout reserves only its canonical keys. '+
+                    ('Allowed for %s: %s.'%(a.get('system'),', '.join(allowed)) if allowed else
+                     'Allowed systems: '+'; '.join('%s: %s'%(s,', '.join(sorted(v.values()))) for s,v in keys.items())+'.'))
+        return ops.reserve(job,**a)
     items=[
       ('stat_file','Get file size, modification time and SHA-256 without opening Explorer.',schema({'path':'s'},['path']),file_info),
       ('copy_file','Create an exclusive working copy and verify source/copy hashes.',schema({'source':'s','destination':'s'},['source','destination']),copy),
@@ -92,12 +105,12 @@ def definitions(config,store,job):
       ('retrieve_memory','Retrieve scoped lessons for the exact application build. Candidates are not qualified procedures.',schema({'query':'s','application':'s','build':'s'}),lambda a:memory.retrieve(job,**a)),
       ('propose_memory','Save a candidate lesson with preconditions/actions/postconditions. No model self-approval.',schema({'title':'s','application':'s','build':'s','payload':'o','kind':{'type':'string','enum':['procedure','client_fact']}},['title','application','build','payload']),lambda a:memory.propose(job,**a)),
       ('memory_use','Record procedure use before actions, validate after runtime evidence, or invalidate after failure.',schema({'action':'s','id':'s','build':'s','evidence_id':'s','reason':'s'},['action','id']),memory_action),
-      ('reserve_external_write','Reserve one external-write attempt by stable client/business key before creating invoices, signature packets or uploads. Existing keys cannot be replayed.',schema({'system':'s','operation':'s','key':'s','request':'o'},['system','operation','key','request']),lambda a:ops.reserve(job,**a)),
+      ('reserve_external_write','Reserve one external-write attempt by stable client/business key before creating invoices, signature packets or uploads. Existing keys cannot be replayed.',schema({'system':'s','operation':'s','key':'s','request':'o'},['system','operation','key','request']),reserve),
       ('verify_remote_record','Match remote record fields against fresh Chrome readback, not an assistant claim.',schema({k:'s' for k in ['observation_id','system','url','remote_id','external_key','client_name','status']},['observation_id','system','url','remote_id','external_key','client_name','status']),remote),
       ('reconcile_external_write','Confirm a reserved operation using verified remote-record evidence.',schema({'id':'s','evidence_id':'s'},['id','evidence_id']),lambda a:ops.reconcile(job,a['id'],a['evidence_id'])),
       ('publish_handoff','Publish a local JSON evidence package, remaining stages, operations and budget for review.',schema({'note':'s'}),handoff),
     ]
-    if store.one('SELECT local_job_id FROM portal_v1_attempts WHERE local_job_id=?', (job['id'],)):
+    if attempt:
         from .portal_outputs import record_delivery
         def record_schema(fields):
             return schema({field: {'type': 'string', 'minLength': 1,

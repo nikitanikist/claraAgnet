@@ -9,7 +9,8 @@ import re
 import time
 from urllib.parse import urlsplit
 
-from .knowledge import decode
+from .knowledge import decode, job_scope
+from .operations import Operations
 from .portal_documents import collect_documents
 from .portal_lease import AttemptIdentity
 from .workflows import Workflows
@@ -30,6 +31,14 @@ def _remote_url(value, system):
     if not allowed or u.scheme != 'https' or u.username or u.password or u.port not in (None, 443):
         raise ValueError('Use the record link on the expected PandaDoc or OneDrive service.')
     return value
+
+
+def closeout_reservation_keys(claim):
+    """Canonical external-write keys for one assigned closeout, independent of page titles or timestamps."""
+    closeout = claim['closeout']
+    prefix = 'closeout:' + closeout['closeout_form_id']
+    return {'pandadoc': {m['member_id']: f"{prefix}:pandadoc:{m['member_id']}" for m in closeout['members']},
+            'storage': {'folder': prefix + ':storage:folder'}}
 
 
 def _observation(store, job, eid, values):
@@ -61,6 +70,7 @@ def record_delivery(config, store, job, args):
     identity = AttemptIdentity(row['external_job_id'], row['worker_id'], row['attempt_no'], row['fence_token'])
     documents = collect_documents(config, store, row['namespace'], identity, job['id'], args['document_evidence_ids'])
     members = {m['member_id']: m for m in claim['closeout']['members']}
+    keys = closeout_reservation_keys(claim)
     packets, files = args['pandadoc'], args['files']
     for records, fields in ((packets, ('member_id', 'remote_id', 'url', 'external_key', 'observation_id')),
                             (files, ('member_id', 'document_type', 'tax_year', 'remote_file_id', 'observation_id'))):
@@ -127,16 +137,35 @@ def record_delivery(config, store, job, args):
         signing.append(wf.evidence(job, 'remote_record', packet['remote_id'], {
             'system': 'pandadoc', 'remote_id': packet['remote_id'], 'url': packet['url'],
             'client_name': member['member_name'], 'external_key': packet['external_key'],
+            'reservation_key': keys['pandadoc'][member['member_id']],
             'observation_id': observation['id'], 'case_key': claim['closeout']['closeout_form_id'],
             'coverage': 'Worker-observed packet and recipient; portal verification still required.'}, True)['id'])
     storage = wf.evidence(job, 'remote_record', folder_id, {
         'system': 'storage', 'remote_id': folder_id, 'url': folder_url,
-        'external_key': folder['external_key'], 'observation_id': folder_observation['id'],
+        'external_key': folder['external_key'], 'reservation_key': keys['storage']['folder'],
+        'observation_id': folder_observation['id'],
         'case_key': claim['closeout']['closeout_form_id'], 'uploaded': uploaded,
         'coverage': 'Worker-observed Chrome records; not independent OneDrive API verification.'}, True)
     proof = wf.evidence(job, 'portal_delivery', identity.job_id, {
         'attempt_no': identity.attempt_no, 'fence_token': identity.fence_token,
         'document_evidence_ids': args['document_evidence_ids'], 'artifacts': artifacts}, True)
+    # Reservations made under the canonical keys are confirmed by this delivery's own proofs.
+    delivered = {('pandadoc', keys['pandadoc'][member['member_id']]): eid
+                 for (_, member, _), eid in zip(packet_proofs, signing)}
+    delivered[('storage', keys['storage']['folder'])] = storage['id']
+    ops, reconciled, unresolved = Operations(store), [], []
+    for op in store.rows("SELECT id,system,external_key FROM operations WHERE scope_key=? AND state='uncertain' ORDER BY created",
+                         (job_scope(store, job),)):
+        eid = delivered.get((op['system'], op['external_key']))
+        if eid:
+            ops.reconcile(job, op['id'], eid, auto='record_portal_delivery')
+            reconciled.append(op['id'])
+        else:
+            unresolved.append(op['id'])
+    leftover = (' Uncertain reservations remain (' + ', '.join(unresolved) +
+                '): inspect their remote state before finishing.') if unresolved else ''
     return {'delivery_evidence_id': proof['id'], 'signature_evidence_ids': signing,
             'storage_evidence_id': storage['id'],
-            'next': 'Reconcile reserved writes with matching proofs and save the remaining checkpoints. The staff member who assigned this closeout to Clara receives it in Ready to Email for review.'}
+            'reconciled_operation_ids': reconciled, 'unresolved_operation_ids': unresolved,
+            'next': 'Reservations under the canonical keys are reconciled; save the remaining checkpoints.'
+                    + leftover + ' The staff member who assigned this closeout to Clara receives it in Ready to Email for review.'}

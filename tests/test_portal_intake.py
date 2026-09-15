@@ -6,7 +6,8 @@ import pytest
 
 from clara.agent import AgentManager
 from clara.portal_contract import ContractViolation
-from clara.portal_intake import PortalIntake
+from clara.portal_intake import PortalIntake, task_prompt
+from clara.portal_outputs import closeout_reservation_keys
 from clara.portal_inputs import PortalInputs
 from clara.portal_transport import PortalReply, PortalTransport, PortalUnavailable
 from clara.workflows import Workflows
@@ -124,3 +125,14 @@ def test_all_source_files_must_arrive_before_acknowledgement_and_dispatch(tmp_pa
             prompt = store.job(prepared.local_job_id)['prompt']
             assert 'Slips.pdf' in prompt and 'Checklist.pdf' in prompt
     asyncio.run(scenario())
+
+
+def test_task_prompt_names_the_canonical_reservation_keys(tmp_path):
+    config, store, claim, _ = setup(tmp_path)
+    prompt, context = task_prompt(claim, [])
+    keys = closeout_reservation_keys(claim)
+    form = claim['closeout']['closeout_form_id']
+    assert f'closeout:{form}:pandadoc:m1' in prompt and f'closeout:{form}:storage:folder' in prompt
+    assert all(k in prompt for k in keys['pandadoc'].values()) and context['client_key'] == form
+    general = {**claim, 'kind':'general', 'closeout':None, 'required_outputs':[]}
+    assert 'reserve_external_write' not in task_prompt(general, [])[0]

@@ -1,10 +1,13 @@
+import asyncio
 import json
 import time
 
 import pytest
 
+from clara.operations import Operations
 from clara.portal_documents import collect_documents
-from clara.portal_outputs import record_delivery
+from clara.portal_outputs import closeout_reservation_keys, record_delivery
+from clara.production_tools import definitions
 from clara.workflows import Workflows
 from test_portal_documents import package
 from test_portal_delivery import BASE
@@ -71,3 +74,51 @@ def test_unmatched_or_unobserved_delivery_cannot_be_registered(tmp_path, change)
     with pytest.raises(ValueError):
         record_delivery(config, store, job, args)
     assert store.rows("SELECT id FROM evidence WHERE kind='portal_delivery'") == []
+
+
+def test_delivery_reconciles_canonical_reservations_and_reports_leftovers(tmp_path):
+    config, store, job, lease, args = delivery(tmp_path)
+    claim = json.loads(store.one('SELECT claim_json FROM portal_v1_attempts WHERE local_job_id=?', (job['id'],))['claim_json'])
+    keys = closeout_reservation_keys(claim)
+    form = claim['closeout']['closeout_form_id']
+    assert keys == {'pandadoc': {'m1': f'closeout:{form}:pandadoc:m1'}, 'storage': {'folder': f'closeout:{form}:storage:folder'}}
+    ops = Operations(store)
+    packet = ops.reserve(job, 'pandadoc', 'create_signature_packet', keys['pandadoc']['m1'], {})
+    folder = ops.reserve(job, 'storage', 'create_folder', keys['storage']['folder'], {})
+    drifted = ops.reserve(job, 'pandadoc', 'create_signature_packet', 'John Smith T1 2024 - packet (v2)', {})
+    result = record_delivery(config, store, job, args)
+    signing = json.loads(store.one('SELECT payload FROM evidence WHERE id=?', (result['signature_evidence_ids'][0],))['payload'])
+    storage = json.loads(store.one('SELECT payload FROM evidence WHERE id=?', (result['storage_evidence_id'],))['payload'])
+    assert signing['external_key'] == 'case-2024' and signing['reservation_key'] == keys['pandadoc']['m1']
+    assert storage['external_key'] == 'case-2024' and storage['reservation_key'] == keys['storage']['folder']
+    assert sorted(result['reconciled_operation_ids']) == sorted([packet['id'], folder['id']])
+    assert result['unresolved_operation_ids'] == [drifted['id']]
+    assert drifted['id'] in result['next']
+    for op, eid, remote in ((packet, result['signature_evidence_ids'][0], 'packet-001'), (folder, result['storage_evidence_id'], 'folder-001')):
+        row = store.one('SELECT * FROM operations WHERE id=?', (op['id'],))
+        assert row['state'] == 'confirmed' and row['remote_id'] == remote
+        assert json.loads(row['result']) == {'evidence_id': eid, 'auto': 'record_portal_delivery'}
+    assert store.one('SELECT state FROM operations WHERE id=?', (drifted['id'],))['state'] == 'uncertain'
+    again = record_delivery(config, store, job, args)
+    assert again['reconciled_operation_ids'] == [] and again['unresolved_operation_ids'] == [drifted['id']]
+    assert len(store.rows('SELECT id FROM operations')) == 3
+    assert json.loads(store.one('SELECT result FROM operations WHERE id=?', (packet['id'],))['result'])['evidence_id'] == result['signature_evidence_ids'][0]
+
+
+def test_portal_closeout_reservation_accepts_only_canonical_keys(tmp_path):
+    config, store, job, lease, args = delivery(tmp_path)
+    claim = json.loads(store.one('SELECT claim_json FROM portal_v1_attempts WHERE local_job_id=?', (job['id'],))['claim_json'])
+    keys = closeout_reservation_keys(claim)
+    reserve = next(fn for name, _, _, fn in definitions(config, store, job) if name == 'reserve_external_write')
+    assert asyncio.run(reserve({'system':'pandadoc','operation':'create_signature_packet','key':keys['pandadoc']['m1'],'request':{}}))['execute_allowed']
+    assert asyncio.run(reserve({'system':'storage','operation':'create_folder','key':keys['storage']['folder'],'request':{}}))['execute_allowed']
+    with pytest.raises(ValueError, match=keys['pandadoc']['m1']):
+        asyncio.run(reserve({'system':'pandadoc','operation':'create_signature_packet','key':'John Smith T1 2024 packet','request':{}}))
+    with pytest.raises(ValueError, match=keys['storage']['folder']):
+        asyncio.run(reserve({'system':'storage','operation':'create_folder','key':keys['pandadoc']['m1'],'request':{}}))
+    with pytest.raises(ValueError, match='Allowed systems'):
+        asyncio.run(reserve({'system':'sharepoint','operation':'create_folder','key':'anything','request':{}}))
+    assert len(store.rows('SELECT id FROM operations')) == 2
+    other = store.create_job(store.create_conversation()['id'], 'Not a portal task', 'ask', [])
+    plain = next(fn for name, _, _, fn in definitions(config, store, other) if name == 'reserve_external_write')
+    assert asyncio.run(plain({'system':'pandadoc','operation':'create','key':'free-form key','request':{}}))['execute_allowed']

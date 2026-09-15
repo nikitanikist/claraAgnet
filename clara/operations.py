@@ -32,7 +32,7 @@ class Operations:
         return {'id':oid,'state':'uncertain','execute_allowed':True,
                 'instruction':'One attempt is reserved. Inspect remote state after the attempt, including errors. The reservation itself is not authorization.'}
 
-    def reconcile(self,job,oid,evidence_id):
+    def reconcile(self,job,oid,evidence_id,auto=None):
         op=self.store.one('SELECT * FROM operations WHERE id=? AND scope_key=?',(oid,job_scope(self.store,job)))
         proof=decode(self.store.one('SELECT e.* FROM evidence e JOIN jobs j ON j.id=e.job_id WHERE e.id=? AND j.conversation_id=?',
                                   (evidence_id,job['conversation_id'])),'payload')
@@ -41,10 +41,11 @@ class Operations:
         p=proof['payload']
         if op['state']=='confirmed' and json.loads(op['result'] or '{}').get('evidence_id')==evidence_id:
             return op
-        if p.get('system')!=op['system'] or p.get('external_key')!=op['external_key'] or proof['created']<op['updated']:
+        # A proof matches by the observed on-page key or by the canonical reservation key it was recorded under.
+        if p.get('system')!=op['system'] or op['external_key'] not in (p.get('external_key'),p.get('reservation_key')) or proof['created']<op['updated']:
             raise ValueError('Evidence does not match this reserved operation.')
         self.store.execute("UPDATE operations SET state='confirmed',remote_id=?,result=?,updated=? WHERE id=?",
-                           (p['remote_id'],json.dumps({'evidence_id':evidence_id}),time.time(),oid))
+                           (p['remote_id'],json.dumps({'evidence_id':evidence_id,**({'auto':auto} if auto else {})}),time.time(),oid))
         return self.store.one('SELECT * FROM operations WHERE id=?',(oid,))
 
     def list(self,job):

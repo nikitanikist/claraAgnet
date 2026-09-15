@@ -147,6 +147,25 @@ def test_uncertain_operation_is_not_reexecuted_after_restart(env):
     with pytest.raises(ValueError,match='already used'): ops.confirm_absence(first['id'],'Checked remote records again after the retry.')
 
 
+def test_reconcile_accepts_canonical_reservation_key_but_not_wrong_system_or_stale_proof(env):
+    cfg,s,j,w=env;begin(w,j);ops=Operations(s)
+    op=ops.reserve(j,'pandadoc','create_signature_packet','closeout:form-1:pandadoc:m1',{})
+    def proof(system,created=None):
+        e=w.evidence(j,'remote_record','doc-1',{'system':system,'remote_id':'doc-1','url':'https://app.pandadoc.com/a/#/documents/doc-1',
+            'external_key':'Test Person T1 2025 (v2)','reservation_key':'closeout:form-1:pandadoc:m1'},True)
+        if created is not None: s.execute('UPDATE evidence SET created=? WHERE id=?',(created,e['id']))
+        return e['id']
+    with pytest.raises(ValueError,match='does not match'): ops.reconcile(j,op['id'],proof('storage'))
+    with pytest.raises(ValueError,match='does not match'): ops.reconcile(j,op['id'],proof('pandadoc',created=op_updated(s,op['id'])-1))
+    assert s.one('SELECT state FROM operations WHERE id=?',(op['id'],))['state']=='uncertain'
+    good=proof('pandadoc');confirmed=ops.reconcile(j,op['id'],good)
+    assert confirmed['state']=='confirmed' and confirmed['remote_id']=='doc-1' and json.loads(confirmed['result'])=={'evidence_id':good}
+    assert ops.reconcile(j,op['id'],good)['state']=='confirmed'
+
+
+def op_updated(s,oid): return s.one('SELECT updated FROM operations WHERE id=?',(oid,))['updated']
+
+
 def test_ambiguous_windows_and_controls_are_not_silently_chosen():
     windows=[{'title':'Taxprep - A'},{'title':'Taxprep - B'}]
     with pytest.raises(ValueError,match='ambiguous'): choose_window(windows,'Taxprep')
