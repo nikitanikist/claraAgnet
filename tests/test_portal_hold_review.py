@@ -133,6 +133,36 @@ def test_operator_mapping_requires_actual_delivered_packet_evidence(tmp_path, wr
         assert store.one('SELECT state FROM operations WHERE id=?',(op['id'],))['state'] == 'uncertain'
 
 
+@pytest.mark.parametrize('case', ['folder', 'packet_as_folder', 'folder_as_packet', 'other_system'])
+def test_operator_mapping_binds_storage_reservation_only_to_the_delivered_folder(tmp_path, case):
+    from clara.operations import Operations
+    config, store, job, identity = package(tmp_path)
+    folder_proof = store.one("SELECT * FROM evidence WHERE job_id=? AND kind='remote_record' AND payload LIKE '%\"system\": \"storage\"%'", (job['id'],))
+    packet_proof = store.one("SELECT * FROM evidence WHERE job_id=? AND kind='remote_record' AND payload LIKE '%pandadoc%'", (job['id'],))
+    assert folder_proof and packet_proof
+    folder_id = json.loads(folder_proof['payload'])['remote_id']
+    system = 'sharepoint' if case == 'other_system' else 'storage'
+    op = Operations(store).reserve(job, system, 'create_folder', 'CLARA-TEST-reserved-folder-key', {})
+    for proof in (folder_proof, packet_proof):
+        store.execute('UPDATE evidence SET created=? WHERE id=?', (time.time(), proof['id']))
+    if case == 'folder':
+        rows = review.reviewed_operations(store, BASE, identity, job['id'], {op['id']: folder_proof['id']})
+        assert rows[0]['remote_id'] == folder_id
+        assert rows[0]['reserved_key'] == 'CLARA-TEST-reserved-folder-key'
+        assert rows[0]['observed_key'] == json.loads(folder_proof['payload'])['external_key']
+        assert store.one('SELECT state FROM operations WHERE id=?', (op['id'],))['state'] == 'uncertain'
+        return
+    if case == 'folder_as_packet':
+        # A PandaDoc reservation can never be satisfied by the folder evidence.
+        Operations(store).confirm_absence(op['id'], 'Test: retire the storage reservation before the packet case.')
+        op = Operations(store).reserve(job, 'pandadoc', 'create_signature_packet', 'packet-key', {})
+        mapping = {op['id']: folder_proof['id']}
+    else:
+        mapping = {op['id']: packet_proof['id']}
+    with pytest.raises(ValueError):
+        review.reviewed_operations(store, BASE, identity, job['id'], mapping)
+
+
 @pytest.mark.parametrize('outcome', ['held', 'lost'])
 def test_missing_release_confirmation_keeps_local_hold(tmp_path, monkeypatch, outcome):
     config, store, job, identity = package(tmp_path)

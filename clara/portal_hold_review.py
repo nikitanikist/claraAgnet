@@ -28,7 +28,9 @@ def reviewed_operations(store, namespace, identity, jid, mappings):
     """An operator may bind a different display title to the reserved business key.
 
     The original key and evidence stay unchanged. Every mapping must point to
-    verified evidence for a packet in the acknowledged delivery of this attempt.
+    verified evidence for a packet, or for the one OneDrive folder, in the
+    acknowledged delivery of this attempt. A storage reservation may only be
+    bound to that delivered folder; PandaDoc reservations only to its packets.
     """
     row = store.one('''SELECT payload,receipt FROM portal_v1_outbox WHERE namespace=?
         AND external_job_id=? AND worker_id=? AND attempt_no=? AND fence_token=?
@@ -43,6 +45,7 @@ def reviewed_operations(store, namespace, identity, jid, mappings):
             receipt.get('handoff', {}).get('status') != 'ready_to_email'):
         raise ValueError('The portal has not confirmed Ready to Email.')
     packets = {a['remote_id'] for a in payload['artifacts'] if a['kind'] == 'pandadoc'}
+    folders = {a['remote_id'] for a in payload['artifacts'] if a['kind'] == 'onedrive_folder'}
     job = store.job(jid)
     operations = store.rows("SELECT * FROM operations WHERE scope_key=? AND state='uncertain'",
                             (job_scope(store, job),))
@@ -53,15 +56,20 @@ def reviewed_operations(store, namespace, identity, jid, mappings):
         evidence = store.one('SELECT * FROM evidence WHERE id=? AND job_id=? AND kind=? AND verified=1',
                              (mappings[op['id']], jid, 'remote_record'))
         proof = json.loads(evidence['payload']) if evidence else {}
-        if (not evidence or op['system'] != 'pandadoc' or op['operation'] != 'create_signature_packet'
-                or proof.get('system') != 'pandadoc' or proof.get('remote_id') not in packets
-                or evidence['created'] < op['updated']):
-            raise ValueError('The reviewed packet evidence does not match the saved delivery.')
+        if op['system'] == 'pandadoc':
+            matches = (op['operation'] == 'create_signature_packet'
+                       and proof.get('system') == 'pandadoc' and proof.get('remote_id') in packets)
+        elif op['system'] == 'storage':
+            matches = proof.get('system') == 'storage' and proof.get('remote_id') in folders
+        else:
+            matches = False
+        if not evidence or not matches or evidence['created'] < op['updated']:
+            raise ValueError('The reviewed packet or folder evidence does not match the saved delivery.')
         resolved.append({'operation_id': op['id'], 'evidence_id': evidence['id'],
                          'remote_id': proof['remote_id'], 'reserved_key': op['external_key'],
                          'observed_key': proof.get('external_key')})
     if len({r['remote_id'] for r in resolved}) != len(resolved):
-        raise ValueError('Different reservations must not be mapped to the same packet.')
+        raise ValueError('Different reservations must not be mapped to the same packet or folder.')
     return resolved
 
 

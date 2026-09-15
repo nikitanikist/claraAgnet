@@ -179,7 +179,11 @@ class WindowsHandoff:
         if self.general_task(jid):
             return await self.observe_general(jid)
         unknown, running = [], []
-        interrupted = self.store.job(jid)['status'] in {'failed', 'stopped', 'interrupted', 'cancelled'}
+        # Every locally ended attempt without a successful closeout receipt is
+        # reviewed the same way. 'incomplete' means a workflow stage's evidence
+        # stopped matching after the model finished; its desktop leftovers are
+        # unresolved observations for the operator, never proof of execution.
+        interrupted = self.store.job(jid)['status'] in {'failed', 'stopped', 'interrupted', 'cancelled', 'incomplete'}
         row = self.store.one('SELECT snapshot FROM portal_windows_baselines WHERE job_id=?', (jid,))
         if not self.exclusive or not self.qualified:
             unknown.append('windows-handoff-not-qualified')

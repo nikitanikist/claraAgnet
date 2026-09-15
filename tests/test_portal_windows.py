@@ -130,9 +130,13 @@ def test_failed_probe_persists_unknown_baseline_instead_of_retrying_it_as_clean(
     asyncio.run(scenario())
 
 
-def test_failed_restart_reviews_apps_without_counting_current_worker_as_old_execution(tmp_path):
+@pytest.mark.parametrize('status', ['failed', 'incomplete'])
+def test_failed_restart_reviews_apps_without_counting_current_worker_as_old_execution(tmp_path, status):
+    # 'incomplete' (a stage's evidence no longer matched after the model finished)
+    # is reviewed like a failed attempt: leftover apps are reviewable unknowns,
+    # not in-flight work that would block the portal's Review and continue.
     store, jid = task(tmp_path)
-    store.status(jid, 'failed')
+    store.status(jid, status)
     current = sample()
     observer = WindowsHandoff(store, exclusive=True, qualified=False,
                               probe=lambda: copy.deepcopy(current))
