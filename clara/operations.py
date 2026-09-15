@@ -41,8 +41,11 @@ class Operations:
         p=proof['payload']
         if op['state']=='confirmed' and json.loads(op['result'] or '{}').get('evidence_id')==evidence_id:
             return op
-        # A proof matches by the observed on-page key or by the canonical reservation key it was recorded under.
-        if p.get('system')!=op['system'] or op['external_key'] not in (p.get('external_key'),p.get('reservation_key')) or proof['created']<op['updated']:
+        # A proof matches by the observed on-page key, or by the canonical reservation key it was
+        # recorded under together with the operation that key stands for.
+        by_key=p.get('external_key')==op['external_key']
+        by_reservation=p.get('reservation_key')==op['external_key'] and p.get('reservation_operation')==op['operation']
+        if p.get('system')!=op['system'] or not (by_key or by_reservation) or proof['created']<op['updated']:
             raise ValueError('Evidence does not match this reserved operation.')
         self.store.execute("UPDATE operations SET state='confirmed',remote_id=?,result=?,updated=? WHERE id=?",
                            (p['remote_id'],json.dumps({'evidence_id':evidence_id,**({'auto':auto} if auto else {})}),time.time(),oid))

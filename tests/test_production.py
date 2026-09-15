@@ -152,7 +152,8 @@ def test_reconcile_accepts_canonical_reservation_key_but_not_wrong_system_or_sta
     op=ops.reserve(j,'pandadoc','create_signature_packet','closeout:form-1:pandadoc:m1',{})
     def proof(system,created=None):
         e=w.evidence(j,'remote_record','doc-1',{'system':system,'remote_id':'doc-1','url':'https://app.pandadoc.com/a/#/documents/doc-1',
-            'external_key':'Test Person T1 2025 (v2)','reservation_key':'closeout:form-1:pandadoc:m1'},True)
+            'external_key':'Test Person T1 2025 (v2)','reservation_key':'closeout:form-1:pandadoc:m1',
+            'reservation_operation':'create_signature_packet'},True)
         if created is not None: s.execute('UPDATE evidence SET created=? WHERE id=?',(created,e['id']))
         return e['id']
     with pytest.raises(ValueError,match='does not match'): ops.reconcile(j,op['id'],proof('storage'))
@@ -164,6 +165,17 @@ def test_reconcile_accepts_canonical_reservation_key_but_not_wrong_system_or_sta
 
 
 def op_updated(s,oid): return s.one('SELECT updated FROM operations WHERE id=?',(oid,))['updated']
+
+
+def test_reconcile_by_reservation_key_requires_the_reserved_operation(env):
+    cfg,s,j,w=env;begin(w,j);ops=Operations(s)
+    sent=ops.reserve(j,'pandadoc','send_document','closeout:form-1:pandadoc:m1',{})
+    e=w.evidence(j,'remote_record','doc-1',{'system':'pandadoc','remote_id':'doc-1','url':'https://app.pandadoc.com/a/#/documents/doc-1',
+        'external_key':'Test Person T1 2025 (v2)','reservation_key':'closeout:form-1:pandadoc:m1',
+        'reservation_operation':'create_signature_packet'},True)
+    # A packet-creation proof never confirms a differently named write under the same canonical key.
+    with pytest.raises(ValueError,match='does not match'): ops.reconcile(j,sent['id'],e['id'])
+    assert s.one('SELECT state FROM operations WHERE id=?',(sent['id'],))['state']=='uncertain'
 
 
 def test_ambiguous_windows_and_controls_are_not_silently_chosen():

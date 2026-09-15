@@ -147,11 +147,13 @@ def record_delivery(config, store, job, args):
             'system': 'pandadoc', 'remote_id': packet['remote_id'], 'url': packet['url'],
             'client_name': member['member_name'], 'external_key': packet['external_key'],
             'reservation_key': keys['pandadoc'][member['member_id']],
+            'reservation_operation': CLOSEOUT_OPERATIONS['pandadoc'],
             'observation_id': observation['id'], 'case_key': claim['closeout']['closeout_form_id'],
             'coverage': 'Worker-observed packet and recipient; portal verification still required.'}, True)['id'])
     storage = wf.evidence(job, 'remote_record', folder_id, {
         'system': 'storage', 'remote_id': folder_id, 'url': folder_url,
         'external_key': folder['external_key'], 'reservation_key': keys['storage']['folder'],
+        'reservation_operation': CLOSEOUT_OPERATIONS['storage'],
         'observation_id': folder_observation['id'],
         'case_key': claim['closeout']['closeout_form_id'], 'uploaded': uploaded,
         'coverage': 'Worker-observed Chrome records; not independent OneDrive API verification.'}, True)
