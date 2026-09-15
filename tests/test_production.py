@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import time
 import pytest
@@ -188,6 +189,65 @@ def test_ambiguous_windows_and_controls_are_not_silently_chosen():
 def test_skill_pack_preserves_operator_edits(env):
     cfg,s,j,w=env;p=cfg.skills/'cpa-t1-closeout'/'SKILL.md';p.write_text('Custom approved instructions')
     cfg.initialize();assert p.read_text()=='Custom approved instructions'
+
+
+def starter(tmp_path,monkeypatch,body):
+    import clara.config as config_module
+    package=tmp_path/'package'/'taxprep-fast-path';package.mkdir(parents=True,exist_ok=True)
+    text=f'---\nname: taxprep-fast-path\ndescription: Test starter\n---\n\n{body}\n'
+    (package/'SKILL.md').write_text(text,encoding='utf-8')
+    monkeypatch.setattr(config_module,'STARTER_SKILLS',package.parent)
+    return text,hashlib.sha256(text.encode()).hexdigest()
+
+
+def test_starter_skill_fresh_install_writes_sidecar(tmp_path,monkeypatch):
+    text,digest=starter(tmp_path,monkeypatch,'Version one');cfg=Config(tmp_path/'data')
+    assert cfg.initialize()==[]
+    target=cfg.skills/'taxprep-fast-path'
+    assert (target/'SKILL.md').read_text(encoding='utf-8')==text and (target/'.clara-starter.sha256').read_text()==digest+'\n'
+    assert not (cfg.data/'skills-update-pending.json').exists()
+
+
+def test_starter_skill_unmodified_install_is_refreshed(tmp_path,monkeypatch):
+    starter(tmp_path,monkeypatch,'Version one');cfg=Config(tmp_path/'data');cfg.initialize()
+    extra=cfg.skills/'taxprep-fast-path'/'notes.txt';extra.write_text('operator note')
+    text,digest=starter(tmp_path,monkeypatch,'Version two')
+    assert cfg.initialize()==[]
+    target=cfg.skills/'taxprep-fast-path'
+    assert (target/'SKILL.md').read_text(encoding='utf-8')==text and (target/'.clara-starter.sha256').read_text()==digest+'\n'
+    assert extra.read_text()=='operator note' and not (cfg.data/'skills-update-pending.json').exists()
+
+
+def test_starter_skill_local_edit_is_preserved_and_reported(tmp_path,monkeypatch):
+    starter(tmp_path,monkeypatch,'Version one');cfg=Config(tmp_path/'data');cfg.initialize()
+    target=cfg.skills/'taxprep-fast-path';target.joinpath('SKILL.md').write_text('Custom approved instructions')
+    old_sidecar=(target/'.clara-starter.sha256').read_text();_,digest=starter(tmp_path,monkeypatch,'Version two')
+    pending=cfg.initialize()
+    assert pending==[{'skill':'taxprep-fast-path','installed_sha256':hashlib.sha256(b'Custom approved instructions').hexdigest(),
+                      'packaged_sha256':digest,'reason':'locally_edited'}]
+    assert cfg.pending_skill_updates==pending and json.loads((cfg.data/'skills-update-pending.json').read_text())==pending
+    assert target.joinpath('SKILL.md').read_text()=='Custom approved instructions' and (target/'.clara-starter.sha256').read_text()==old_sidecar
+    starter(tmp_path,monkeypatch,'Version one')
+    assert cfg.initialize()==[] and not (cfg.data/'skills-update-pending.json').exists()
+    assert target.joinpath('SKILL.md').read_text()=='Custom approved instructions'
+
+
+def test_starter_skill_legacy_install_with_equal_content_gets_sidecar(tmp_path,monkeypatch):
+    text,digest=starter(tmp_path,monkeypatch,'Version one');cfg=Config(tmp_path/'data')
+    target=cfg.skills/'taxprep-fast-path';target.mkdir(parents=True);(target/'SKILL.md').write_text(text,encoding='utf-8')
+    assert cfg.initialize()==[]
+    assert (target/'.clara-starter.sha256').read_text()==digest+'\n' and not (cfg.data/'skills-update-pending.json').exists()
+
+
+def test_starter_skill_legacy_install_with_different_content_is_preserved_and_reported(tmp_path,monkeypatch):
+    _,digest=starter(tmp_path,monkeypatch,'Version two');cfg=Config(tmp_path/'data')
+    target=cfg.skills/'taxprep-fast-path';target.mkdir(parents=True);(target/'SKILL.md').write_text('Old or edited text')
+    pending=cfg.initialize()
+    assert pending==[{'skill':'taxprep-fast-path','installed_sha256':hashlib.sha256(b'Old or edited text').hexdigest(),
+                      'packaged_sha256':digest,'reason':'legacy_unknown'}]
+    assert json.loads((cfg.data/'skills-update-pending.json').read_text())==pending
+    assert (target/'SKILL.md').read_text()=='Old or edited text' and not (target/'.clara-starter.sha256').exists()
+    assert (cfg.skills/'cpa-t1-closeout'/'SKILL.md').exists()
 
 
 def test_portal_assignment_retries_do_not_duplicate_tasks(env):

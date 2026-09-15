@@ -1,12 +1,15 @@
 """Local application configuration. No model credentials are stored here."""
+import hashlib
 import json
 import os
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parent
 PROJECT = PACKAGE.parent
+STARTER_SKILLS = PACKAGE / "starter_skills"
+SIDECAR = ".clara-starter.sha256"
 
 
 def atomic_json(path: Path, value):
@@ -19,6 +22,7 @@ def atomic_json(path: Path, value):
 class Config:
     data: Path
     port: int = 8876
+    pending_skill_updates: list = field(default_factory=list, repr=False, compare=False)
 
     @property
     def workspace(self):
@@ -43,13 +47,53 @@ class Config:
                                 "read_roots": [], "browser_enabled": False,
                                 "desktop_enabled": False, "max_budget_usd": None,
                                 "default_execution_mode": "autonomous", "reasoning_effort":"medium"})
-        for source in (PACKAGE / "starter_skills").glob("*"):
-            target = self.skills / source.name
-            if source.is_dir() and not target.exists():
-                shutil.copytree(source, target)
+        self.pending_skill_updates = self.refresh_starter_skills()
         (self.workspace / "outputs").mkdir(exist_ok=True)
         from .skill_pack import install
         install(self)
+        return self.pending_skill_updates
+
+    def refresh_starter_skills(self):
+        """Install packaged starter skills; refresh unmodified installs, keep operator edits, report the rest."""
+        pending = []
+        for source in sorted(STARTER_SKILLS.glob("*")):
+            if not source.is_dir() or not (source / "SKILL.md").is_file():
+                continue
+            target = self.skills / source.name
+            sidecar = target / SIDECAR
+            packaged = _sha256(source / "SKILL.md")
+            if not target.exists():
+                shutil.copytree(source, target)
+                sidecar.write_text(packaged + "\n", encoding="utf-8")
+                continue
+            current = _sha256(target / "SKILL.md") if (target / "SKILL.md").is_file() else None
+            installed = sidecar.read_text(encoding="utf-8").strip() if sidecar.is_file() else None
+            if installed is None:
+                if current == packaged:
+                    sidecar.write_text(packaged + "\n", encoding="utf-8")
+                else:
+                    pending.append({"skill": source.name, "installed_sha256": current,
+                                    "packaged_sha256": packaged, "reason": "legacy_unknown"})
+            elif current != installed:
+                if packaged != installed:
+                    pending.append({"skill": source.name, "installed_sha256": current,
+                                    "packaged_sha256": packaged, "reason": "locally_edited"})
+            elif packaged != installed:
+                for file in sorted(source.rglob("*")):
+                    if not file.is_file():
+                        continue
+                    destination = target / file.relative_to(source)
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    temporary = destination.with_name(destination.name + ".tmp")
+                    shutil.copyfile(file, temporary)
+                    temporary.replace(destination)
+                sidecar.write_text(packaged + "\n", encoding="utf-8")
+        report = self.data / "skills-update-pending.json"
+        if pending:
+            atomic_json(report, pending)
+        else:
+            report.unlink(missing_ok=True)
+        return pending
 
     def settings(self):
         settings = json.loads(self.settings_file.read_text(encoding="utf-8"))
@@ -63,6 +107,10 @@ class Config:
     def read_roots(self):
         return [self.workspace.resolve(), (self.data / "attachments").resolve()] + [
             Path(p).expanduser().resolve() for p in self.settings()["read_roots"]]
+
+
+def _sha256(path: Path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def default_data():

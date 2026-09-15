@@ -3,6 +3,7 @@ import asyncio
 import json
 import os
 import subprocess
+import sys
 import webbrowser
 from pathlib import Path
 
@@ -21,7 +22,10 @@ def main():
     if not 1024 <= args.port <= 65535:
         parser.error("Choose a port from 1024 to 65535")
     config = Config(args.data_dir, args.port)
-    config.initialize()
+    for item in config.initialize():
+        print(f"Starter skill '{item['skill']}' has a packaged update that was not applied ({item['reason']}): "
+              f"installed {item['installed_sha256'] or 'missing'} vs packaged {item['packaged_sha256']}. "
+              "See skills-update-pending.json in the data folder.", file=sys.stderr)
     if args.command == "login":
         executable = cli_path()
         if not executable:
