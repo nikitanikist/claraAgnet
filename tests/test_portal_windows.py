@@ -289,3 +289,38 @@ def test_general_completion_still_requires_finished_work_receipt_and_current_des
         assert 'windows-settling' not in report['in_flight']
         assert report['unknown'] or report['in_flight']
     asyncio.run(scenario())
+
+
+def test_stopped_task_reaps_its_own_executors_but_never_applications(tmp_path):
+    config, store, claim, lease = setup(tmp_path)
+    jid = PortalBindings(store, BASE, WORKER).persist_claim(claim, 'Prepare this T1')['local_job_id']
+    manager = AgentManager(config, store)
+    reaped = []
+    async def reaper(root_pid, since, protected):
+        reaped.append((root_pid, since, list(protected)))
+        return {'root': root_pid, 'missing': False, 'terminated': [{'pid': 21, 'name': 'node.exe'}], 'failed': []}
+    manager.windows_handoff = WindowsHandoff(store, probe=lambda: sample(), reaper=reaper)
+    connected = asyncio.Event()
+    async def fake_execute(job, tracker, started, limit):
+        manager.cli_pids[job['id']] = 4242   # what _cli_pid reports once the SDK session is up
+        connected.set()
+        await asyncio.sleep(3600)
+    manager._execute = fake_execute
+    async def scenario():
+        worker = asyncio.create_task(manager.worker())
+        manager.queue.put_nowait(jid)
+        await asyncio.wait_for(connected.wait(), 5)
+        before = time.time()
+        await manager.cancel(jid)
+        for _ in range(50):
+            if reaped:
+                break
+            await asyncio.sleep(0.05)
+        worker.cancel()
+        await asyncio.gather(worker, return_exceptions=True)
+        assert len(reaped) == 1 and reaped[0][0] == 4242 and reaped[0][1] <= before
+        assert store.job(jid)['status'] == 'cancelled'
+        event = store.one("SELECT data FROM events WHERE job_id=? AND kind='executors_reaped'", (jid,))
+        assert json.loads(event['data'])['terminated'] == [{'pid': 21, 'name': 'node.exe'}]
+        assert jid not in manager.cli_pids and jid not in manager.job_started
+    asyncio.run(scenario())

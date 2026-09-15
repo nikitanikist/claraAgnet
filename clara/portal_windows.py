@@ -58,6 +58,29 @@ async def native_snapshot():
         return json.loads(data)
 
 
+async def native_reap(root_pid, since, protected):
+    """End leftover executor processes under root_pid through the desktop Python (which has psutil)."""
+    command = desktop_command()
+    if os.name != 'nt' or not command:
+        raise ValueError('Windows executor cleanup is unavailable.')
+    with tempfile.TemporaryFile() as output:
+        process = await asyncio.create_subprocess_exec(command[0], str(Path(__file__).with_name('windows_reap.py')),
+            str(int(root_pid)), repr(float(since)), *(str(int(pid)) for pid in protected),
+            env=clean_environment(), stdout=output, stderr=asyncio.subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW)
+        try:
+            await asyncio.wait_for(process.wait(), 30)
+        finally:
+            if process.returncode is None:
+                process.kill()
+                await process.wait()
+        output.seek(0)
+        data = output.read(100_001)
+        if process.returncode or len(data) > 100_000:
+            raise ValueError('Windows executor cleanup did not finish completely.')
+        return json.loads(data)
+
+
 def validate_snapshot(value):
     if not isinstance(value, dict) or type(value.get('version')) is not int or value['version'] != 1 or value.get('errors') != []:
         raise ValueError('Windows observation is incomplete.')
@@ -113,10 +136,31 @@ def baseline_issues(snapshot):
 
 
 class WindowsHandoff:
-    def __init__(self, store, *, exclusive=False, qualified=False, probe=native_snapshot, clock=time.monotonic):
+    def __init__(self, store, *, exclusive=False, qualified=False, probe=native_snapshot, clock=time.monotonic,
+                 reaper=native_reap):
         self.store, self.exclusive, self.qualified = store, exclusive, qualified
-        self.probe, self.clock = probe, clock
+        self.probe, self.clock, self.reaper = probe, clock, reaper
         self.clear_since = {}
+
+    async def reap_executors(self, jid, root_pid, since):
+        """End the model/script executors a finished or stopped task left running.
+
+        A bare cancellation of the SDK session can orphan the Claude CLI and its
+        MCP bridges; observe() would then report them as unfinished execution
+        for ever. Only executor processes under the task's CLI (or, when its PID
+        is unknown, under this worker) that started with the task are ended.
+        Applications stay open for the operator's review; this never authorizes
+        a handoff or changes any job state.
+        """
+        root = int(root_pid) if root_pid else os.getpid()
+        try:
+            result = await self.reaper(root, float(since), [os.getpid()])
+        except Exception as error:
+            result = {'root': root, 'error': type(error).__name__, 'terminated': [], 'failed': []}
+        job = self.store.job(jid)
+        if job:
+            self.store.event(job['conversation_id'], jid, 'executors_reaped', result)
+        return result
 
     def general_task(self, jid):
         row = self.store.one('SELECT claim_json FROM portal_v1_attempts WHERE local_job_id=?', (jid,))

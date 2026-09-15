@@ -22,6 +22,14 @@ from .diagnostics import usable_snapshot, tool_diagnostic, limit_message
 # Bound the transport separately from model turns, output tokens and budgets.
 SDK_MESSAGE_BUFFER_BYTES = 16 * 1024 * 1024
 
+
+def _cli_pid(client):
+    """The Claude CLI subprocess id of a connected SDK client, or None when the SDK hides it."""
+    try:
+        return int(client._transport._process.pid)
+    except (AttributeError, TypeError, ValueError):
+        return None
+
 SYSTEM = """You are Clara, a capable assistant working on this computer for its signed-in user.
 Complete the user's requested outcome by selecting tools, observing results, adjusting your plan,
 and verifying the result. There is no fixed tax-workflow script to follow. You can search files,
@@ -138,6 +146,8 @@ class AgentManager:
         self.execution_reservation = None
         self.reserved_jobs = set()
         self.windows_handoff = None
+        self.cli_pids = {}      # job id -> Claude CLI process id, once the SDK session is connected
+        self.job_started = {}   # job id -> wall-clock start, so leftover executors can be identified
 
     def assert_execution_permitted(self, job):
         guard = self.execution_guards.get(job["id"])
@@ -294,16 +304,28 @@ class AgentManager:
                 except Exception as error:
                     self.store.status(jid, "failed", message=f"{type(error).__name__}: {str(error)[:1500]}")
             finally:
+                await self._reap_executors(jid)
                 self.client = None
                 self.active_task = None
                 self.active_job = None
                 self.cancelled.discard(jid)
                 self.queue.task_done()
 
+    async def _reap_executors(self, jid):
+        """After a task ends for any reason, end the executors its SDK session left behind."""
+        cli_pid, since = self.cli_pids.pop(jid, None), self.job_started.pop(jid, None)
+        if self.windows_handoff is None or since is None or asyncio.current_task().cancelling():
+            return
+        try:
+            await self.windows_handoff.reap_executors(jid, cli_pid, since)
+        except Exception:
+            pass  # Cleanup must never change the recorded outcome of the task.
+
     async def execute(self, job):
         tracker = UsageTracker()
         tracker.query_started=False
         started = time.monotonic()
+        self.job_started[job['id']] = time.time()
         limit = self.config.settings().get("max_budget_usd")
         try:
             self.assert_execution_permitted(job)
@@ -532,6 +554,7 @@ class AgentManager:
         received_result = False
         async with asyncio.timeout(settings["task_timeout_minutes"] * 60):
             async with self.client:
+                self.cli_pids[job['id']] = _cli_pid(self.client)
                 emit("runtime", {"message": "Claude connected; starting the task", "auth": {"plan": auth["plan"], "api_fallback": False}})
                 self.assert_execution_permitted(job)
                 tracker.query_started=True
