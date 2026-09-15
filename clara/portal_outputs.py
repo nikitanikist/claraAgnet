@@ -139,4 +139,4 @@ def record_delivery(config, store, job, args):
         'document_evidence_ids': args['document_evidence_ids'], 'artifacts': artifacts}, True)
     return {'delivery_evidence_id': proof['id'], 'signature_evidence_ids': signing,
             'storage_evidence_id': storage['id'],
-            'next': 'Reconcile reserved writes with matching proofs and save the remaining checkpoints. Laureen performs final review.'}
+            'next': 'Reconcile reserved writes with matching proofs and save the remaining checkpoints. The staff member who assigned this closeout to Clara receives it in Ready to Email for review.'}

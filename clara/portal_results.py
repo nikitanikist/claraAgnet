@@ -97,7 +97,7 @@ class PortalResults:
             raise ValueError('The saved OneDrive files do not cover every required PDF distinctly.')
         return {**asdict(identity), 'idempotency_key': 'result-' + jid,
                 'outcome': 'completed_prepared', 'needs_review_reason': None,
-                'summary': 'T1 documents are in OneDrive. Signing packets and folder links are ready for Laureen to review; no email was sent.',
+                'summary': 'T1 documents are in OneDrive. Signing packets and folder links are prepared for review by the staff member who assigned this closeout to Clara; no email was sent.',
                 'artifacts': remotes, 'usage': portal_usage(job['usage'], **timing)}
 
     def saved_closeout_payload(self, identity, jid):

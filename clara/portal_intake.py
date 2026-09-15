@@ -45,6 +45,7 @@ def task_prompt(claim, messages, source_files=None):
         context = {'client_key': closeout['closeout_form_id'], 'year': closeout['tax_year'],
                    'members': [m['member_name'] for m in closeout['members']]}
     payload = {'kind': claim['kind'], 'assignment': claim['closeout'],
+               'assigned_by': claim['scope']['assigned_by'],
                'required_outputs': claim['required_outputs'],
                'onedrive_rules': claim['policy'].get('onedrive_rules'),
                'saved_checkpoint': claim.get('resume_from_checkpoint'),
@@ -56,7 +57,11 @@ def task_prompt(claim, messages, source_files=None):
         'select exact LW/T183/ECL rows, use Ctrl+R/Ctrl+P, and print by form across members. '
         'Laureen handles invoicing. Prepare the verified '
         'documents, recipient-specific PandaDoc shared links and OneDrive folder for human review. '
-        'The portal performs the Ready to Email handoff after verification. Never email the client, '
+        'The portal performs the Ready to Email handoff after verification, returning the closeout '
+        'to the staff account that assigned it to Clara, including a super admin who assigned it. '
+        'Laureen is the invoicing contact, not the default Ready to Email owner. '
+        'Use the recorded assignment identity; never infer the owner from a name, role, '
+        'OneDrive account or a prior example. Never email the client, '
         'sign, e-file, or mark the closeout finally completed. ProFile, T2 and T3 execution are unavailable. '
         'For general chat, answer the authorized information request without starting a tax closeout. '
         'An ordinary information request does not require a formal workflow or review checkpoint. '
