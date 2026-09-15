@@ -112,7 +112,7 @@ The observed problems are mostly workflow/tool/integration defects, not evidence
 - Synthetic drag actions misplaced fields. Current guidance requires supported drag/native pointer actions and a visual check against the actual signature line.
 - The SDK transport buffer was too small for a large tool message.
 - Completion evidence, remote-operation identity and portal handoff/release rules did not fit together reliably. The current editable-copy proof and reservation-key mismatch are concrete examples.
-- A held worker does not currently refresh idle claim presence, so the portal can say **offline** while the local server is still running. Starting another Clara process does not resolve the underlying hold.
+- A held worker did not refresh idle claim presence, so the portal could say **offline** while the local server was still running. Now a held or claim-unknown worker sends an idle `busy: false` heartbeat at most every `heartbeat_interval_s` (capped at 120 s, default 60 s), a rejected or ambiguous first claim is retried every 30 s, and unexpected runtime exceptions are logged (redacted) to `<data>/logs/portal-runtime.log` with the exception class name shown in the local status. Starting another Clara process does not resolve the underlying hold.
 
 The Windows model setting was read as **`opus`**, with medium reasoning configured. The exact resolved Claude model version was not captured. Do not invent a version or claim changing the model will fix these state/verification defects.
 

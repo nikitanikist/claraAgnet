@@ -26,8 +26,10 @@ from .portal_transport import PortalRejected, PortalUnavailable
 
 
 CLAIM_RETRY_S = 30
-PRESENCE_INTERVAL_S = 60
+PRESENCE_INTERVAL_S, PRESENCE_MIN_S, PRESENCE_MAX_S = 60, 10, 120
 RUNTIME_LOG_BYTES = 5 * 1024 * 1024
+# Quoted strings holding a separator, absolute POSIX paths, Windows drive and UNC paths.
+PATH_TOKEN = re.compile(r'''["'][^"'\n]*[/\\][^"'\n]*["']|(?<![\w:/])/[^\s"'/][^\s"']*|\b[A-Za-z]:[\\/][^\s"']*|\\\\[^\s"']+''')
 
 
 class PortalRuntime:
@@ -97,15 +99,20 @@ class PortalRuntime:
         self._presence_at = now
         try:
             reply = await self.transport.request('clara-heartbeat', {'worker_id': self.worker_id, 'busy': False})
-        except (PortalUnavailable, PortalRejected, ContractViolation):
-            return
+        except (PortalUnavailable, PortalRejected, ContractViolation, ValueError):
+            return  # Credential problems already surface through the claim path.
         interval = reply.body.get('heartbeat_interval_s')
-        if type(interval) is int and interval >= 1:
-            self._presence_interval = interval
+        self._presence_interval = max(PRESENCE_MIN_S, min(
+            interval if type(interval) is int else PRESENCE_INTERVAL_S, PRESENCE_MAX_S))
 
     def _diagnose(self, error):
-        message = redact_text(str(error))
+        if isinstance(error, OSError):
+            # OSError text carries filenames, which may be client folders.
+            message = f'errno={error.errno} {error.strerror or ""}'
+        else:
+            message = redact_text(str(error))
         message = re.sub(r'https?://\S+', '[url]', message)
+        message = PATH_TOKEN.sub('[path]', message)
         message = re.sub(r'\s+', ' ', message).strip()[:500]
         try:
             path = self.config.data / 'logs' / 'portal-runtime.log'

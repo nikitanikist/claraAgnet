@@ -419,6 +419,120 @@ def test_held_cycle_with_in_flight_work_announces_presence_once_per_interval(tmp
     asyncio.run(scenario())
 
 
+def held_in_flight_cycle(store, claim):
+    jid = PortalBindings(store, BASE, WORKER).persist_claim(claim, 'Synthetic interrupted task')['local_job_id']
+    store.status(jid, 'interrupted')
+    cycle_id = str(uuid4())
+    store.execute('INSERT INTO portal_v1_cycles VALUES(?,?,?,?,?,?,?,NULL,NULL)',
+                  (cycle_id, BASE, WORKER, 'held', json.dumps(claim), jid, time.time()))
+    return cycle_id
+
+
+def in_flight_observer(store, manager, namespace, identity, local_job_id):
+    return {'finished':[], 'in_flight':['tool:printing'], 'unknown':[],
+            'observed_at':'2026-09-14T00:00:00Z', 'complete':False}
+
+
+def test_presence_interval_is_capped_at_two_minutes(tmp_path):
+    config, store, claim, _ = setup(tmp_path)
+    general(claim)
+    cycle_id = held_in_flight_cycle(store, claim)
+    calls, executions, now = [], [], [100]
+    original_handler = portal_handler(claim, calls)
+    def handle(request):
+        if request.url.path.endswith('clara-heartbeat'):
+            calls.append(('clara-heartbeat', json.loads(request.content)))
+            return wire({**CONTRACT.document['fixtures']['clara-heartbeat']['response'], 'heartbeat_interval_s':3600})
+        return original_handler(request)
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+            manager = simulated_manager(config, store, executions)
+            await manager.start()
+            runtime = PortalRuntime(config, store, manager,
+                PortalTransport(BASE, lambda:'test', client=client, clock=lambda:now[0]), WORKER, observer=in_flight_observer)
+            try:
+                for tick, expected in [(100, 1), (159, 1), (219, 1), (220, 2), (339, 2), (340, 3)]:
+                    now[0] = tick
+                    assert await runtime.poll() == 'held'
+                    assert len([b for op,b in calls if op == 'clara-heartbeat']) == expected
+                assert not executions and manager.execution_reservation == cycle_id
+            finally:
+                await runtime.close()
+                await manager.close()
+    asyncio.run(scenario())
+
+
+def test_presence_failure_with_a_value_error_leaves_the_held_error_alone(tmp_path):
+    config, store, claim, _ = setup(tmp_path)
+    general(claim)
+    cycle_id = held_in_flight_cycle(store, claim)
+    calls, executions = [], []
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(portal_handler(claim, calls))) as client:
+            manager = simulated_manager(config, store, executions)
+            await manager.start()
+            transport = PortalTransport(BASE, lambda:'test', client=client, clock=lambda:100)
+            original_request = transport.request
+            async def request(operation, payload, **kw):
+                if operation == 'clara-heartbeat':
+                    raise ValueError('The configured portal worker credential is unavailable.')
+                return await original_request(operation, payload, **kw)
+            transport.request = request
+            runtime = PortalRuntime(config, store, manager, transport, WORKER, observer=in_flight_observer)
+            try:
+                assert await runtime.poll() == 'held'
+                assert 'unconfirmed' in runtime.error and 'credential' not in runtime.error
+                assert runtime.pending()['state'] == 'held' and runtime.pending()['error'] == runtime.error
+                assert manager.execution_reservation == cycle_id and not executions
+                assert 'clara-heartbeat' not in [op for op,_ in calls]
+            finally:
+                await runtime.close()
+                await manager.close()
+    asyncio.run(scenario())
+
+
+def test_unexpected_os_error_logs_no_file_name_or_path(tmp_path):
+    config, store, _, _ = setup(tmp_path)
+    executions = []
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: wire({}))) as client:
+            manager = simulated_manager(config, store, executions)
+            await manager.start()
+            runtime = PortalRuntime(config, store, manager,
+                PortalTransport(BASE, lambda:'test', client=client, clock=lambda:100), WORKER)
+            async def broken():
+                raise FileNotFoundError(2, 'No such file or directory', '/Users/clara/Clients/Smith Family/2025 T1 Return.pdf')
+            runtime.tick = broken
+            try:
+                await runtime.start()
+                async with asyncio.timeout(3):
+                    while runtime.error is None:
+                        await asyncio.sleep(0.01)
+                assert runtime.error.endswith('(FileNotFoundError)')
+                lines = (config.data / 'logs' / 'portal-runtime.log').read_text().splitlines()
+                assert len(lines) == 1 and ' FileNotFoundError errno=2 No such file or directory' in lines[0]
+                assert not any(part in lines[0] for part in ('/Users', 'Clients', 'Smith', 'T1 Return', '.pdf'))
+            finally:
+                await runtime.close()
+                await manager.close()
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('text', [
+    "Cannot open '/Users/clara/Clients/Smith/T1.pdf' for the report",
+    'Cannot open C:\\Users\\clara\\Clients\\Smith\\T1.pdf for the report',
+    'Cannot open \\\\server\\share\\Smith\\T1.pdf for the report',
+    'Cannot open "Clients\\Smith\\T1.pdf" for the report',
+    'Cannot open /Users/clara/Clients/Smith/T1.pdf for the report'])
+def test_diagnose_masks_path_like_tokens(tmp_path, text):
+    config, store, _, _ = setup(tmp_path)
+    runtime = PortalRuntime(config, store, None, PortalTransport(BASE, lambda:'test', client=httpx.AsyncClient()), WORKER)
+    runtime._diagnose(RuntimeError(text))
+    line = (config.data / 'logs' / 'portal-runtime.log').read_text()
+    assert line.endswith(' RuntimeError Cannot open [path] for the report\n')
+    assert 'Smith' not in line and 'T1.pdf' not in line
+
+
 @pytest.mark.parametrize('answer,outcome', [('released', 'idle'), ('hold', 'held'), ('claimed', 'finished')])
 def test_held_cycle_without_claim_retries_the_claim_after_thirty_seconds(tmp_path, answer, outcome):
     config, store, claim, _ = setup(tmp_path)
