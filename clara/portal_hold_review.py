@@ -20,7 +20,7 @@ from .portal_lease import AttemptIdentity
 from .portal_quiescence import observe_quiescence
 from .portal_recovery import saved_attempt
 from .portal_transport import PortalTransport, PortalRejected, PortalUnavailable
-from .portal_windows import native_snapshot, validate_snapshot
+from .portal_windows import native_snapshot, validate_snapshot, task_started_processes
 from .store import Store
 
 
@@ -73,17 +73,20 @@ def reviewed_operations(store, namespace, identity, jid, mappings):
     return resolved
 
 
-def check_desktop(snapshot):
+def check_desktop(snapshot, baseline=None):
     validate_snapshot(snapshot)
     if snapshot['print_jobs']:
         raise ValueError('Settle printing before review.')
     # A stopped service must not leave a model/browser/controller running. A
     # name is only a blocker here; it never authorizes terminating a process.
+    # With the task's saved baseline, programs that were already open before
+    # the task (and the helpers they spawn) are somebody else's, not leftovers.
     executors = {'claude.exe', 'node.exe', 'python.exe', 'pythonw.exe',
                  'chrome.exe', 'msedge.exe', 't1txp.exe', 'profile.exe',
                  'winword.exe', 'excel.exe', 'acrord32.exe', 'acrobat.exe'}
+    candidates = task_started_processes(snapshot, baseline) if baseline else snapshot['processes']
     if any(p.get('name', '').casefold() in executors and p['pid'] not in snapshot['ancestors']
-           for p in snapshot['processes']):
+           for p in candidates):
         raise ValueError('A separate model or controller process still needs review.')
 
 
@@ -104,11 +107,13 @@ async def release(config, identity, mappings, note, *, probe=native_snapshot, pa
     allowed = {'external-desktop-state-unconfirmed'} | {'operation:' + r['operation_id'] for r in resolved}
     if original['in_flight'] or set(original['unknown']) - allowed:
         raise ValueError('Unfinished tools, attachments or other actions still require review.')
+    saved = store.one('SELECT snapshot FROM portal_windows_baselines WHERE job_id=?', (jid,))
+    baseline = json.loads(saved['snapshot']) if saved else None
     first = await probe()
-    check_desktop(first)
+    check_desktop(first, baseline)
     await pause(3)
     second = await probe()
-    check_desktop(second)
+    check_desktop(second, baseline)
     if (any(first[k] != second[k] for k in ('owner', 'session', 'controller')) or
             abs(first['boot'] - second['boot']) > 2):
         raise ValueError('The observed desktop changed; inspect it again.')

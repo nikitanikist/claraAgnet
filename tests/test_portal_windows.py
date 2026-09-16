@@ -9,7 +9,7 @@ import pytest
 from clara.portal_bindings import PortalBindings
 from clara.portal_journal import PortalJournal
 from clara.agent import AgentManager
-from clara.portal_windows import WindowsHandoff, validate_snapshot, baseline_issues
+from clara.portal_windows import WindowsHandoff, validate_snapshot, baseline_issues, baseline_notes, task_started_processes
 from test_portal_delivery import BASE, WORKER, setup
 
 
@@ -84,12 +84,12 @@ def test_activity_and_uncertain_windows_observations_never_release(tmp_path, cha
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize('blocked', ['unqualified', 'shared', 'missing-baseline', 'interrupted', 'no-receipt', 'dirty-baseline'])
+@pytest.mark.parametrize('blocked', ['unqualified', 'shared', 'missing-baseline', 'interrupted', 'no-receipt', 'printing-baseline'])
 def test_operator_or_task_preconditions_cannot_be_replaced_by_a_quiet_desktop(tmp_path, blocked):
     store, jid = task(tmp_path)
     current = sample()
-    if blocked == 'dirty-baseline':
-        current['processes'].append({'pid': 55, 'created': 200, 'name': 'T1Txp.exe'})
+    if blocked == 'printing-baseline':
+        current['print_jobs'].append({'queue': 'printer', 'id': 1, 'status': 0})
     observer = WindowsHandoff(store, exclusive=blocked != 'shared', qualified=blocked != 'unqualified',
                               probe=lambda: copy.deepcopy(current))
     async def scenario():
@@ -99,8 +99,8 @@ def test_operator_or_task_preconditions_cannot_be_replaced_by_a_quiet_desktop(tm
             store.status(jid, 'interrupted')
         if blocked == 'no-receipt':
             store.execute("DELETE FROM portal_v1_outbox WHERE operation='clara-result'")
-        if blocked == 'dirty-baseline':
-            current['processes'].pop()
+        if blocked == 'printing-baseline':
+            current['print_jobs'].clear()
         report = await observer.observe(jid)
         assert not report['complete'] and report['unknown']
     asyncio.run(scenario())
@@ -219,12 +219,13 @@ def test_shell_helpers_require_actual_shell_pid_and_explorer_folders_still_block
     current['shell_pid'] = 20
     current['windows'] += [{'handle': 88, 'pid': 20, 'class': 'ThumbnailDeviceHelperWnd'},
                            {'handle': 89, 'pid': 20, 'class': 'EdgeUiInputTopWndClass'}]
-    assert baseline_issues(current) == []
+    assert baseline_issues(current) == [] and baseline_notes(current) == []
     current['windows'].append({'handle': 90, 'pid': 20, 'class': 'CabinetWClass'})
-    assert 'windows-baseline-applications-open' in baseline_issues(current)
+    assert 'pre-existing-application-windows' in baseline_notes(current)
     current['windows'].pop()
     current['windows'][1]['pid'] = 30
-    assert 'windows-baseline-applications-open' in baseline_issues(current)
+    assert 'pre-existing-application-windows' in baseline_notes(current)
+    assert baseline_issues(current) == [], 'programs already open are notes, never blockers'
 
 
 def general_task(tmp_path):
@@ -354,3 +355,95 @@ def test_a_new_windows_logon_reports_startup_executors_for_review_not_as_in_flig
                                                         {'pid': 72, 'created': 902, 'name': 'node.exe'}]
         assert (await observer.observe(jid))['in_flight'] == ['windows-process:72:902']
     asyncio.run(scenario())
+
+
+def crowded():
+    """A dedicated desktop that is not empty: the operator's browser, a chat client and an old TaxPrep."""
+    current = sample()
+    current['shell_pid'] = 20
+    current['processes'] += [{'pid': 20, 'created': 90, 'name': 'explorer.exe', 'parent': 1},
+                             {'pid': 40, 'created': 150, 'name': 'chrome.exe', 'parent': 20},
+                             {'pid': 41, 'created': 151, 'name': 'chrome.exe', 'parent': 40},
+                             {'pid': 42, 'created': 152, 'name': 'Messenger.exe', 'parent': 20},
+                             {'pid': 43, 'created': 153, 'name': 'T1Txp.exe', 'parent': 20}]
+    current['windows'] += [{'handle': 40, 'pid': 40, 'class': 'Chrome_WidgetWin_1'},
+                           {'handle': 42, 'pid': 42, 'class': 'TSoftrosLANMessenger'},
+                           {'handle': 43, 'pid': 43, 'class': 'TaxPrep'}]
+    return current
+
+
+def test_programs_open_before_the_task_and_their_helpers_are_not_claras_leftovers(tmp_path):
+    store, jid = task(tmp_path)
+    current, clock = crowded(), [0]
+    observer = WindowsHandoff(store, exclusive=True, qualified=True, probe=lambda: copy.deepcopy(current), clock=lambda: clock[0])
+    async def scenario():
+        assert await observer.begin(jid) == []
+        saved = json.loads(store.one('SELECT snapshot FROM portal_windows_baselines')['snapshot'])
+        assert set(saved['baseline_notes']) == {'pre-existing-application-windows', 'pre-existing-task-application'}
+        # The operator's browser spawns helpers for itself while Clara works; a helper's child is still the browser's.
+        current['processes'] += [{'pid': 60, 'created': 300, 'name': 'chrome.exe', 'parent': 40},
+                                 {'pid': 61, 'created': 301, 'name': 'chrome.exe', 'parent': 60}]
+        report = await observer.observe(jid)
+        assert report['unknown'] == [] and report['in_flight'] == ['windows-settling']
+        clock[0] = 4
+        assert (await observer.observe(jid))['complete']
+        # Anything Clara's own launch chain started is hers until it ends.
+        current['processes'].append({'pid': 70, 'created': 310, 'name': 'T1Txp.exe', 'parent': 10})
+        report = await observer.observe(jid)
+        assert 'windows-process:70:310' in report['unknown'] and not report['complete']
+        current['processes'].pop()
+        # A program whose launcher already exited stays hers: its parent pid is gone or reused.
+        current['processes'].append({'pid': 71, 'created': 311, 'name': 'AcroRd32.exe', 'parent': 999})
+        assert 'windows-process:71:311' in (await observer.observe(jid))['unknown']
+        current['processes'].pop()
+        # Started through the Windows shell (Start menu, Explorer): attributable to whoever clicked, so reviewed.
+        current['processes'].append({'pid': 72, 'created': 312, 'name': 'WINWORD.EXE', 'parent': 20})
+        assert 'windows-process:72:312' in (await observer.observe(jid))['unknown']
+        current['processes'].pop()
+        # A new window in a pre-existing program is still reviewed: Clara may have opened it.
+        current['windows'].append({'handle': 90, 'pid': 40, 'class': 'Chrome_WidgetWin_1'})
+        assert 'windows-window:90:40' in (await observer.observe(jid))['unknown']
+    asyncio.run(scenario())
+
+
+def test_task_started_processes_ignores_pid_reuse_and_unreadable_parents():
+    baseline = crowded()
+    current = copy.deepcopy(baseline)
+    # pid 40 (the operator's browser) exited and Windows reused its pid for a new program Clara's tool started.
+    current['processes'] = [p for p in current['processes'] if p['pid'] not in {40, 41}]
+    current['processes'] += [{'pid': 40, 'created': 500, 'name': 'T1Txp.exe', 'parent': 10},
+                             {'pid': 80, 'created': 501, 'name': 'AcroRd32.exe', 'parent': 40},
+                             {'pid': 81, 'created': 502, 'name': 'notepad.exe'}]  # no parent field at all
+    started = {p['pid'] for p in task_started_processes(current, baseline)}
+    assert started == {40, 80, 81}
+    # A baseline recorded by an older worker without parent identities still works on the current probe.
+    old = {'processes': [{'pid': p['pid'], 'created': p['created'], 'name': p['name']} for p in baseline['processes']]}
+    assert {p['pid'] for p in task_started_processes(current, old)} == {40, 80, 81}
+    assert task_started_processes(current, {'baseline_issues': ['windows-baseline-unavailable']}) == current['processes']
+
+
+def test_qualified_start_is_not_blocked_by_programs_someone_else_left_open(tmp_path):
+    config, store, claim, lease = setup(tmp_path)
+    jid = PortalBindings(store, BASE, WORKER).persist_claim(claim, 'Prepare this T1')['local_job_id']
+    manager = AgentManager(config, store)
+    manager.execution_guards[jid] = lease
+    manager.windows_handoff = WindowsHandoff(store, exclusive=True, qualified=True, probe=lambda: copy.deepcopy(crowded()))
+    ran = []
+    async def fake_execute(job, tracker, started, limit):
+        ran.append(job['id'])
+        store.status(job['id'], 'completed')
+    manager._execute = fake_execute
+    async def scenario():
+        await manager.execute(store.job(jid))
+        assert ran == [jid]
+    asyncio.run(scenario())
+    manager.windows_handoff = WindowsHandoff(store, exclusive=True, qualified=True,
+                                             probe=lambda: {**crowded(), 'print_jobs': [{'queue': 'p', 'id': 1, 'status': 0}]})
+    jid2 = PortalBindings(store, BASE, WORKER).persist_claim({**claim, 'job_id': str(__import__('uuid').uuid4()), 'fence_token': claim['fence_token'] + 1},
+                                                              'Prepare another T1')['local_job_id']
+    manager.execution_guards[jid2] = lease
+    async def blocked():
+        with pytest.raises(ValueError, match='No model work started'):
+            await manager.execute(store.job(jid2))
+    asyncio.run(blocked())
+    assert ran == [jid], "Clara's own active printing still blocks a qualified start"

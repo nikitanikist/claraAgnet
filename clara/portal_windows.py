@@ -108,6 +108,8 @@ def validate_snapshot(value):
         if (type(process.get('pid')) is not int or process['pid'] < 1 or
                 type(process.get('created')) not in {int, float} or not math.isfinite(process['created'])):
             raise ValueError('A Windows process lacks its creation identity.')
+        if 'parent' in process and (type(process['parent']) is not int or process['parent'] < 0):
+            raise ValueError('A Windows process has an unreadable parent identity.')
     return value
 
 
@@ -119,20 +121,62 @@ def window_key(row):
     return (row['handle'], row['pid'], row['class'])
 
 
+TASK_APPLICATIONS = {'chrome.exe', 'msedge.exe', 't1txp.exe', 'profile.exe', 'winword.exe', 'excel.exe',
+                     'acrord32.exe', 'acrobat.exe'}
+
+
 def baseline_issues(snapshot):
+    """Starting conditions that block a task: Clara's own printing still active."""
     issues = []
-    # Console hosts are retained so the operator can keep Clara's startup
-    # PowerShell open. Every other application window must start closed.
-    if any(not shell_surface(snapshot, w) and w['class'] not in CONSOLE_CLASSES for w in snapshot['windows']):
-        issues.append('windows-baseline-applications-open')
     if snapshot['print_jobs']:
         issues.append('windows-baseline-printing-active')
-    # Hidden instances of task applications cannot silently become baseline
-    # services; they could otherwise be reused without showing up as new PIDs.
-    names = {'chrome.exe', 'msedge.exe', 't1txp.exe', 'profile.exe', 'winword.exe', 'excel.exe', 'acrord32.exe', 'acrobat.exe'}
-    if any(p.get('name', '').casefold() in names for p in snapshot['processes']):
-        issues.append('windows-baseline-task-application-running')
     return issues
+
+
+def baseline_notes(snapshot):
+    """Programs already running before the task. They belong to whoever opened them.
+
+    A chat client, a browser or a tax application that predates the task is
+    not Clara's leftover and never holds the worker; it is kept in the baseline
+    for the audit trail and for the operator's cleanup review.
+    """
+    notes = []
+    # Console hosts are retained so the operator can keep Clara's startup PowerShell open.
+    if any(not shell_surface(snapshot, w) and w['class'] not in CONSOLE_CLASSES for w in snapshot['windows']):
+        notes.append('pre-existing-application-windows')
+    if any(p.get('name', '').casefold() in TASK_APPLICATIONS for p in snapshot['processes']):
+        notes.append('pre-existing-task-application')
+    return notes
+
+
+def task_started_processes(current, baseline):
+    """Processes that appeared after the baseline and are attributable to the task.
+
+    A leftover is something Clara started that is still running. A new process
+    is not hers when its parent (or that parent's parent, and so on) is a
+    program that was already running before the task and is neither the
+    worker's own launch chain nor the Windows shell: the helpers a pre-existing
+    browser or chat client spawns for itself are that program's business.
+    A process whose parent cannot be read, has already exited, or lives outside
+    this session stays attributed to the task, so nothing Clara launched can be
+    waved through once its launcher is gone.
+    """
+    before = {process_key(p) for p in baseline.get('processes', [])}
+    by_pid = {p['pid']: p for p in current['processes']}
+    own = set(current.get('ancestors', [])) | {current.get('shell_pid', 0)}
+    fresh = [p for p in current['processes'] if process_key(p) not in before]
+    foreign, settled = set(), False
+    while not settled:
+        settled = True
+        for p in fresh:
+            parent = p.get('parent') or 0
+            if p['pid'] in foreign or not parent or parent in own:
+                continue
+            row = by_pid.get(parent)
+            if parent in foreign or (row is not None and process_key(row) in before):
+                foreign.add(p['pid'])
+                settled = False
+    return [p for p in fresh if p['pid'] not in foreign]
 
 
 class WindowsHandoff:
@@ -208,12 +252,11 @@ class WindowsHandoff:
             return json.loads(existing['snapshot']).get('baseline_issues', ['windows-baseline-unavailable'])
         try:
             value = await self.take()
+            # Programs already open in the account are not another task and
+            # not Clara's leftovers. Their identities stay in the immutable
+            # baseline; only her own printing blocks a start.
             value['baseline_issues'] = baseline_issues(value)
-            if self.general_task(jid):
-                # An already-open application in the dedicated account is not
-                # another task. Keep its identity as the immutable baseline.
-                value['baseline_issues'] = [v for v in value['baseline_issues'] if v not in {
-                    'windows-baseline-applications-open', 'windows-baseline-task-application-running'}]
+            value['baseline_notes'] = baseline_notes(value)
         except Exception:
             value = {'baseline_issues': ['windows-baseline-unavailable']}
         self.store.execute('INSERT OR IGNORE INTO portal_windows_baselines VALUES(?,?)', (jid, json.dumps(value)))
@@ -251,12 +294,13 @@ class WindowsHandoff:
             # work. With the same controller still running, a new process behind an
             # ancestor's pid is somebody else's work and stays visible.
             restarted = current['controller'] != baseline.get('controller')
-            before = {process_key(p) for p in baseline.get('processes', [])}
-            # After a stopped attempt, an open app is an unresolved observation,
-            # not proof that it is still executing a tool. Let the existing
-            # operator reconciliation review those exact identities. Detached
-            # model/script executors and printing still block continuation.
-            # The restarted observer and its own launch ancestors cannot be
+            # After a stopped attempt, an open app Clara started is an unresolved
+            # observation, not proof that it is still executing a tool. Let the
+            # existing operator reconciliation review those exact identities.
+            # Detached model/script executors and printing still block
+            # continuation. Programs that predate the task, and the helpers they
+            # spawn for themselves, are not hers (task_started_processes). The
+            # restarted observer and its own launch ancestors cannot be
             # unfinished work from the old attempt. Its changed identity stays
             # in unknown above; this never grants automatic handoff. After a
             # new Windows logon or boot, nothing from the old attempt survived,
@@ -264,9 +308,7 @@ class WindowsHandoff:
             # not execution still in flight.
             executors = {'python.exe', 'pythonw.exe', 'node.exe', 'claude.exe',
                          'powershell.exe', 'pwsh.exe', 'cmd.exe', 'wscript.exe', 'cscript.exe'}
-            for p in current['processes']:
-                if process_key(p) in before:
-                    continue
+            for p in task_started_processes(current, baseline):
                 if interrupted and restarted and p['pid'] in current['ancestors']:
                     continue
                 ref = f"windows-process:{p['pid']}:{p['created']}"
@@ -320,12 +362,11 @@ class WindowsHandoff:
             current = await self.take()
             if not same_execution_session(current, baseline):
                 unknown.append('windows-session-or-controller-changed')
-            before = {process_key(p) for p in baseline.get('processes', [])}
             visible = set(current.get('ui_process_ids', [])) | {w['pid'] for w in current['windows']}
             controllers = {'python.exe', 'pythonw.exe', 'node.exe', 'claude.exe', 'powershell.exe',
                            'pwsh.exe', 'cmd.exe', 'wscript.exe', 'cscript.exe'}
-            for p in current['processes']:
-                if process_key(p) not in before and (p['pid'] not in visible or p.get('name', '').casefold() in controllers):
+            for p in task_started_processes(current, baseline):
+                if p['pid'] not in visible or p.get('name', '').casefold() in controllers:
                     running.append(f"windows-process:{p['pid']}:{p['created']}")
             running.extend(f"windows-print:{p['queue']}:{p['id']}" for p in current['print_jobs'])
         except Exception:

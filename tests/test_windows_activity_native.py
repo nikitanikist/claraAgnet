@@ -47,7 +47,7 @@ def test_native_probe_tracks_a_background_process_without_client_content():
         assert len(observed['owner']) == 64
         assert any(p['pid'] == child.pid and p['created'] > 0 for p in observed['processes'])
         assert all(set(w) == {'handle', 'pid', 'class'} for w in observed['windows'])
-        assert all(set(p) == {'pid', 'created', 'name'} for p in observed['processes'])
+        assert all(set(p) == {'pid', 'created', 'name', 'parent'} for p in observed['processes'])
         assert all(set(j) == {'queue', 'id', 'status'} for j in observed['print_jobs'])
         assert isinstance(observed['interactive'], bool)
         assert isinstance(observed['ui_process_ids'], list)

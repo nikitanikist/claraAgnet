@@ -107,7 +107,12 @@ def snapshot(controller_pid):
             # exclude other console hosts or the controller's task children.
             if own_probe_console(process, os.getpid(), observer_created, os.environ['SystemRoot']):
                 continue
-            result['processes'].append({'pid': pid, 'created': process.create_time(), 'name': process.name()})
+            try:
+                parent = int(process.ppid())
+            except (OSError, psutil.Error):
+                parent = 0  # Unknown parentage keeps the process attributed to the task.
+            result['processes'].append({'pid': pid, 'created': process.create_time(), 'name': process.name(),
+                                        'parent': parent})
         except psutil.NoSuchProcess:
             continue
         except (OSError, psutil.AccessDenied):

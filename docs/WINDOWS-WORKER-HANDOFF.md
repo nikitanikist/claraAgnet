@@ -29,16 +29,18 @@ ThumbnailDeviceHelperWnd and EdgeUiInputTopWndClass are also shell surfaces only
 After result reporting, WindowsHandoff takes fresh observations. Automatic release requires all of the following:
 
 - The configured session is dedicated and has passed Windows qualification.
-- The baseline was complete, interactive and clear of existing application windows, hidden TaxPrep/Chrome/Office instances and pending printing. Clara's startup console and Windows shell can stay open.
+- The baseline was complete and interactive, with no current-account print job pending. Programs that were already open (a browser, a chat client, a TaxPrep instance) are recorded as baseline notes; they belong to whoever opened them and never block a start or a release.
 - The same Windows account, session, boot and controller process remain. A reused PID with a different creation time is a different process.
-- Every new current-session process and visible window has gone, and all configured queues were readable with no remaining current-account print job. Paused, retained or failed print jobs are not treated as finished.
+- Every process the task started and every new visible window has gone, and all configured queues were readable with no remaining current-account print job. Paused, retained or failed print jobs are not treated as finished.
+
+**What counts as a leftover.** A leftover is something Clara started during the task that is still running or open when she finishes: a process that did not exist at the baseline and is attributable to the task, a visible window that did not exist at the baseline, or a print job of her account. A new process is *not* hers when its parent, or that parent's parent, is a program that was already running before the task and is neither the worker's own launch chain nor the Windows shell: the helper processes a pre-existing browser or chat client spawns for itself are that program's business (`task_started_processes` in `clara/portal_windows.py`). A process whose parent cannot be read, has exited, or lives outside the session stays attributed to the task, so nothing Clara launched is waved through once its launcher is gone. New windows are always reviewed, even inside a pre-existing program, because Clara may have opened them.
 - A successful T1 TaxPrep preparation result for this exact attempt has an acknowledged portal receipt. General desktop tasks and interrupted/failed tasks still require review.
 - Two clear observations are separated by at least three seconds. Any activity or incomplete observation resets that settling interval.
 - The existing executor, tool, external-operation and attachment checks are also clear, and the portal returns its release receipt. Windows observations cannot clear another unresolved operation.
 
-The model gets one cleanup reminder with newly observed application windows. It must verify saved outputs/uploads and use normal close controls only for task-owned windows. The observer never closes applications, kills task processes, discards unsaved work or interprets a vanished window as proof of an upload. Remote record and output verification remain separate requirements.
+The model gets one cleanup reminder with newly observed application windows. It must verify saved outputs/uploads and close the windows it opened with normal close controls. Programs other people had open before the task are left alone unless one blocked the work, and unsaved work that is not Clara's is never discarded. The observer never closes applications, kills task processes, discards unsaved work or interprets a vanished window as proof of an upload. Remote record and output verification remain separate requirements.
 
-An unreadable session/printer, still-running browser or application, changed controller after restart, or incomplete task remains held. This is an observational handoff for the supported dedicated T1 workflow, not a sandbox or proof about arbitrary scheduled commands, Windows services or unknown application integrations. Do not qualify new workflows by reusing this flag without testing their external activities.
+An unreadable session/printer, a still-running browser or application that the task started, a changed controller after restart, or an incomplete task remains held. This is an observational handoff for the supported dedicated T1 workflow, not a sandbox or proof about arbitrary scheduled commands, Windows services or unknown application integrations. Do not qualify new workflows by reusing this flag without testing their external activities.
 
 ## Local configuration
 
@@ -53,7 +55,7 @@ In the existing protocol-v1 portal.json, add:
 
 Keep `enabled: false` during deployment/setup. On an enabled portal worker, `exclusive_session` enables baseline capture and diagnostics; `qualified: false` keeps the automatic release gate closed. After native observations and a test task's cleanup have been reviewed, qualification can be enabled for the supervised two-task acceptance test below. Keep it enabled for general staff use only after that test passes. Changes require a Clara restart. Existing local-only conversations are unaffected. No model tool can change the in-memory qualification flags.
 
-With qualification enabled, an unavailable/dirty initial desktop fails before any model query or application action. Close task applications before the first queued run. Staff should use the portal on their own computers, leaving the dedicated worker desktop for Clara. Chrome's separate profile retains website sign-in storage when its task window closes.
+With qualification enabled, an unavailable desktop or pending printing of Clara's account fails the task before any model query or application action. Programs already open in the account do not block it; Clara may close one that stands in the way of her work. Staff should use the portal on their own computers, leaving the dedicated worker desktop for Clara. Chrome's separate profile retains website sign-in storage when its task window closes.
 
 ## Releasing a completed test after operator review
 

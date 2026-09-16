@@ -180,3 +180,19 @@ def test_missing_release_confirmation_keeps_local_hold(tmp_path, monkeypatch, ou
     asyncio.run(scenario())
     assert store.one('SELECT finished FROM portal_v1_cycles')['finished'] is None
     assert len(store.rows('SELECT * FROM jobs')) == 1
+
+
+def test_review_ignores_programs_that_were_open_before_the_task():
+    baseline = snapshot()
+    baseline['processes'] += [{'pid': 8, 'created': 102., 'name': 'chrome.exe', 'parent': 3},
+                              {'pid': 9, 'created': 103., 'name': 't1txp.exe', 'parent': 3}]
+    value = snapshot()
+    value['processes'] += [{'pid': 8, 'created': 102., 'name': 'chrome.exe', 'parent': 3},
+                           {'pid': 9, 'created': 103., 'name': 't1txp.exe', 'parent': 3},
+                           {'pid': 12, 'created': 300., 'name': 'chrome.exe', 'parent': 8}]  # the browser's own helper
+    review.check_desktop(value, baseline)
+    with pytest.raises(ValueError):
+        review.check_desktop(value)  # without the task's baseline nothing can be attributed
+    value['processes'].append({'pid': 13, 'created': 301., 'name': 't1txp.exe', 'parent': 7})
+    with pytest.raises(ValueError):
+        review.check_desktop(value, baseline)
