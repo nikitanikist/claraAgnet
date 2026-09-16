@@ -125,6 +125,14 @@ def window_key(row):
     return (row['handle'], row['pid'], row['class'])
 
 
+# Windows starts these for itself as a side effect of ordinary use (typing opens
+# ctfmon and the touch-keyboard hosts; consoles get a conhost; hosted apps get
+# a broker). They are never a task's unfinished work and never a leftover.
+WINDOWS_HELPERS = {'ctfmon.exe', 'tabtip.exe', 'tabtip32.exe', 'textinputhost.exe', 'runtimebroker.exe',
+                   'dllhost.exe', 'backgroundtaskhost.exe', 'searchhost.exe', 'shellexperiencehost.exe',
+                   'startmenuexperiencehost.exe', 'sihost.exe', 'conhost.exe', 'openconsole.exe',
+                   'applicationframehost.exe', 'smartscreen.exe', 'wmiprvse.exe', 'taskhostw.exe',
+                   'fontdrvhost.exe', 'dwm.exe', 'audiodg.exe'}
 TASK_APPLICATIONS = {'chrome.exe', 'msedge.exe', 't1txp.exe', 'profile.exe', 'winword.exe', 'excel.exe',
                      'acrord32.exe', 'acrobat.exe'}
 
@@ -151,6 +159,17 @@ def baseline_notes(snapshot):
     if any(p.get('name', '').casefold() in TASK_APPLICATIONS for p in snapshot['processes']):
         notes.append('pre-existing-task-application')
     return notes
+
+
+def own_launch_chain(process, current):
+    """The restarted worker itself, its launchers, or a helper a launcher opened (its console).
+
+    The worker's own descendants are NOT covered: they are the task's executors.
+    """
+    ancestors = set(current.get('ancestors', []))
+    controller = (current.get('controller') or [None])[0]
+    parent = process.get('parent') or 0
+    return process['pid'] in ancestors or (parent in ancestors and parent != controller)
 
 
 def task_started_processes(current, baseline):
@@ -336,7 +355,9 @@ class WindowsHandoff:
             executors = {'python.exe', 'pythonw.exe', 'node.exe', 'claude.exe',
                          'powershell.exe', 'pwsh.exe', 'cmd.exe', 'wscript.exe', 'cscript.exe'}
             for p in task_started_processes(current, baseline):
-                if interrupted and restarted and p['pid'] in current['ancestors']:
+                if p.get('name', '').casefold() in WINDOWS_HELPERS:
+                    continue
+                if interrupted and restarted and own_launch_chain(p, current):
                     continue
                 ref = f"windows-process:{p['pid']}:{p['created']}"
                 if interrupted and (not same_logon or p.get('name', '').casefold() not in executors):
@@ -396,7 +417,9 @@ class WindowsHandoff:
             controllers = {'python.exe', 'pythonw.exe', 'node.exe', 'claude.exe', 'powershell.exe',
                            'pwsh.exe', 'cmd.exe', 'wscript.exe', 'cscript.exe'}
             for p in task_started_processes(current, baseline):
-                if restarted and p['pid'] in current['ancestors']:
+                if p.get('name', '').casefold() in WINDOWS_HELPERS:
+                    continue
+                if restarted and own_launch_chain(p, current):
                     continue
                 if p['pid'] not in visible or p.get('name', '').casefold() in controllers:
                     running.append(f"windows-process:{p['pid']}:{p['created']}")

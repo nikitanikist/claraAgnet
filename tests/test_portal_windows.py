@@ -157,7 +157,8 @@ def test_failed_restart_reviews_apps_without_counting_current_worker_as_old_exec
         report = await observer.observe(jid)
         assert report['in_flight'] == []
         assert not report['complete']
-        expected = {'windows-process:30:230', 'windows-process:31:231',
+        # The console host (pid 31) is one of the helpers Windows starts for itself: never a leftover.
+        expected = {'windows-process:30:230',
                     'windows-window:30:30', 'windows-session-or-controller-changed', 'windows-handoff-not-qualified'}
         if status not in {'needs_review', 'completed'}:
             expected.add('windows-interrupted-task-needs-review')  # a finished model turn is reviewed by the portal instead
@@ -513,4 +514,46 @@ def test_a_restarted_worker_is_not_the_finished_general_requests_unfinished_work
         # Anything else that started with the request is still reported.
         current['processes'].append({'pid': 30, 'created': 230, 'name': 'node.exe', 'parent': 999})
         assert (await observer.observe(jid))['in_flight'] == ['windows-process:30:230']
+    asyncio.run(scenario())
+
+
+def test_windows_text_input_helpers_and_the_restarted_services_console_are_never_leftovers(tmp_path):
+    # Observed 16 Sep 2026: typing in Softros started ctfmon/TabTip, and the service restart
+    # added powershell + python + conhost + OpenConsole; all seven held the worker.
+    store, jid = task(tmp_path)
+    current, clock = sample(), [0]
+    observer = WindowsHandoff(store, exclusive=True, qualified=True, probe=lambda: copy.deepcopy(current), clock=lambda: clock[0])
+    async def scenario():
+        await observer.begin(jid)
+        current['processes'] += [{'pid': 24260, 'created': 300, 'name': 'ctfmon.exe'},
+                                 {'pid': 81944, 'created': 300, 'name': 'TabTip.exe'},
+                                 {'pid': 81776, 'created': 301, 'name': 'TabTip32.exe'}]
+        assert (await observer.observe(jid))['in_flight'] == ['windows-settling'], 'text-input helpers are not work'
+        # The service restarts: new launch chain powershell 11004 -> python 55648, with consoles.
+        current.update(controller=[55648, 402], ancestors=[11004, 55648])
+        current['processes'] += [{'pid': 11004, 'created': 401, 'name': 'powershell.exe', 'parent': 1},
+                                 {'pid': 55648, 'created': 402, 'name': 'python.exe', 'parent': 11004},
+                                 {'pid': 46812, 'created': 401, 'name': 'conhost.exe', 'parent': 11004},
+                                 {'pid': 87272, 'created': 401, 'name': 'OpenConsole.exe', 'parent': 11004}]
+        report = await observer.observe(jid)
+        assert report['in_flight'] == [] and not any(r.startswith('windows-process') for r in report['unknown'])
+        assert 'windows-session-or-controller-changed' in report['unknown']
+        # A process the worker's own python started IS still the task's (an executor): reported.
+        current['processes'].append({'pid': 60000, 'created': 500, 'name': 'node.exe', 'parent': 55648})
+        report = await observer.observe(jid)
+        assert 'windows-process:60000:500' in report['in_flight'] + report['unknown']
+    asyncio.run(scenario())
+
+
+def test_general_requests_ignore_windows_helpers_too(tmp_path):
+    store, jid = general_task(tmp_path)
+    current, clock = sample(), [0]
+    observer = WindowsHandoff(store, exclusive=True, probe=lambda: copy.deepcopy(current), clock=lambda: clock[0])
+    async def scenario():
+        await observer.begin(jid)
+        current['processes'] += [{'pid': 24260, 'created': 300, 'name': 'ctfmon.exe'},
+                                 {'pid': 81944, 'created': 300, 'name': 'TabTip.exe'}]
+        assert (await observer.observe(jid))['in_flight'] == ['windows-settling']
+        clock[0] = 4
+        assert (await observer.observe(jid))['complete']
     asyncio.run(scenario())
