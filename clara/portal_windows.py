@@ -239,6 +239,10 @@ class WindowsHandoff:
             current = await self.take()
             if not same_execution_session(current, baseline):
                 unknown.append('windows-session-or-controller-changed')
+            # A restarted worker in the same logon can still have orphaned executors
+            # of the old attempt; a new logon or boot cannot.
+            same_logon = (current['session'] == baseline.get('session')
+                          and type(baseline.get('boot')) in {int, float} and abs(current['boot'] - baseline['boot']) <= 2)
             before = {process_key(p) for p in baseline.get('processes', [])}
             # After a stopped attempt, an open app is an unresolved observation,
             # not proof that it is still executing a tool. Let the existing
@@ -246,7 +250,10 @@ class WindowsHandoff:
             # model/script executors and printing still block continuation.
             # The restarted observer and its own launch ancestors cannot be
             # unfinished work from the old attempt. Its changed identity stays
-            # in unknown above; this never grants automatic handoff.
+            # in unknown above; this never grants automatic handoff. After a
+            # new Windows logon or boot, nothing from the old attempt survived,
+            # so every process of the new session is an observation to review,
+            # not execution still in flight.
             executors = {'python.exe', 'pythonw.exe', 'node.exe', 'claude.exe',
                          'powershell.exe', 'pwsh.exe', 'cmd.exe', 'wscript.exe', 'cscript.exe'}
             for p in current['processes']:
@@ -255,7 +262,7 @@ class WindowsHandoff:
                 if interrupted and p['pid'] in current['ancestors']:
                     continue
                 ref = f"windows-process:{p['pid']}:{p['created']}"
-                if interrupted and p.get('name', '').casefold() not in executors:
+                if interrupted and (not same_logon or p.get('name', '').casefold() not in executors):
                     unknown.append(ref)
                 else:
                     running.append(ref)

@@ -324,3 +324,31 @@ def test_stopped_task_reaps_its_own_executors_but_never_applications(tmp_path):
         assert json.loads(event['data'])['terminated'] == [{'pid': 21, 'name': 'node.exe'}]
         assert jid not in manager.cli_pids and jid not in manager.job_started
     asyncio.run(scenario())
+
+
+def test_a_new_windows_logon_reports_startup_executors_for_review_not_as_in_flight(tmp_path):
+    store, jid = task(tmp_path)
+    store.status(jid, 'incomplete')
+    current = sample()
+    observer = WindowsHandoff(store, exclusive=True, qualified=True, probe=lambda: copy.deepcopy(current))
+    async def scenario():
+        await observer.begin(jid)
+        # The server logged the account on again: new session id, new controller,
+        # and the logon chain (shell, PowerShell, Clara) all started fresh.
+        current.update(session=4, controller=[70, 900], ancestors=[69, 70])
+        current['processes'] = [{'pid': 69, 'created': 899, 'name': 'powershell.exe'},
+                                {'pid': 70, 'created': 900, 'name': 'python.exe'},
+                                {'pid': 71, 'created': 901, 'name': 'cmd.exe'},
+                                {'pid': 72, 'created': 902, 'name': 'node.exe'}]
+        report = await observer.observe(jid)
+        assert report['in_flight'] == []
+        assert 'windows-session-or-controller-changed' in report['unknown']
+        assert {'windows-process:71:901', 'windows-process:72:902'} <= set(report['unknown'])
+        assert not report['complete']
+        # A restarted worker in the same logon: an orphaned executor is still unfinished execution.
+        current.update(session=3, controller=[70, 900], ancestors=[69, 70])
+        current['processes'] = sample()['processes'] + [{'pid': 69, 'created': 899, 'name': 'powershell.exe'},
+                                                        {'pid': 70, 'created': 900, 'name': 'python.exe'},
+                                                        {'pid': 72, 'created': 902, 'name': 'node.exe'}]
+        assert (await observer.observe(jid))['in_flight'] == ['windows-process:72:902']
+    asyncio.run(scenario())
