@@ -685,11 +685,11 @@ def test_idle_or_waiting_worker_keeps_the_windows_session_alive_but_not_while_wo
                 manager.active_job = jid
                 store.status(jid, 'running')
                 now[0] = 700
-                await runtime.poll()
+                runtime._keep_session_alive()
                 assert touches == [100, 341]
                 # Waiting for a person's answer can take hours; the session must survive.
                 store.status(jid, 'waiting')
-                await runtime.poll()
+                runtime._keep_session_alive()
                 assert touches == [100, 341, 700]
             finally:
                 manager.active_job = None
