@@ -27,6 +27,8 @@ A wait is a ceiling, not a sleep. A dialog a keystroke opens appears in about a 
 
 Resolve the source path, tax year, exact full member names, required documents and output folder once from the closeout. Source names are inconsistently cased (`Singh, Inder pal and AURORA, AMRITA`): match case-insensitively. Files under `O:\Clearhouse Clara agent\Profile files\` are live client returns.
 
+**The closeout usually names a folder, not a file.** Real closeouts give a path like `E:\CH Client Files\T\Trimaxx - Vikram Karwal\Personal Tax\2025`, with no file name on the end. When the path has no file name, list that folder and find the return inside it: a `.25T`, or a shortcut pointing at one. Exactly one candidate is the ordinary case, so use it. Several returns, or none at all, is a stop and ask, never a pick: choosing the wrong file here means preparing the wrong person's return. Record which file you chose, and the folder you chose it from, in the source-copy checkpoint.
+
 **The client folder usually holds a Windows shortcut, not the return.** Staff place a shortcut such as `Karwal, Vikram.25T - Shortcut` in the client's own folder, laid out as `CH Client Files\{initial}\{Client folder}\Personal Tax\{year}\` (Laureen, 16 September 2026). Explorer shows it as Type `Shortcut` at a few KB. It is a pointer: it holds no tax data, and copying or opening it as if it were the return gives you a 5 KB link file instead of a client's return.
 
 Resolve it before anything else, and work only from the resolved target:

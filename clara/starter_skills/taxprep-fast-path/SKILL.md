@@ -33,6 +33,8 @@ If the exact row or expected content is absent, take one targeted observation an
 
 For taxpayer/spouse, Alt+F7 toggles between those two members and preserves the form; allow about 1.5 s for the change. It does **not** reach dependants. For larger households use the named client selector and match the person's full consecutive name; the file/group row is not a person. Confirm the member in the Save As default name and resulting PDF even when the switch appeared successful.
 
+**The closeout may name a folder rather than a file.** Real closeouts give a path like `E:\CH Client Files\V\Varun Anand\Personal Tax\2025`, with no file name on the end. List that folder and find the return in it, a `.125` or a shortcut to one. Exactly one candidate is ordinary; several, or none, is a stop and ask rather than a pick, because the wrong file here is another person's return. Record the file you chose and the folder it came from in the source-copy checkpoint.
+
 **A client folder may give you a shortcut instead of the return.** Staff place Windows shortcuts (`... - Shortcut`, Type `Shortcut`, a few KB) in the client's folder alongside the real file. A shortcut holds no tax data, so copying or opening one gives you a link file, not a return. If the path ends `.lnk`, is named `... - Shortcut`, or is only a few KB, read its target with `(New-Object -ComObject WScript.Shell).CreateShortcut('<full path>').TargetPath`, check that the target exists, has the right extension, is a plausible size and names the client this closeout names, and work only from that resolved path. Record both paths in the source-copy checkpoint. A target that is missing, names another client or sits outside the folders you may read is a stop and ask.
 
 ## Spend turns sparingly
