@@ -9,6 +9,7 @@ import time
 
 from .portal_control import PortalControl
 from .portal_lease import LeaseLost
+from .portal_preview import PreviewLoop
 from .portal_progress import PortalProgress
 from .portal_transport import PortalUnavailable
 
@@ -18,11 +19,14 @@ TERMINAL = frozenset({'completed', 'needs_review', 'incomplete', 'failed',
 
 
 class PortalSession:
-    def __init__(self, store, manager, transport, journal, prepared, *, clock=time.monotonic):
+    def __init__(self, store, manager, transport, journal, prepared, *, clock=time.monotonic, preview=None):
         self.store, self.manager = store, manager
         self.lease, self.local_job_id = prepared.lease, prepared.local_job_id
         self.control = PortalControl(store, manager, transport, journal, self.lease, self.local_job_id)
         self.progress = PortalProgress(store, transport, journal, self.lease, self.local_job_id)
+        # Live desktop frames for whoever is watching in the portal. Isolated on
+        # purpose: it cannot stop or cancel the task (see portal_preview).
+        self.preview = preview if preview is not None else PreviewLoop(store, transport, self.lease.identity, self.local_job_id)
         self.clock = clock
         self.started = self.last_observed = clock()
         self.waiting_seconds = 0.0
@@ -40,6 +44,16 @@ class PortalSession:
                       asyncio.create_task(self._loop(self.control.poll_commands, 1)),
                       asyncio.create_task(self._loop(self._publish, 1)),
                       asyncio.create_task(self._watch_lease())]
+        if self.preview is not False:
+            self.tasks.append(asyncio.create_task(self._preview()))
+
+    async def _preview(self):
+        try:
+            await self.preview.run()
+        except (LeaseLost, asyncio.CancelledError):
+            raise
+        except Exception:
+            return  # never a reason to stop the task
 
     async def _publish(self):
         async with self.publish_lock:

@@ -103,5 +103,20 @@ def test_checkpoint_events_carry_the_stage_and_status_for_progress_chips():
     assert (level, stage, message) == ('info', 'checkpoint', 'Saved workflow progress: documents verified.')
     assert meta == {'stage': 'documents', 'status': 'verified'}
     assert PortalProgress._activity('checkpoint', {}) == ('info', 'checkpoint', 'Saved workflow progress.', None)
-    assert PortalProgress._activity('tool', {'name': 'mcp__clara__save_checkpoint'})[3] is None
+    assert PortalProgress._activity('tool', {'name': 'mcp__clara__save_checkpoint'})[3] == {
+        'kind': 'tool', 'tool': 'save_checkpoint', 'surface': 'worker', 'app': None}
     assert PortalProgress._activity('status', {'status': 'incomplete'})[3] is None
+
+
+def test_tool_events_carry_a_safe_action_description_and_never_the_input():
+    level, stage, message, meta = PortalProgress._activity('tool', {
+        'name': 'mcp__windows__Click', 'input': '{"handle": 4711, "title": "Erica Rocchi & Carlos Melo - Personal Taxprep 2025 (T1Txp)", "x": 10}'})
+    assert (level, stage, message) == ('info', 'working', 'Using Click.')
+    assert meta == {'kind': 'tool', 'tool': 'Click', 'surface': 'desktop', 'app': 'TaxPrep'}
+    done = PortalProgress._activity('tool_done', {'name': 'mcp__chrome__navigate_page', 'failed': True,
+                                                   'input': '{"url": "https://app.pandadoc.com/a/#/documents/x"}'})
+    assert done[0] == 'warn' and done[3] == {'kind': 'tool_done', 'tool': 'navigate_page', 'surface': 'browser', 'app': 'PandaDoc'}
+    assert PortalProgress._activity('tool', {'name': 'mcp__chrome__take_snapshot', 'input': '{}'})[3]['app'] == 'Chrome'
+    assert PortalProgress._activity('tool', {'name': 'mcp__windows__Type', 'input': '{"text": "O:\\clients\\secret.125"}'})[3]['app'] is None
+    # Nothing but the allowlisted label leaves the worker: no title, path or command text in the meta.
+    assert set(meta) == {'kind', 'tool', 'surface', 'app'}

@@ -15,6 +15,40 @@ def check_binding(store, namespace, identity, local_job_id):
     return row
 
 
+# The portal shows "what Clara is doing" from these fields alone. An application
+# label comes from a fixed allowlist; the tool's input is only searched for
+# those names and is never forwarded, so window titles, file paths, command
+# text and client data stay on the worker.
+APP_HINTS = (('t1txp', 'TaxPrep'), ('taxprep', 'TaxPrep'), ('profile', 'ProFile'), ('pandadoc', 'PandaDoc'),
+             ('sharepoint', 'OneDrive'), ('onedrive', 'OneDrive'), ('1drv', 'OneDrive'), ('acrord32', 'Acrobat'),
+             ('acrobat', 'Acrobat'), ('winword', 'Word'), ('excel', 'Excel'), ('explorer', 'Explorer'),
+             ('chrome', 'Chrome'), ('msedge', 'Edge'))
+
+
+def tool_surface(name):
+    """desktop for the Windows bridge, browser for Chrome, worker for Clara's own tools."""
+    if name.startswith('mcp__windows__'):
+        return 'desktop'
+    if name.startswith('mcp__chrome__'):
+        return 'browser'
+    return 'worker'
+
+
+def app_hint(name, raw_input):
+    """An allowlisted application name for the action, or None."""
+    text = (raw_input if isinstance(raw_input, str) else '').casefold()[:4000]
+    if name.startswith('mcp__chrome__'):
+        for needle, label in APP_HINTS:
+            if label in {'PandaDoc', 'OneDrive'} and needle in text:
+                return label
+        return 'Chrome'
+    if name.startswith('mcp__windows__'):
+        for needle, label in APP_HINTS:
+            if needle in text:
+                return label
+    return None
+
+
 class PortalProgress:
     def __init__(self, store, transport, journal, lease, local_job_id):
         self.store, self.transport, self.journal = store, transport, journal
@@ -64,11 +98,13 @@ class PortalProgress:
     def _activity(kind, data):
         """(level, stage, message, meta) for the portal; never command input/output, login data or signed URLs."""
         if kind in {'tool', 'tool_done'}:
-            name = str(data.get('name', 'Action')).rsplit('__', 1)[-1][:100]
+            full = str(data.get('name', 'Action'))
+            name = full.rsplit('__', 1)[-1][:100]
+            meta = {'kind': kind, 'tool': name, 'surface': tool_surface(full), 'app': app_hint(full, data.get('input'))}
             if kind == 'tool':
-                return 'info', 'working', 'Using ' + name + '.', None
+                return 'info', 'working', 'Using ' + name + '.', meta
             failed = data.get('failed') is True
-            return ('warn' if failed else 'info'), 'working', name + (' reported a problem.' if failed else ' returned.'), None
+            return ('warn' if failed else 'info'), 'working', name + (' reported a problem.' if failed else ' returned.'), meta
         if kind == 'checkpoint':
             # The stage name and status let the portal show honest progress chips.
             stage = str(data.get('stage', ''))[:64]

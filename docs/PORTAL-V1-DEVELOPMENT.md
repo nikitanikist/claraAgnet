@@ -184,3 +184,28 @@ question in the same portal chat before querying the model. Continue records
 review of the exact usage snapshot without filling missing values or changing
 limits. Keep paused, cancellation, and changed usage history do not grant that
 review. Local-only workflows retain their existing Workflow review screen.
+
+## Live desktop preview (worker side)
+
+`clara/portal_preview.py` runs one isolated background task per portal attempt, started by
+`PortalSession.start()`. While the local job is `running` it:
+
+- sends a frame-less `clara-preview` probe every 10 s until the reply says `wanted: true`
+  (a super admin has the Live desktop card open in a visible tab), then a `live` JPEG frame
+  every 2 s (1280 px wide, quality 62, at most 400 000 base64 characters) until the reply says
+  `wanted: false`;
+- sends one `key` frame at the start of every visible action (Windows bridge or Chrome tool that
+  is not read-only) and at every checkpoint, regardless of watching, capped at 120 per attempt
+  (checkpoints still earn a frame beyond the cap), tagged with the action's `local-<id>` event
+  uid, stage and a short label;
+- sends one final `live` frame when the job pauses for a question, then nothing until it resumes;
+- stops on its own when the job leaves `running`/`waiting`, so the end-of-task observer never sees
+  a capture in progress.
+
+Frames are captured inside the worker process with Pillow (`ImageGrab.grab(all_screens=True)`),
+never by launching a helper: a helper process would count as Clara's unfinished work. Black
+frames (a locked or disconnected session draws nothing) are discarded and the loop keeps probing
+at the slow cadence. Every failure except a lost lease backs off (2, 4, 8 … 30 s; 60 s when the
+portal is unavailable or lacks the function) and never stops or cancels the task; `fenced`,
+`lease_expired`, `unauthorized` and `forbidden` end the loop because the control loops already
+handle the task. The whole dedicated desktop is captured, so that desktop must stay Clara's.
