@@ -13,6 +13,11 @@ from .portal_lease import AttemptIdentity
 from .store import new_id
 
 
+# T1 closeouts by tax application. The portal grants exactly one of these
+# permissions per assignment; the worker refuses anything else.
+SOFTWARE_PERMISSIONS = {'taxprep': 'closeout.t1.taxprep', 'profile': 'closeout.t1.profile'}
+
+
 class BindingConflict(ValueError):
     pass
 
@@ -50,12 +55,13 @@ class PortalBindings:
         if kind == 'closeout':
             closeout = claim.get('closeout') or {}
             closeout_id = closeout.get('closeout_form_id')
+            permission = SOFTWARE_PERMISSIONS.get(closeout.get('software'))
             if (not closeout_id or closeout.get('form_type') != 'Personal Tax'
-                    or closeout.get('software') != 'taxprep'
+                    or permission is None
                     or not closeout.get('members') or policy.get('invoice_mode') != 'laureen_manual'
                     or claim['scope'].get('closeout_form_id') != closeout_id
-                    or 'closeout.t1.taxprep' not in claim['scope']['permissions']):
-                raise ContractViolation('This worker supports authorized T1 TaxPrep preparation only.')
+                    or permission not in claim['scope']['permissions']):
+                raise ContractViolation('This worker supports authorized T1 TaxPrep and ProFile preparation only.')
         elif kind != 'general':
             raise ContractViolation('This worker does not support the requested task kind.')
 

@@ -16,6 +16,7 @@ from pathlib import Path
 
 from .auth import clean_environment
 from .connectors import desktop_command
+from .portal_bindings import SOFTWARE_PERMISSIONS
 
 SHELL_CLASSES = {'Progman', 'WorkerW', 'Shell_TrayWnd', 'Shell_SecondaryTrayWnd'}
 CONSOLE_CLASSES = {'ConsoleWindowClass', 'CASCADIA_HOSTING_WINDOW_CLASS'}
@@ -256,7 +257,8 @@ class WindowsHandoff:
         if not binding:
             return False
         claim = json.loads(binding['claim_json'])
-        if claim['kind'] != 'closeout' or 'closeout.t1.taxprep' not in claim['scope']['permissions']:
+        permission = SOFTWARE_PERMISSIONS.get((claim.get('closeout') or {}).get('software'))
+        if claim['kind'] != 'closeout' or permission is None or permission not in claim['scope']['permissions']:
             return False
         result = self.store.one('''SELECT payload,receipt FROM portal_v1_outbox WHERE namespace=? AND external_job_id=?
             AND worker_id=? AND attempt_no=? AND fence_token=? AND operation='clara-result'

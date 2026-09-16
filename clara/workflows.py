@@ -142,7 +142,7 @@ class Workflows:
             raise ValueError('This member is not part of the workflow.')
         if context.get('year') and str(year)!=str(context['year']):
             raise ValueError('Document year does not match the workflow.')
-        if not member or not year or document_type not in {'client-copy','t183','engagement-letter','invoice','working-paper','report'}:
+        if not member or not year or document_type not in {'client-copy','t183','engagement-letter','instalments','t1135','invoice','working-paper','report'}:
             raise ValueError('Provide member, year and a supported document type.')
         data=source.read_bytes();digest=hashlib.sha256(data).hexdigest()
         import io
@@ -156,9 +156,14 @@ class Workflows:
         checks=[{'name':'readable_text','passed':bool(text.strip())},
                 {'name':'minimum_pages','passed':len(reader.pages)>=max(1,min_pages)},
                 {'name':'member','passed':normalized(member) in text}]
-        if document_type!='engagement-letter':
+        if document_type=='instalments':
+            # An instalments schedule is for the year AFTER the return (a 2025
+            # return produces 2026 instalments); either year proves the match.
+            following=str(int(year)+1) if str(year).isdigit() else ''
+            checks.append({'name':'tax_year','passed':str(year) in text or bool(following and following in text)})
+        elif document_type!='engagement-letter':
             checks.append({'name':'tax_year','passed':str(year) in text})
-        type_tokens={'t183':['t183'],'engagement-letter':['engagement'],'client-copy':['income','tax']}
+        type_tokens={'t183':['t183'],'engagement-letter':['engagement'],'client-copy':['income','tax'],'instalments':['instal'],'t1135':['t1135']}
         for needle in type_tokens.get(document_type,[])+(required_text or []):
             checks.append({'name':'contains:'+needle,'passed':normalized(needle) in text})
         ok=all(c['passed'] for c in checks)

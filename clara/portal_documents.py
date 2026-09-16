@@ -11,6 +11,9 @@ from .workflows import Workflows
 
 
 DOCUMENT_TYPES = {'client-copy': 'client_copy', 't183': 't183', 'engagement-letter': 'engagement_letter'}
+# Forms a return may call for; delivered when verified, never required.
+OPTIONAL_DOCUMENT_TYPES = {'instalments': 'instalments', 't1135': 't1135'}
+ALL_DOCUMENT_TYPES = {**DOCUMENT_TYPES, **OPTIONAL_DOCUMENT_TYPES}
 
 
 @dataclass(frozen=True)
@@ -49,15 +52,15 @@ def collect_documents(config, store, namespace, identity, local_job_id, evidence
         if proof['kind'] != 'document':
             continue
         data = proof['payload']
-        if (data.get('member') not in ids_by_name or data.get('document_type') not in DOCUMENT_TYPES
+        if (data.get('member') not in ids_by_name or data.get('document_type') not in ALL_DOCUMENT_TYPES
                 or str(data.get('year')) != str(closeout['tax_year'])):
-            raise ContractViolation('A document does not match this family, tax year or required output type.')
-        key = (ids_by_name[data['member']], DOCUMENT_TYPES[data['document_type']])
+            raise ContractViolation('A document does not match this family, tax year or a delivered output type.')
+        key = (ids_by_name[data['member']], ALL_DOCUMENT_TYPES[data['document_type']])
         if key in chosen and chosen[key]['payload']['sha256'] != data['sha256']:
             raise ContractViolation('Conflicting PDFs were supplied for the same family member and document type.')
         chosen[key] = proof
     expected = {(m['member_id'], doc) for m in members for doc in DOCUMENT_TYPES.values()}
-    if set(chosen) != expected:
+    if not expected <= set(chosen):
         raise ContractViolation('Verify all required PDFs for every assigned family member before uploading the package.')
     if len({p['payload']['sha256'] for p in chosen.values()}) != len(chosen):
         raise ContractViolation('One PDF was used for multiple required outputs. Verify the separate member-specific documents.')

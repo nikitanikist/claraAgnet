@@ -8,6 +8,7 @@ import time
 
 from .knowledge import decode
 from .portal_artifacts import PortalUploads, published_snapshot
+from .portal_bindings import SOFTWARE_PERMISSIONS
 from .portal_documents import collect_documents
 from .portal_progress import check_binding
 from .portal_transport import PortalUnavailable
@@ -95,9 +96,9 @@ class PortalResults:
         binding = check_binding(self.store, self.transport.base_url, identity, jid)
         claim = json.loads(binding['claim_json'])
         job = self.store.job(jid)
-        if (claim['kind'] != 'closeout' or claim['closeout']['software'] != 'taxprep'
+        if (claim['kind'] != 'closeout' or claim['closeout']['software'] not in SOFTWARE_PERMISSIONS
                 or job['status'] not in {'completed', 'needs_review'} or not job['finished']):
-            raise ValueError('Only a finished TaxPrep closeout can hand off saved delivery links.')
+            raise ValueError('Only a finished TaxPrep or ProFile closeout can hand off saved delivery links.')
         documents, remotes = self._closeout(job, identity, claim)
         folders = [a for a in remotes if a.get('kind') == 'onedrive_folder']
         packets = [a for a in remotes if a.get('kind') == 'pandadoc']
