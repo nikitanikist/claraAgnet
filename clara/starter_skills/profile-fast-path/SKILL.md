@@ -9,6 +9,20 @@ Use this for ProFile (.25T) T1 closeouts, alongside the assigned closeout and fi
 
 **ProFile is a different application from TaxPrep. Never reuse TaxPrep keystrokes.** In ProFile `Alt+F7` is Back track, not a member switch. `F12` = Print form. `F5` = spouse toggle (two-way only). `F4` = Form Explorer. `F3` = Client Explorer, whose index is EMPTY on this machine: never search by client name; the closeout gives the file path. The search box is the control named `Search` (class `TEdit`) at the top of the window; it is typeable.
 
+## Spend turns sparingly
+
+Every tool call is a round trip, and a run is mostly the sum of them. A measured ProFile closeout spent about two thirds of its wall-clock time between tool calls, with 55 screenshots against 29 clicks. The work was right; the pace was the cost.
+
+ProFile's toolbar icons are not in the accessibility tree, so those keep the hover-read-tooltip-then-click rule below. Its dialogs are ordinary controls: the Print/Email PDF dialog, Save As, the file name field, the folder chooser and the audit panel can all be driven by `ActAndVerify`, which takes up to six actions plus the controls you expect afterwards, selects by name/automation_id/type rather than by pixel, refuses a missing, ambiguous or disabled control, and verifies the result. Use it for every sequence you can predict, above all replacing a pre-filled file name and pressing Save. It is faster than a screenshot-and-click pair and harder to get wrong.
+
+Two limits decide what you may batch. A `toggle` step flips a checkbox rather than setting it, so read the current state first; this matters for the T1 EFILE job, which you must confirm is shown AND checked rather than flip blindly. And the expected controls prove a control is present, not what it holds: every value this skill requires you to read, the window title's member and form, "Clearhouse LLP" and "Q2629" on the T183, the file name before Save, you still read yourself. A passed batch is never proof of a value.
+
+Take a screenshot when the next action truly depends on something unpredictable, when a step fails and you must inspect, or when you need visual proof. Do not take one to confirm what the call you just made already verified. Reading the window title is still the proof of member and form, and none of this removes a single verification this skill requires.
+
+Before `save_checkpoint`, call `list_evidence` and pass the exact evidence IDs the stage requires; a verified stage is refused without them.
+
+A wait is a ceiling, not a sleep. A dialog a keystroke opens appears in about a second: if your condition has not matched after roughly 8 s it is wrong, so look once and act on what is really on screen rather than sitting out the ceiling.
+
 ## Read once, then execute
 
 Resolve the source path, tax year, exact full member names, required documents and output folder once from the closeout. Source names are inconsistently cased (`Singh, Inder pal and AURORA, AMRITA`): match case-insensitively. Files under `O:\Clearhouse Clara agent\Profile files\` are live client returns.

@@ -117,6 +117,15 @@ Prefer the matching cpa- business skill for CPA work and use the firm's imported
 Use structured save_checkpoint, not only a text file. For a resume call prepare_resume, inspect
 live state, and continue from the first unverified stage. A workflow budget covers all its runs.
 Prefer ListWindows, FocusWindow, InspectControls and ActAndVerify for native Windows work.
+Every tool call is a round trip and a long task is mostly the sum of them, so when the next few
+steps are already known, batch them into one ActAndVerify (up to six actions plus the controls you
+expect afterwards) instead of alternating a screenshot with a click. It drives controls by identity
+rather than by pixel and verifies the result, so batching is the safer route as well as the quicker
+one. Take a screenshot when the next action depends on something you cannot predict, when a step
+failed and you must inspect, or when you need visual evidence, not to confirm what the call you just
+made already verified. A wait is a ceiling on work that is genuinely still running: if a condition
+has not matched in a few seconds, it is wrong, so observe once and act instead of sitting it out.
+Call list_evidence before save_checkpoint and pass the exact evidence IDs the stage requires.
 Use exact observed handle/PID and accessible control names; verify foreground and postconditions.
 ApplicationInfo reads the actual executable/build for memory matching. VerifyWindow checks client/file
 identity in the live title without an action; inspect the fields if the title is insufficient.

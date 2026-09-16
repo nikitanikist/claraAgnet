@@ -33,6 +33,18 @@ If the exact row or expected content is absent, take one targeted observation an
 
 For taxpayer/spouse, Alt+F7 toggles between those two members and preserves the form; allow about 1.5 s for the change. It does **not** reach dependants. For larger households use the named client selector and match the person's full consecutive name; the file/group row is not a person. Confirm the member in the Save As default name and resulting PDF even when the switch appeared successful.
 
+## Spend turns sparingly
+
+Every tool call is a round trip, and a run is mostly the sum of them, not the sum of the clicks. A measured closeout spent about three quarters of its wall-clock time between tool calls, across roughly 120 desktop steps that alternated one screenshot with one click. The work was right; the pace was the cost.
+
+When the next few steps are already known, do them in one `ActAndVerify` call: up to six actions plus the controls you expect afterwards. It re-focuses the window before each step, drives controls by name/automation_id/type rather than by pixel, refuses a missing, ambiguous or disabled control, and then polls for your expected controls. That is both faster and safer than a screenshot-and-click pair, so prefer it for every sequence you can predict: filling a file name and pressing Save, dismissing a known dialog, moving through a wizard whose buttons you have already seen.
+
+Two limits worth knowing, because they decide what you may batch. A `toggle` step flips a checkbox rather than setting it, so read the option's current state before you include one, or you will turn off the very setting you meant to turn on. And the expected controls prove that a control is present, not what its value is: when a rule here requires a value, such as Print to PDF being selected or the saved path reading back correctly, read that value yourself rather than treating a passed batch as proof of it.
+
+Take a screenshot when the next action genuinely depends on something you cannot predict, when an `ActAndVerify` step fails and you must inspect before retrying, or when you need visual proof for evidence. Do not take one to confirm what the call you just made already verified.
+
+Before `save_checkpoint`, call `list_evidence` and pass the exact evidence IDs the stage requires. A verified stage is refused without the evidence its contract names, and guessing costs two turns and teaches nothing.
+
 ## Printing and saving without detours
 
 - Use Ctrl+R for the whole client return and Ctrl+P for the current T183/ECL. Do not walk the File/Print menus.
@@ -42,7 +54,9 @@ For taxpayer/spouse, Alt+F7 toggles between those two members and preserves the 
 - Save As disappearing is insufficient: require the expected nonempty PDF at the exact path, correct member/year and document content. Inspect a reopened Save As before retrying; do not overwrite or reprint already verified files.
 - Dismiss an automatically opened Send/View PDF Files window with Escape. Do not attach to the client file, publish to iFirm, transmit, sign or send emails.
 
-Use bounded, condition-driven waits: Print dialog up to 60 s; return Save As up to 300 s; form Save As up to 180 s; Save As closing up to 120 s. These are ceilings, not sleeps. If the next expected dialog is present, proceed immediately. Watch for either Diagnostics or Print; do not pay a separate optional diagnostic timeout after Print is already visible (historical optional bounds: 15 s for a return, 5 s for a form).
+Use bounded, condition-driven waits: Print dialog up to 10 s; return Save As up to 300 s; form Save As up to 180 s; Save As closing up to 120 s. These are ceilings, not sleeps. If the next expected dialog is present, proceed immediately. Watch for either Diagnostics or Print; do not pay a separate optional diagnostic timeout after Print is already visible (historical optional bounds: 15 s for a return, 5 s for a form).
+
+A ceiling is only for work that is genuinely still running, and a long one is only ever justified while the application is actually producing a file. A dialog that a keystroke opens appears in about a second: if your condition has not matched after roughly 8 s, the condition is wrong, not slow. Stop waiting, look once with a live window/control observation or a single screenshot, and act on what is really on screen. Never sit out a ceiling because a detector never matches; that is dead time in every run, and a measured run lost a full minute to exactly this at the print dialog.
 
 Check for Save As with a short live-window/control observation first. The visible title `Save PDF File As` may not be exposed to a `text_exists` detector. If that detector misses once, inspect the owned window and its `File name` control or take a screenshot; do not spend 120 seconds repeating the same failed detector. Long ceilings apply only while printing is actually still in progress. Likewise, dismiss Send/View only if that optional window is present.
 
