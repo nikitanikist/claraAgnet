@@ -138,3 +138,13 @@ def test_task_prompt_names_the_canonical_reservation_keys(tmp_path):
             't183, engagement_letter; tax_year is ' + str(claim['closeout']['tax_year']) + '.') in prompt
     general = {**claim, 'kind':'general', 'closeout':None, 'required_outputs':[]}
     assert 'reserve_external_write' not in task_prompt(general, [])[0]
+
+
+def test_task_prompt_requires_delivery_to_be_recorded_by_the_attempt_that_hands_off(tmp_path):
+    config, store, claim, _ = setup(tmp_path)
+    first, _ = task_prompt({**claim, 'attempt_no': 1}, [])
+    assert 'call record_portal_delivery in this attempt even if an earlier attempt recorded delivery' in first
+    assert 'This is attempt' not in first
+    third, _ = task_prompt({**claim, 'attempt_no': 3}, [])
+    assert ('This is attempt 3 of this closeout: before finishing, read the folder, its files and each packet '
+            'again in Chrome and record delivery again.') in third

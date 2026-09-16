@@ -1,8 +1,10 @@
 """Deliver one completed attempt's artifacts and immutable result report."""
 from dataclasses import asdict
+from datetime import datetime
 import hashlib
 import json
 from pathlib import Path
+import time
 
 from .knowledge import decode
 from .portal_artifacts import PortalUploads, published_snapshot
@@ -12,6 +14,26 @@ from .portal_transport import PortalUnavailable
 from .portal_usage import portal_usage
 from .usage import number
 from .workflows import Workflows
+
+
+HANDOFF_FRESH_S = 12 * 3600  # the portal's own limit on the age of a delivery readback
+REPEAT_DELIVERY = ('The portal accepts only OneDrive and PandaDoc readbacks made during the attempt that hands '
+                   'off. Read the folder, its files and each packet again in Chrome and call record_portal_delivery '
+                   'in this attempt before finishing; recording again creates nothing remotely.')
+STALE_DELIVERY = ("Clara's OneDrive and PandaDoc readbacks are older than 12 hours, which the portal does not "
+                  'accept. Read them again in Chrome and call record_portal_delivery in a new attempt.')
+
+
+def _observed_ages(artifacts, now):
+    """Seconds since each readback a delivery record rests on (folder, files, packets)."""
+    ages = []
+    for artifact in artifacts:
+        stamps = [artifact.get('observed_at')]
+        stamps += [item.get('observed_at') for item in artifact.get('evidence', {}).get('uploaded', [])]
+        for stamp in stamps:
+            if stamp:
+                ages.append(now - datetime.fromisoformat(stamp).timestamp())
+    return ages
 
 
 class PortalResults:
@@ -52,15 +74,18 @@ class PortalResults:
             raise ValueError('Some closeout stages are still unfinished. Review the saved checkpoints.')
         for stage in state['stages'].values():
             wf._proofs(job, stage['evidence_ids'])
-        # The delivery proof belongs to the portal job (its subject), not to one
-        # attempt: a continued attempt reuses the outputs its predecessor bound,
-        # and every artifact is re-verified below and again by the portal.
-        row = self.store.one('''SELECT e.* FROM evidence e JOIN jobs j ON j.id=e.job_id
-            WHERE j.conversation_id=? AND e.kind='portal_delivery' AND e.verified=1 AND e.subject=?
-            ORDER BY e.created DESC LIMIT 1''', (job['conversation_id'], identity.job_id))
-        if not row:
-            raise ValueError('Record the verified member-specific delivery outputs before handing off this closeout.')
-        delivery = decode(row, 'payload')['payload']
+        # The portal accepts only OneDrive and PandaDoc readbacks made during the
+        # attempt that hands off, so the proof must come from this attempt's own
+        # record_portal_delivery call even when an earlier attempt bound the same
+        # outputs. Recording again creates nothing remotely.
+        row = self.store.one('''SELECT * FROM evidence WHERE job_id=? AND kind='portal_delivery' AND verified=1
+            AND subject=? ORDER BY created DESC LIMIT 1''', (job['id'], identity.job_id))
+        delivery = decode(row, 'payload')['payload'] if row else None
+        if (not delivery or delivery.get('attempt_no') != identity.attempt_no
+                or delivery.get('fence_token') != identity.fence_token):
+            raise ValueError(REPEAT_DELIVERY)
+        if any(age > HANDOFF_FRESH_S for age in _observed_ages(delivery['artifacts'], time.time())):
+            raise ValueError(STALE_DELIVERY)
         documents = collect_documents(self.config, self.store, self.transport.base_url,
                                       identity, job['id'], delivery['document_evidence_ids'])
         return documents, delivery['artifacts']

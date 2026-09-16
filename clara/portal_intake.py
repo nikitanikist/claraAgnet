@@ -51,7 +51,13 @@ def task_prompt(claim, messages, source_files=None):
                         'record_portal_delivery identities: member_id is one of '
                         + ', '.join(m['member_id'] for m in closeout['members'])
                         + '; document_type is one of client_copy, t183, engagement_letter; tax_year is '
-                        + str(closeout['tax_year']) + '. ')
+                        + str(closeout['tax_year']) + '. '
+                        'The portal accepts only OneDrive and PandaDoc readbacks made during the attempt that '
+                        'hands off, so call record_portal_delivery in this attempt even if an earlier attempt '
+                        'recorded delivery; recording again creates nothing remotely. ')
+        if claim.get('attempt_no', 1) > 1:
+            reservations += ('This is attempt ' + str(claim['attempt_no']) + ' of this closeout: before finishing, '
+                             'read the folder, its files and each packet again in Chrome and record delivery again. ')
     payload = {'kind': claim['kind'], 'assignment': claim['closeout'],
                'assigned_by': claim['scope']['assigned_by'],
                'required_outputs': claim['required_outputs'],

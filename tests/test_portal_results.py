@@ -173,7 +173,8 @@ def test_explicit_general_chat_file_request_still_uploads_the_requested_file(tmp
     asyncio.run(scenario())
 
 
-def test_a_continued_attempt_hands_off_the_delivery_its_predecessor_recorded(tmp_path):
+def continued_attempt(tmp_path):
+    """The first attempt recorded delivery; Review and continue starts a new attempt and fence."""
     from datetime import datetime, timedelta, timezone
     from clara.portal_bindings import PortalBindings
     from clara.portal_lease import AttemptIdentity, ExecutionLease
@@ -182,14 +183,33 @@ def test_a_continued_attempt_hands_off_the_delivery_its_predecessor_recorded(tmp
     claim = copy.deepcopy(CONTRACT.document['fixtures']['clara-claim']['response'])
     claim['closeout']['attachments'] = []
     store.status(job['id'], 'incomplete')  # the first attempt ended without a receipt
-    # Review and continue: a new attempt and fence for the same portal job and conversation.
     later = {**claim, 'attempt_no': claim['attempt_no'] + 1, 'fence_token': claim['fence_token'] + 1}
     local = PortalBindings(store, BASE, WORKER).persist_claim(later, 'Continue the closeout')['local_job_id']
-    store.status(local, 'needs_review')
     identity = AttemptIdentity(later['job_id'], WORKER, later['attempt_no'], later['fence_token'])
     lease2 = ExecutionLease(identity, clock=lambda: 100)
     server = datetime(2026, 9, 14, tzinfo=timezone.utc)
     lease2.acknowledge(identity, server_time=server, expires_at=server + timedelta(seconds=120), request_started=100)
+    return config, store, local, later, lease2, args
+
+
+def reobserved(config, store, local, args):
+    """The same page facts read again in Chrome by the continued attempt."""
+    import copy
+    wf = Workflows(store, config)
+    def again(oid):
+        text = json.loads(store.one('SELECT payload FROM evidence WHERE id=?', (oid,))['payload'])['text']
+        return wf.evidence(store.job(local), 'tool_observation', 'Chrome',
+                           {'tool':'mcp__chrome__take_snapshot','text':text,'error':False}, True)['id']
+    fresh = copy.deepcopy(args)
+    for packet in fresh['pandadoc']:
+        packet['observation_id'] = again(packet['observation_id'])
+    fresh['folder']['observation_id'] = again(fresh['folder']['observation_id'])
+    for item in fresh['files']:
+        item['observation_id'] = again(item['observation_id'])
+    return fresh
+
+
+def report(config, store, local, lease2):
     bodies = []
     async def scenario():
         def handle(request):
@@ -200,12 +220,40 @@ def test_a_continued_attempt_hands_off_the_delivery_its_predecessor_recorded(tmp
             transport = PortalTransport(BASE, lambda:'test', client=api, clock=lambda:100)
             reporter = PortalResults(config, store, transport, PortalJournal(store, BASE))
             try:
-                result = await reporter.deliver(PreparedAttempt(local, lease2, False), TIMING)
+                return await reporter.deliver(PreparedAttempt(local, lease2, False), TIMING)
             finally:
                 await reporter.close()
-        assert result['handoff']['status'] == 'ready_to_email'
-        body = bodies[0]
-        assert body['outcome'] == 'completed_prepared'
-        assert (body['attempt_no'], body['fence_token']) == (later['attempt_no'], later['fence_token'])
-        assert [a['kind'] for a in body['artifacts']] == ['pandadoc', 'onedrive_folder']
-    asyncio.run(scenario())
+    return asyncio.run(scenario()), bodies[0]
+
+
+def test_a_continued_attempt_that_recorded_delivery_again_hands_off_under_its_own_attempt(tmp_path):
+    config, store, local, later, lease2, args = continued_attempt(tmp_path)
+    proof = record_delivery(config, store, store.job(local), reobserved(config, store, local, args))
+    assert proof['unresolved_operation_ids'] == [] and proof['reconciled_operation_ids'] == []
+    store.status(local, 'needs_review')
+    result, body = report(config, store, local, lease2)
+    assert result['handoff']['status'] == 'ready_to_email'
+    assert body['outcome'] == 'completed_prepared'
+    assert (body['attempt_no'], body['fence_token']) == (later['attempt_no'], later['fence_token'])
+    assert [a['kind'] for a in body['artifacts']] == ['pandadoc', 'onedrive_folder']
+    assert all(a['observed_at'] > '2026' for a in body['artifacts'])
+
+
+def test_a_continued_attempt_may_not_hand_off_the_readbacks_of_an_earlier_attempt(tmp_path):
+    from clara.portal_results import REPEAT_DELIVERY
+    config, store, local, later, lease2, args = continued_attempt(tmp_path)
+    store.status(local, 'needs_review')  # finished without calling record_portal_delivery again
+    result, body = report(config, store, local, lease2)
+    assert body['outcome'] == 'needs_review' and body['artifacts'] == []
+    assert body['needs_review_reason'] == REPEAT_DELIVERY
+    assert 'record_portal_delivery in this attempt' in REPEAT_DELIVERY
+
+
+def test_readbacks_older_than_the_portal_accepts_are_refused_locally(tmp_path, monkeypatch):
+    import clara.portal_results as module
+    config, store, job, lease, args = completed_delivery(tmp_path)
+    real = module.time.time
+    monkeypatch.setattr(module.time, 'time', lambda: real() + 13 * 3600)
+    result, body = report(config, store, job['id'], lease)
+    assert body['outcome'] == 'needs_review'
+    assert body['needs_review_reason'] == module.STALE_DELIVERY

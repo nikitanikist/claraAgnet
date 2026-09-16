@@ -46,7 +46,7 @@ def definitions(config,store,job):
                 proofs.append({'stage':name,'saved_status':stage['status'],'files_still_match':valid})
         return {'workflow':state,'checks':proofs,'operations':ops.list(job),
                 'last_execution':store.one('SELECT s.* FROM execution_snapshots s JOIN jobs j ON j.id=s.job_id WHERE j.conversation_id=? ORDER BY s.updated DESC LIMIT 1',(job['conversation_id'],)),
-                'instruction':'Inspect current application/remote state before resuming. Saved observations can be stale. Never replay uncertain external writes.'}
+                'instruction':'Inspect current application/remote state before resuming. Saved observations can be stale. Never replay uncertain external writes. A portal delivery an earlier attempt recorded must be recorded again in this attempt (record_portal_delivery with fresh Chrome readbacks of the folder, its files and each packet) before finishing.'}
     def remote(args):
         proof=decode(store.one('SELECT * FROM evidence WHERE id=? AND job_id=?',(args['observation_id'],job['id'])),'payload')
         if not proof or proof['kind']!='tool_observation' or not proof['payload'].get('tool','').startswith('mcp__chrome__') or proof['payload'].get('error'):
@@ -129,7 +129,9 @@ def definitions(config,store,job):
             'exactly one of client_copy, t183 or engagement_letter, tax_year, remote_file_id (the OneDrive '
             'item ID), observation_id; readbacks must show the folder ID, file ID, exact file name and '
             'exact size in bytes (item details or the storage API; a rounded "245 KB" is rejected). Keys '
-            'are bound by the reservation records, never by page text. Returns checkpoint proofs; does not '
+            'are bound by the reservation records, never by page text. Call it in the attempt that finishes '
+            'the closeout even if an earlier attempt recorded delivery: the portal accepts only readbacks from '
+            'that attempt, and recording again creates nothing remotely. Returns checkpoint proofs; does not '
             'send email or approve the workflow.',
             schema({'document_evidence_ids': {'type':'array', 'items':{'type':'string'}, 'maxItems':100},
                     'pandadoc': {'type':'array', 'maxItems':100, 'items':record_schema(
