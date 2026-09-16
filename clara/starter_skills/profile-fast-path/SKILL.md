@@ -88,7 +88,7 @@ Never write a file without the client name in it.
 ## Verify
 
 1. Open the printed T1 PDF. The client letter must be the FIRST page. If not, setup A2 has drifted: abort, print nothing further, escalate.
-2. Scan the whole PDF for audit notes, memos or tapes content. Any present: setup A3 has drifted, abort and escalate.
+2. Scan the whole PDF for internal notes of any kind: audit notes, memos, tapes, or a Notes Summary section at the end. **The firm's rule is that internal notes never reach the client** (Laureen, 16 September 2026). TaxPrep prints a Notes Summary that has to be removed; ProFile's setup is configured not to print notes at all, so anything of this kind appearing here means setup A3 has drifted. Abort and escalate rather than editing the PDF: a return that printed notes it was configured to suppress needs a person to look at the setup, not a quiet repair.
 3. Confirm the member's name and the tax year.
 4. Amounts trap: the status bar `Balance/Refund` is Taxes Payable, NOT the client-email figure. Amount Owing / Refund = Taxes Payable + Prior Balance (Chung: -9,528.64 + 327.07 = -9,201.57; Singh: 3,370.24 + 24,971.76 = 28,342.00). Compare the closeout's figure against the right field; if a genuine difference remains, escalate with the arithmetic; never guess.
 
