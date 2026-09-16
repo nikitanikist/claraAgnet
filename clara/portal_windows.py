@@ -225,9 +225,13 @@ class WindowsHandoff:
         unknown, running = [], []
         # Every locally ended attempt without a successful closeout receipt is
         # reviewed the same way. 'incomplete' means a workflow stage's evidence
-        # stopped matching after the model finished; its desktop leftovers are
-        # unresolved observations for the operator, never proof of execution.
-        interrupted = self.store.job(jid)['status'] in {'failed', 'stopped', 'interrupted', 'cancelled', 'incomplete'}
+        # stopped matching after the model finished; 'needs_review' and
+        # 'completed' mean the model finished and the portal has the last word.
+        # Their desktop leftovers are unresolved observations for the operator,
+        # never proof of execution, and a restarted worker is never its own
+        # unfinished work.
+        interrupted = self.store.job(jid)['status'] in {'failed', 'stopped', 'interrupted', 'cancelled',
+                                                        'incomplete', 'needs_review', 'completed'}
         row = self.store.one('SELECT snapshot FROM portal_windows_baselines WHERE job_id=?', (jid,))
         if not self.exclusive or not self.qualified:
             unknown.append('windows-handoff-not-qualified')
@@ -243,6 +247,10 @@ class WindowsHandoff:
             # of the old attempt; a new logon or boot cannot.
             same_logon = (current['session'] == baseline.get('session')
                           and type(baseline.get('boot')) in {int, float} and abs(current['boot'] - baseline['boot']) <= 2)
+            # A restarted worker has a new launch chain that is not the old attempt's
+            # work. With the same controller still running, a new process behind an
+            # ancestor's pid is somebody else's work and stays visible.
+            restarted = current['controller'] != baseline.get('controller')
             before = {process_key(p) for p in baseline.get('processes', [])}
             # After a stopped attempt, an open app is an unresolved observation,
             # not proof that it is still executing a tool. Let the existing
@@ -259,7 +267,7 @@ class WindowsHandoff:
             for p in current['processes']:
                 if process_key(p) in before:
                     continue
-                if interrupted and p['pid'] in current['ancestors']:
+                if interrupted and restarted and p['pid'] in current['ancestors']:
                     continue
                 ref = f"windows-process:{p['pid']}:{p['created']}"
                 if interrupted and (not same_logon or p.get('name', '').casefold() not in executors):

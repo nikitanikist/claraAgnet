@@ -130,7 +130,7 @@ def test_failed_probe_persists_unknown_baseline_instead_of_retrying_it_as_clean(
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize('status', ['failed', 'incomplete'])
+@pytest.mark.parametrize('status', ['failed', 'incomplete', 'needs_review', 'completed'])
 def test_failed_restart_reviews_apps_without_counting_current_worker_as_old_execution(tmp_path, status):
     # 'incomplete' (a stage's evidence no longer matched after the model finished)
     # is reviewed like a failed attempt: leftover apps are reviewable unknowns,
@@ -157,9 +157,11 @@ def test_failed_restart_reviews_apps_without_counting_current_worker_as_old_exec
         report = await observer.observe(jid)
         assert report['in_flight'] == []
         assert not report['complete']
-        assert {'windows-process:30:230', 'windows-process:31:231',
-                'windows-window:30:30', 'windows-session-or-controller-changed',
-                'windows-interrupted-task-needs-review', 'windows-handoff-not-qualified'} <= set(report['unknown'])
+        expected = {'windows-process:30:230', 'windows-process:31:231',
+                    'windows-window:30:30', 'windows-session-or-controller-changed', 'windows-handoff-not-qualified'}
+        if status not in {'needs_review', 'completed'}:
+            expected.add('windows-interrupted-task-needs-review')  # a finished model turn is reviewed by the portal instead
+        assert expected <= set(report['unknown'])
         assert not any(ref.startswith(('windows-process:20:', 'windows-process:19:', 'windows-window:20:'))
                        for ref in report['unknown'])
         assert store.one('SELECT snapshot FROM portal_windows_baselines')['snapshot'] == baseline
