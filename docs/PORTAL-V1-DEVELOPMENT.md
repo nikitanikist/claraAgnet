@@ -214,3 +214,22 @@ loop keeps probing at the slow cadence. Every failure except a lost lease backs 
 portal is unavailable or lacks the function) and never stops or cancels the task; `fenced`,
 `lease_expired`, `unauthorized` and `forbidden` end the loop because the control loops already
 handle the task. The whole dedicated desktop is captured, so that desktop must stay Clara's.
+
+## ProFile (.25T) closeouts
+
+The portal assigns each Personal Tax closeout with `software` = `taxprep` or `profile` and grants the
+matching permission (`closeout.t1.taxprep` or `closeout.t1.profile`); `SOFTWARE_PERMISSIONS` in
+`clara/portal_bindings.py` is the one table every worker gate uses (claim check, handoff payload,
+prepared-closeout test). The task prompt names the skill per application: `taxprep-fast-path` for
+`.125` files, `profile-fast-path` (`clara/starter_skills/profile-fast-path/SKILL.md`, written from
+Laureen's walkthroughs and the 14-15 Sep 2026 recon) for `.25T` files. A ProFile return may call for
+extra per-member PDFs: `verify_output` accepts `instalments` and `t1135`, the delivery manifest sends
+them with those exact `document_type` values, and an instalments schedule proves its year with the
+return year or the following one. The three required documents per member stay mandatory; the
+portal's link-only validator accepts the optional types.
+
+Before the first ProFile closeout: the worker's portal capabilities must list `profile`
+(`clara_set_worker_capabilities`), the server's read roots must include the ProFile client folders
+(`O:\Clearhouse Clara agent\Profile files` holds real client returns), and Laureen's one-time ProFile
+setup (preparer details, letter first, audit notes/memos/tapes unticked) must be in place on the agent's
+install; the skill verifies its effects read-only and stops on drift.
