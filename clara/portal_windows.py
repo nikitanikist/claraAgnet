@@ -389,10 +389,15 @@ class WindowsHandoff:
             current = await self.take()
             if not same_execution_session(current, baseline):
                 unknown.append('windows-session-or-controller-changed')
+            # A restarted worker's own launch chain is never the old request's
+            # unfinished work (the same rule the closeout observer applies).
+            restarted = current['controller'] != baseline.get('controller')
             visible = set(current.get('ui_process_ids', [])) | {w['pid'] for w in current['windows']}
             controllers = {'python.exe', 'pythonw.exe', 'node.exe', 'claude.exe', 'powershell.exe',
                            'pwsh.exe', 'cmd.exe', 'wscript.exe', 'cscript.exe'}
             for p in task_started_processes(current, baseline):
+                if restarted and p['pid'] in current['ancestors']:
+                    continue
                 if p['pid'] not in visible or p.get('name', '').casefold() in controllers:
                     running.append(f"windows-process:{p['pid']}:{p['created']}")
             running.extend(f"windows-print:{p['queue']}:{p['id']}" for p in current['print_jobs'])

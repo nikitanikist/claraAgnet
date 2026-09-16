@@ -493,3 +493,24 @@ def test_general_completion_ignores_hidden_helpers_of_preexisting_programs_but_n
         report = await observer.observe(jid)
         assert report['in_flight'] == ['windows-process:62:302'] and not report['complete']
     asyncio.run(scenario())
+
+
+def test_a_restarted_worker_is_not_the_finished_general_requests_unfinished_work(tmp_path):
+    store, jid = general_task(tmp_path)
+    current, clock = sample(), [0]
+    observer = WindowsHandoff(store, exclusive=True, probe=lambda: copy.deepcopy(current), clock=lambda: clock[0])
+    async def scenario():
+        assert await observer.begin(jid) == []
+        # Clara's service was updated and restarted after the request finished: a new
+        # PowerShell and python chain now runs the observer itself.
+        current.update(controller=[20, 220], ancestors=[19, 20])
+        current['processes'] = [{'pid': 20, 'created': 220, 'name': 'python.exe', 'parent': 19},
+                                {'pid': 19, 'created': 219, 'name': 'powershell.exe', 'parent': 1}]
+        current['windows'] = [{'handle': 20, 'pid': 19, 'class': 'ConsoleWindowClass'}]
+        report = await observer.observe(jid)
+        assert report['in_flight'] == [], 'its own launch chain is never unfinished work'
+        assert 'windows-session-or-controller-changed' in report['unknown']
+        # Anything else that started with the request is still reported.
+        current['processes'].append({'pid': 30, 'created': 230, 'name': 'node.exe', 'parent': 999})
+        assert (await observer.observe(jid))['in_flight'] == ['windows-process:30:230']
+    asyncio.run(scenario())
