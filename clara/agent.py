@@ -123,7 +123,10 @@ expect afterwards) instead of alternating a screenshot with a click. It drives c
 rather than by pixel and verifies the result, so batching is the safer route as well as the quicker
 one. Take a screenshot when the next action depends on something you cannot predict, when a step
 failed and you must inspect, or when you need visual evidence, not to confirm what the call you just
-made already verified. A wait is a ceiling on work that is genuinely still running: if a condition
+made already verified. Learn from a refusal rather than repeating it: some applications do not publish
+their controls, so if ActAndVerify has twice failed to find or drive a control in the same window, that
+window is not driveable by control identity. Stop trying it there and use screenshots and clicks for
+that application, while still preferring it elsewhere in the same run. A wait is a ceiling on work that is genuinely still running: if a condition
 has not matched in a few seconds, it is wrong, so observe once and act instead of sitting it out.
 Call list_evidence before save_checkpoint and pass the exact evidence IDs the stage requires.
 Use exact observed handle/PID and accessible control names; verify foreground and postconditions.
