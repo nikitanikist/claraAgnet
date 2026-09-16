@@ -229,7 +229,7 @@ return year or the following one. The three required documents per member stay m
 portal's link-only validator accepts the optional types.
 
 Before the first ProFile closeout: the worker's portal capabilities must list `profile`
-(`clara_set_worker_capabilities`), the server's read roots must include the ProFile client folders
+(`clara_set_worker_capabilities`, or the per-runner TaxPrep/ProFile boxes on the portal's Clara Settings page), the server's read roots (`read_roots` in `%LOCALAPPDATA%\Clara\settings.json`, not portal.json) must include the ProFile client folders
 (`O:\Clearhouse Clara agent\Profile files` holds real client returns), and Laureen's one-time ProFile
 setup (preparer details, letter first, audit notes/memos/tapes unticked) must be in place on the agent's
 install; the skill verifies its effects read-only and stops on drift.
