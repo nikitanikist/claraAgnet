@@ -160,8 +160,8 @@ The authoritative detailed record is `CONTEXT.md`. These are last verified obser
 
 | Surface | State at handover (updated 16 Sep 2026; `CONTEXT.md` has the detail) |
 | --- | --- |
-| Clara integration source | `8019e47` on `feat/clearhouse-portal-v1`; 408 tests pass |
-| Windows installed code | `8019e47` (16 Sep 06:36 UTC); `windows_handoff.qualified: true` since 06:38 UTC (automatic release on) |
+| Clara integration source | `f60ba9e` on `feat/clearhouse-portal-v1`; 422 tests pass |
+| Windows installed code | `8019e47` (16 Sep 06:36 UTC); `windows_handoff.qualified: true` since 06:38 UTC (automatic release on). `f60ba9e` (live desktop preview) pushed, awaiting install |
 | Portal database | Lovable migration `20260915190732`: late quiescence reports for cancelled or reviewed attempts are superseded and never re-hold the worker |
 | Test frontend | v4.1 published (Clara workspace redesign, Lovable commit `f8a61b4f`); 4 pre-existing security-scan findings remain in Lovable's Security view |
 | TEST5 | **Ready to Email** (attempt 6, 16 Sep 05:42 UTC) for T Super Admin, no email sent; the post-completion hold was released with `Release-ClaraPortalHold.ps1` after the leftover rule changed (programs open before a task are never Clara's leftovers); worker idle, no hold |
