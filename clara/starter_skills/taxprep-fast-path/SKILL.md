@@ -87,6 +87,20 @@ In PandaDoc, inspect the editor's current frame; its outer page can contain only
 
 This was measured on the first real package (Laureen, 16 September 2026, confirmed by inspecting the live document). On the T183 the signature field sat entirely below the Part F line, its bottom about 50 px under it. On the engagement letter the line crossed the field near its top, leaving the signature about 35 px low. Both read as "close, but the signature ends up under the line".
 
-After placing each field, check it against the line before moving on: the line should meet the field at or very near its bottom edge, and no part of the box should cover the caption beneath the line. If the field is low, drag it up rather than accepting near-enough. The date field follows the same rule; on the T183 it belongs above its own line, not over the "Year Month Day" caption.
+**Place each field by looking, not by aiming once.** The reviewer's standard is that the field sits exactly on its line, not one step above or below, and the way to meet it is a short check-and-correct loop on each field:
+
+1. Drag the field roughly into place, aiming about one field-height above the line.
+2. Zoom into just that field and its line together. A full-page screenshot cannot show a few pixels of error; a close view can.
+3. Read the gap between the **bottom edge of the field** and the printed line. That edge is what decides where the signature lands.
+4. If the bottom sits below the line, move the field up by the gap you just saw. If it sits above the line, move it down. Change one field at a time and re-zoom after each move, so every correction is judged on what is actually on screen rather than on what you intended.
+5. Stop when the bottom edge meets the line, and no part of the box covers the caption beneath it.
+
+Move the field that is already there; never drop a second one on top to fix the first. If the editor nudges a selected field with the arrow keys, prefer that for the last small correction and confirm from the zoom that it really moved, since a keystroke that does nothing looks the same as one that did. If four corrections have not settled it, stop and ask rather than nudging indefinitely: something about the field or the page is not what you think.
+
+Keep the final zoomed view of each field as evidence, so the reviewer can see the placement that was accepted rather than taking it on trust.
+
+The date field follows the same loop against its own line; on the T183 it belongs above its line, not over the "Year Month Day" caption.
+
+**This loop is the deliberate exception to spending turns sparingly.** A handful of extra observations here costs under a minute and is the difference between a packet the reviewer accepts and one that has to be redone by hand. Batch the predictable steps everywhere else; slow down for this.
 
 At completion, close the dialogs and applications you opened for this task once their outputs are verified; this includes any TaxPrep or browser window you opened. Programs that were already open before the task belong to whoever opened them: leave them, unless one blocks your work (for example a TaxPrep window holding the file you need or a dialog covering the screen), in which case close it with its normal close control and never discard unsaved work that is not yours; if it asks to save someone else's changes, cancel and ask the staff member. Preserve the source return. Record the first unfinished step on interruption; resume that step without recreating completed PDFs, folders or signature packets. Report stage durations, retries and model usage from actual logs so consecutive runs can be compared.
