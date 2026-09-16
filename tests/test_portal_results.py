@@ -171,3 +171,41 @@ def test_explicit_general_chat_file_request_still_uploads_the_requested_file(tmp
             assert uploaded == [source.read_bytes()]
             assert reports[0]['artifacts'][0]['storage_path'].endswith('-example.pdf')
     asyncio.run(scenario())
+
+
+def test_a_continued_attempt_hands_off_the_delivery_its_predecessor_recorded(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    from clara.portal_bindings import PortalBindings
+    from clara.portal_lease import AttemptIdentity, ExecutionLease
+    config, store, job, lease, args = completed_delivery(tmp_path)
+    import copy
+    claim = copy.deepcopy(CONTRACT.document['fixtures']['clara-claim']['response'])
+    claim['closeout']['attachments'] = []
+    store.status(job['id'], 'incomplete')  # the first attempt ended without a receipt
+    # Review and continue: a new attempt and fence for the same portal job and conversation.
+    later = {**claim, 'attempt_no': claim['attempt_no'] + 1, 'fence_token': claim['fence_token'] + 1}
+    local = PortalBindings(store, BASE, WORKER).persist_claim(later, 'Continue the closeout')['local_job_id']
+    store.status(local, 'needs_review')
+    identity = AttemptIdentity(later['job_id'], WORKER, later['attempt_no'], later['fence_token'])
+    lease2 = ExecutionLease(identity, clock=lambda: 100)
+    server = datetime(2026, 9, 14, tzinfo=timezone.utc)
+    lease2.acknowledge(identity, server_time=server, expires_at=server + timedelta(seconds=120), request_started=100)
+    bodies = []
+    async def scenario():
+        def handle(request):
+            assert request.url.path.endswith('/clara-result')
+            bodies.append(json.loads(request.content))
+            return wire(CONTRACT.document['fixtures']['clara-result']['response'])
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as api:
+            transport = PortalTransport(BASE, lambda:'test', client=api, clock=lambda:100)
+            reporter = PortalResults(config, store, transport, PortalJournal(store, BASE))
+            try:
+                result = await reporter.deliver(PreparedAttempt(local, lease2, False), TIMING)
+            finally:
+                await reporter.close()
+        assert result['handoff']['status'] == 'ready_to_email'
+        body = bodies[0]
+        assert body['outcome'] == 'completed_prepared'
+        assert (body['attempt_no'], body['fence_token']) == (later['attempt_no'], later['fence_token'])
+        assert [a['kind'] for a in body['artifacts']] == ['pandadoc', 'onedrive_folder']
+    asyncio.run(scenario())

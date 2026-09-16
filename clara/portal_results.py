@@ -52,12 +52,15 @@ class PortalResults:
             raise ValueError('Some closeout stages are still unfinished. Review the saved checkpoints.')
         for stage in state['stages'].values():
             wf._proofs(job, stage['evidence_ids'])
-        row = self.store.one("SELECT * FROM evidence WHERE job_id=? AND kind='portal_delivery' AND verified=1 ORDER BY created DESC LIMIT 1", (job['id'],))
+        # The delivery proof belongs to the portal job (its subject), not to one
+        # attempt: a continued attempt reuses the outputs its predecessor bound,
+        # and every artifact is re-verified below and again by the portal.
+        row = self.store.one('''SELECT e.* FROM evidence e JOIN jobs j ON j.id=e.job_id
+            WHERE j.conversation_id=? AND e.kind='portal_delivery' AND e.verified=1 AND e.subject=?
+            ORDER BY e.created DESC LIMIT 1''', (job['conversation_id'], identity.job_id))
         if not row:
             raise ValueError('Record the verified member-specific delivery outputs before handing off this closeout.')
         delivery = decode(row, 'payload')['payload']
-        if (delivery['attempt_no'], delivery['fence_token']) != (identity.attempt_no, identity.fence_token):
-            raise ValueError('The delivery evidence belongs to another portal attempt.')
         documents = collect_documents(self.config, self.store, self.transport.base_url,
                                       identity, job['id'], delivery['document_evidence_ids'])
         return documents, delivery['artifacts']
