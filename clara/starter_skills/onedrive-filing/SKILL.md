@@ -1,13 +1,13 @@
 ---
 name: onedrive-filing
-description: "File a finished T1 package into the client's OneDrive folder: find the existing client folder without ever creating a duplicate, create the year's package folder, upload every document, and record what the portal needs. Sharing the folder with the client is a person's step, not Clara's."
+description: "File a finished T1 package into the client's OneDrive folder: find the existing client folder without ever creating a duplicate, create the year's package folder, upload every document, share it view-only with Copy link and never Send, and record what the portal needs."
 ---
 
 # OneDrive filing for a T1 package
 
 Use this with the assigned closeout and the TaxPrep or ProFile skill once every PDF is printed and verified. The client never receives the return as attachments: they receive a link to a OneDrive folder shared view-only, and that link becomes the closeout's Drive Link.
 
-**Clara files and uploads. Clara does not share.** The share dialog is the one screen in this system where a wrong setting emails a client their tax documents, and nobody has yet watched it operate. Until a person has, create the folder, upload the package, record the folder and its contents, and hand the sharing step to the staff member who reviews the closeout. State plainly in the handoff that the folder still has to be shared view-only before the email goes out. Filing without sharing is a useful, complete piece of work; guessing at a share dialog is not.
+The share dialog is the one screen in this whole system where a wrong press emails a client their tax documents, because its blue primary button is **Send**. Laureen has now shown that screen and given the rule: use **Copy link**, never Send. That rule is absolute and appears again in full below. Everything else here exists to put the right folder in front of that dialog before it is opened.
 
 ## Account and location
 
@@ -45,7 +45,7 @@ Select by `data-automationid`, then `role`, then `aria-label`, in that order.
 | Search box | `input[type=search]`, aria-label `Search box. Suggestions appear as you type` |
 | Selection checkbox | `input[data-automationid=selection-checkbox]` |
 
-Reading any of these is safe. Pressing create or upload is ordinary work. Pressing share is not yours to press.
+Reading any of these is safe. Create, upload and share are ordinary work here; what is never ordinary is the Send button inside the share dialog.
 
 ### Three traps in the file grid
 
@@ -59,39 +59,45 @@ Search settles in about 6 seconds. Wait for it rather than reading a half-drawn 
 
 ```
 CH Clients Share
-  └── ZZ T1 clients              sorted to the bottom on purpose
-        └── {letter bucket}      first letter of the FOLDER NAME, not the surname
-              └── {client folder}
-                    └── {Year} T1 Package
+  └── ZZ T1 Clients
+        └── {letter bucket}
+              └── {client folder}                          e.g. Adam and Jennifer Pink
+                    ├── 2024 T1 Package - Adam & Jennifer Pink
+                    └── 2025 T1 Package - Adam & Jennifer Pink
 ```
 
-The letter bucket follows the folder name: *Erica Rocchi and Carlos Melo* is filed under **E**, not R. Use letter folders that already exist on screen, and never create a new top-level or letter folder.
+**Every year's package sits directly inside the client folder. There is no year folder in between** (Laureen, 17 September 2026). The E drive is arranged differently, with a year folder in the path, and that structure does not carry over here. If you are thinking of creating a folder called `2025`, you have the wrong tree in mind.
+
+**The letter bucket follows however the client is filed on the E drive.** That is the firm's own answer, and the E drive is already in front of you because the return came from it. Use letter folders that exist; never create a new top-level or letter folder.
 
 ## Finding the client folder, and the duplicate trap
 
-**This is the most dangerous step in the whole flow.** Client folder names do not match the wording of the email subject, and searching for the subject's version will miss a folder that exists:
+**This is the most dangerous step in the whole flow, and the reason is that there is no naming standard to rely on.** Laureen: *"I would usually just search for one name — there was no standard when we started using it so it could be any way."* The firm's own folders prove it. One real client folder holds these four packages, filed by three different people:
 
-| Source | Value |
+```
+2022 T1 Package - Adam and Jennifer Pink
+2023 T1 Package - Jennifer and Adam Pink      names in the other order
+2024 T1 Package - Adam & Jennifer Pink        ampersand instead of and
+2025 T1 Package - Adam & Jennifer Pink
+```
+
+So **search the way Laureen does: one name at a time.** A surname is usually the most distinctive. Searching the full couple string as the closeout writes it is the one approach that reliably finds nothing, because almost no folder is spelled that way. Search one member's surname, then the other's, then a first name, and the company name if the client is also a corporate client, since a person may be filed under the company's letter. Read the results with your eyes rather than matching strings: you are looking for the folder that is plainly this client.
+
+Let the E drive settle what the name should look like. The client is already filed there, and Laureen's rule for the letter bucket is to go by that filing.
+
+| What the searches found | What to do |
 |---|---|
-| Email subject | `2025 T1 Package - Jeffrey William Langlet & Janice Kyong Chung` |
-| Folder actually on disk | `Jeff Langlet and Janice Chung` |
+| A folder that is plainly this client | Use it, whatever its spelling |
+| Nothing, after searching each name separately and scrolling | Create the client folder, in the bucket the E drive filing indicates. A first year is ordinary |
+| Two or more that could each be this client | **Stop and ask.** Filing this year's return into the wrong one is not recoverable |
 
-Short first names, and the word `and` rather than `&`. The only other couple folder on record is `Erica Rocchi and Carlos Melo`, whose subject would render with `&`. A single failed exact search therefore proves nothing.
-
-Search for more than one spelling before drawing any conclusion: the full names from the closeout, the short or familiar forms, `and` in place of `&`, each member's surname on its own, and the company name if the client is also a corporate client, because a person may be filed under the company's letter. Then decide:
-
-| What search found | What to do |
-|---|---|
-| Exactly one exact match | Use it |
-| Nothing, after trying every spelling above and scrolling | Create the client folder in the correct letter bucket. A first year is ordinary |
-| Near-misses only | **Stop and ask.** Filing this year's return into last year's spouse's folder is not recoverable |
-| Two folders with the same name | **Stop and ask.** Never guess between them |
-
-Never merge, rename or move an existing client folder.
+Never merge, rename or move an existing client folder, and never "correct" a folder whose spelling differs from this year's closeout. The spelling varying is normal here, not a mistake to fix.
 
 ## The package folder and the upload
 
-1. Inside the client's folder, create `{Year} T1 Package` for the closeout's tax year, for example `2025 T1 Package`. If a folder for this year already exists, use it rather than making a second one.
+1. Inside the client's folder, create this year's package folder. The name carries the client too: `{Year} T1 Package - {client names}`, for example `2025 T1 Package - Adam & Jennifer Pink`. If a folder for this year already exists, use it rather than making a second one.
+
+   **Take the spelling from the sibling packages already in that folder.** Copy the most recent year's name and change only the year. Those folders are how this client is actually written here, and following them keeps a client's own folder internally consistent instead of adding a fifth spelling. Only when there is no previous package, a genuine first year, fall back to the client folder's own name.
 2. Upload every document from the verified local package: each member's client copy, T183 and engagement letter, plus any conditional form this return produced, such as instalments or a T1135.
 3. **Work out the expected file list from the closeout before you upload, then confirm what actually landed matches it.** Two members with nothing conditional means six files, three per member. One member means three. Do not carry a fixed number in your head.
 4. **Clara's packages contain no invoice.** Laureen raises invoices by hand, so a file count taken from an older procedure that includes one will be wrong by exactly one file. Do not upload an invoice and do not wait for one.
@@ -99,13 +105,33 @@ Never merge, rename or move an existing client folder.
 
 Names follow the firm's convention, which is the same one the printing skills use: `{Year} T1 - {Full name}`, `{Year} T183 - {Full name}`, `{Year} Engagement Letter - {Full name}`, and instalments at `{ReturnYear+1} Instalments - {Full name}`. Copy client names from the closeout rather than retyping them. A name may never end in a period: tidy a trailing period rather than refusing the name, which comes up with corporate names ending in `Inc.`. Never put a SIN, an amount, or words like FINAL, v2 or copy into a file name.
 
-## Sharing: what to hand over
+## Sharing the package folder
 
-Do not open the share dialog. In the handoff, record what the reviewer needs to finish the job: the folder's location and link, the file list you uploaded, the client email addresses from the closeout, and the settings the firm requires, which are **People you choose**, **Can view**, with the **notification turned off**, on the **package folder for this year** and never on the client's main folder. A client folder can hold several years side by side, so sharing the main folder would hand a client other years of their own returns, and in a corporate folder somebody else's entirely.
+The share dialog has now been shown by Laureen, and it holds one specific danger.
 
-If a future task explicitly authorizes Clara to share, with a person watching, these are the rules that apply and none of them is optional. Audience is People you choose, never Anyone with the link. Permission is Can view, never Can edit. The notification to the client is turned off **and read back as off** before anything is applied; a dialog that would email the client is a hard stop. All three settings are read back after applying and refused if any is not what was set. After Copy link, wait for the spinner to stop before reading the clipboard: an empty clipboard is a stop, not an empty drive link, and a link identical to the previous one means the clipboard still holds the **previous client's** link, which is a perfectly valid URL for the wrong client.
+```
+Share "2025 T1 Pac...nnifer Pink"
+  [ Add a name, group, or email        ] [pencil v]
+  [ Add a message                      ]
+  (avatars)         [ Copy link ]  [gear]  [ > Send ]
+```
 
-**One deliberate exception to the rule against touching anything labelled send, email or notify.** The control that stops OneDrive emailing the client is itself called something like *Notify people*. Refusing it on the strength of its name would leave the notification switched on, which is the exact outcome that rule exists to prevent. Turning that one named control off is allowed, and only after reading it back as off. Everything else matching send, email, notify, delete, remove, rename, move to, stop sharing, anyone with the link or can edit stays refused.
+**The blue button in the bottom-right corner is Send, and pressing it emails the client.** It sits exactly where a confirm button normally sits, which is what makes it dangerous: the instinct to finish a dialog by pressing the prominent blue button is the one instinct that must not be followed here. Laureen's instruction is exact: *"make sure she only uses the Copy Link button and not the Send button."*
+
+**Copy link is the plain button to its left, and it is the only button on this dialog you may press to finish.** Never press Send. Never type anything into *Add a message*, because that box is the body of an email to the client.
+
+Share the **package folder for this year**, never the client's main folder. A client folder holds every year side by side, so sharing the main folder would hand this client their other years as well, and in a corporate folder somebody else's entirely.
+
+1. Select this year's package folder so the dialog names it. Read the dialog title and confirm it is the right folder before touching anything.
+2. Open link settings with the gear. Audience is **People you choose**, never *Anyone with the link*. Permission is **Can view**, never *Can edit*. Apply, then read both back and refuse to continue if either is not what you set.
+3. Put the client email addresses from the closeout in the name field. There may be more than one, the signing member's address plus any additional addresses the closeout names. A malformed address is a stop, never a silent drop, because sharing with fewer people than the closeout names is invisible afterwards.
+4. Press **Copy link**, and wait until the spinner stops before reading the clipboard.
+5. Check what you copied. An empty clipboard is a stop, not an empty drive link. A link identical to the previous client's means the clipboard never updated and still holds **that** client's link, which is a perfectly valid URL for entirely the wrong person.
+6. Never press Send, at any point, for any reason.
+
+Hold the link in run state and record it with the delivery, so it reaches the portal alongside the PandaDoc links rather than separately.
+
+**The first time this runs on a real client folder, a person should watch it.** Say so in the handoff if nobody has yet. Everything matching delete, remove, rename, move to, stop sharing, anyone with the link or can edit stays refused throughout.
 
 ## Refusals
 
@@ -122,10 +148,9 @@ Keep a Chrome readback from this attempt showing the folder ID, the folder link,
 
 ## Still open: ask, never guess
 
-These have not been settled, and a confident guess at any of them creates a real problem in a real client's folder.
+Laureen answered most of this on 17 September 2026, and those answers are written into the sections above. Two things remain genuinely unknown.
 
-1. **How existing client folders spell a couple.** Evidence points to short first names joined by `and`, but it has not been confirmed as a rule. This is the one that creates duplicate folders.
-2. **Whether the package folder is `{Year} T1 Package` or carries the client name too.** One record of the real drive shows a bare year folder instead.
-3. **Whether the share dialog ever offers to email the client.** Nobody has watched it.
-4. **Whether this account may create sharing links at all.** A visible Share button is not the same as the action succeeding, and pressing it makes a real link to real client data.
-5. **Which member's name decides the letter bucket** for a couple whose folder does not exist yet.
+1. **Whether this account can actually create a sharing link.** A visible Share button is not the same as the action succeeding, and the first attempt makes a real link to real client data. If it refuses, stop and say so rather than working around it.
+2. **What the gear's link settings look like in practice.** The audience and permission controls behind it have not been watched, so read back what you set rather than assuming the dialog kept it.
+
+Answered, and not to be re-litigated: couples have no spelling standard, so search one name at a time; the package folder is `{Year} T1 Package - {client names}` and sits directly in the client folder with no year folder; the share dialog does offer to email the client, via the blue Send button, which is why Copy link is the only button you finish with; and the letter bucket follows the client's filing on the E drive.
