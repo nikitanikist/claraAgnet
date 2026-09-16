@@ -27,6 +27,17 @@ A wait is a ceiling, not a sleep. A dialog a keystroke opens appears in about a 
 
 Resolve the source path, tax year, exact full member names, required documents and output folder once from the closeout. Source names are inconsistently cased (`Singh, Inder pal and AURORA, AMRITA`): match case-insensitively. Files under `O:\Clearhouse Clara agent\Profile files\` are live client returns.
 
+**The client folder usually holds a Windows shortcut, not the return.** Staff place a shortcut such as `Karwal, Vikram.25T - Shortcut` in the client's own folder, laid out as `CH Client Files\{initial}\{Client folder}\Personal Tax\{year}\` (Laureen, 16 September 2026). Explorer shows it as Type `Shortcut` at a few KB. It is a pointer: it holds no tax data, and copying or opening it as if it were the return gives you a 5 KB link file instead of a client's return.
+
+Resolve it before anything else, and work only from the resolved target:
+
+1. If the path ends `.lnk`, is named `... - Shortcut`, or its size is only a few KB, treat it as a shortcut.
+2. Read its target: `(New-Object -ComObject WScript.Shell).CreateShortcut('<full path>').TargetPath`.
+3. Check the target before using it: it exists, it ends in `.25T`, its size is plausible for a return rather than a link, and its name matches the client this closeout names. A target that is missing, points at another client, or sits outside the folders you are permitted to read is a stop and ask, never a guess.
+4. Record both paths in the source-copy checkpoint, the shortcut you were given and the return you resolved, so a reviewer can see which file was actually opened.
+
+Everything below then applies to the resolved `.25T`, never to the shortcut. The closeout may give you either one, so run this check on whatever path it provides.
+
 Use `copy_file` to retain an untouched source snapshot of the `.25T` in this run's folder, then make a separate live working copy and open only that copy, once. Save the snapshot's evidence ID in the source-copy checkpoint; preserve original and snapshot with their hashes. Printing from a copied `.25T` is unproven: if ProFile behaves differently on the copy (refuses, warns), stop and ask rather than opening the original.
 
 ## Open and identify

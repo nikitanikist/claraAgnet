@@ -33,6 +33,8 @@ If the exact row or expected content is absent, take one targeted observation an
 
 For taxpayer/spouse, Alt+F7 toggles between those two members and preserves the form; allow about 1.5 s for the change. It does **not** reach dependants. For larger households use the named client selector and match the person's full consecutive name; the file/group row is not a person. Confirm the member in the Save As default name and resulting PDF even when the switch appeared successful.
 
+**A client folder may give you a shortcut instead of the return.** Staff place Windows shortcuts (`... - Shortcut`, Type `Shortcut`, a few KB) in the client's folder alongside the real file. A shortcut holds no tax data, so copying or opening one gives you a link file, not a return. If the path ends `.lnk`, is named `... - Shortcut`, or is only a few KB, read its target with `(New-Object -ComObject WScript.Shell).CreateShortcut('<full path>').TargetPath`, check that the target exists, has the right extension, is a plausible size and names the client this closeout names, and work only from that resolved path. Record both paths in the source-copy checkpoint. A target that is missing, names another client or sits outside the folders you may read is a stop and ask.
+
 ## Spend turns sparingly
 
 Every tool call is a round trip, and a run is mostly the sum of them, not the sum of the clicks. A measured closeout spent about three quarters of its wall-clock time between tool calls, across roughly 120 desktop steps that alternated one screenshot with one click. The work was right; the pace was the cost.
