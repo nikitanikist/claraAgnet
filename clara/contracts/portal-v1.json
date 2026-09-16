@@ -792,7 +792,7 @@
                 ]
               },
               "message_boundary_seq": {
-                "minimum": 1,
+                "minimum": 0,
                 "maximum": 9007199254740991,
                 "type": "integer"
               },
@@ -1248,7 +1248,7 @@
             "type": "integer"
           },
           "to_seq": {
-            "minimum": 1,
+            "minimum": 0,
             "maximum": 9007199254740991,
             "type": "integer"
           },
@@ -1308,7 +1308,7 @@
             "type": "integer"
           },
           "acked_seq": {
-            "minimum": 1,
+            "minimum": 0,
             "maximum": 9007199254740991,
             "type": "integer"
           }
@@ -1326,12 +1326,12 @@
       "response": {
         "properties": {
           "acked_seq": {
-            "minimum": 1,
+            "minimum": 0,
             "maximum": 9007199254740991,
             "type": "integer"
           },
           "to_seq": {
-            "minimum": 1,
+            "minimum": 0,
             "maximum": 9007199254740991,
             "type": "integer"
           },

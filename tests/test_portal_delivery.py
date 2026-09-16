@@ -137,3 +137,55 @@ def test_incomplete_or_changed_window_never_acknowledges_or_creates_work(tmp_pat
             assert store.rows('SELECT * FROM portal_v1_deliveries') == []
             assert all(c[0] != 'clara-message-ack' for c in calls)
     asyncio.run(scenario())
+
+
+def test_a_closeout_assigned_with_no_chat_message_delivers_an_empty_window(tmp_path):
+    """The portal hands out (from 1, to 0) when the work is entirely in the snapshot.
+
+    Nothing is paged and the acknowledgement carries 0, so the contract has to
+    accept it on both the claim and the acknowledgement.
+    """
+    config, store, claim, lease = setup(tmp_path)
+    claim['delivery_from_seq'] = 1
+    claim['message_boundary_seq'] = 0
+    claim['messages'] = []
+    claim['more_messages'] = False
+    calls = []
+
+    def handle(request):
+        body = json.loads(request.content)
+        name = request.url.path.rsplit('/', 1)[-1]
+        calls.append((name, body))
+        if name == 'clara-message-ack':
+            return wire({**CONTRACT.document['fixtures']['clara-message-ack']['response'],
+                         'acked_seq': 0, 'to_seq': 0, 'complete': True})
+        raise AssertionError('an empty window must not be paged')
+
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+            transport = PortalTransport(BASE, lambda: 'test-key', client=client)
+            delivery = PortalDelivery(store, transport)
+            manager = AgentManager(config, store)
+            assert manager.reserve_execution('portal')
+            assert await delivery.receive(claim, lease) == []
+            row = PortalBindings(store, BASE, WORKER).persist_claim(claim, 'Prepare the assigned task.')
+            jid = row['local_job_id']
+            await delivery.acknowledge(lease)
+            manager.enqueue_portal_job(jid, reservation_id='portal', execution_guard=lease)
+            assert manager.queue.get_nowait() == jid
+            assert [c[0] for c in calls] == ['clara-message-ack']
+            assert calls[0][1]['acked_seq'] == 0
+    asyncio.run(scenario())
+
+
+def test_the_contract_accepts_an_empty_window_and_still_rejects_nonsense():
+    claim = copy.deepcopy(CONTRACT.document['fixtures']['clara-claim']['response'])
+    claim.update(delivery_from_seq=1, message_boundary_seq=0, messages=[], more_messages=False)
+    CONTRACT.validate('clara-claim', 'response', claim)  # must not raise
+    with pytest.raises(ContractViolation):
+        CONTRACT.validate('clara-claim', 'response', {**claim, 'message_boundary_seq': -1})
+    with pytest.raises(ContractViolation):
+        CONTRACT.validate('clara-claim', 'response', {**claim, 'delivery_from_seq': 0})
+    ack = {**CONTRACT.document['fixtures']['clara-message-ack']['response'],
+           'acked_seq': 0, 'to_seq': 0, 'complete': True}
+    CONTRACT.validate('clara-message-ack', 'response', ack)
