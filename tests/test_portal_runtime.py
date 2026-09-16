@@ -655,3 +655,49 @@ def test_unexpected_runtime_exception_logs_a_redacted_line_and_names_the_class(t
                 await runtime.close()
                 await manager.close()
     asyncio.run(scenario())
+
+
+def test_idle_or_waiting_worker_keeps_the_windows_session_alive_but_not_while_working(tmp_path):
+    config, store, claim, _ = setup(tmp_path)
+    general(claim)
+    jid = PortalBindings(store, BASE, WORKER).persist_claim(claim, 'Synthetic interrupted task')['local_job_id']
+    store.status(jid, 'interrupted')
+    cycle_id = str(uuid4())
+    store.execute('INSERT INTO portal_v1_cycles VALUES(?,?,?,?,?,?,?,NULL,NULL)',
+                  (cycle_id, BASE, WORKER, 'held', json.dumps(claim), jid, time.time()))
+    def observer(store, manager, namespace, identity, local_job_id):
+        return {'finished':[], 'in_flight':['tool:printing'], 'unknown':[],
+                'observed_at':'2026-09-14T00:00:00Z', 'complete':False}
+    calls, executions, now, touches = [], [], [100], []
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(portal_handler(claim, calls))) as client:
+            manager = simulated_manager(config, store, executions)
+            await manager.start()
+            runtime = PortalRuntime(config, store, manager,
+                PortalTransport(BASE, lambda:'test', client=client, clock=lambda:now[0]), WORKER, observer=observer)
+            runtime.touch = lambda: touches.append(now[0]) or True
+            try:
+                for tick, expected in [(100, [100]), (200, [100]), (341, [100, 341])]:
+                    now[0] = tick
+                    await runtime.poll()
+                    assert touches == expected
+                # A task in hand: Clara's own desktop actions must not be interleaved.
+                manager.active_job = jid
+                store.status(jid, 'running')
+                now[0] = 700
+                await runtime.poll()
+                assert touches == [100, 341]
+                # Waiting for a person's answer can take hours; the session must survive.
+                store.status(jid, 'waiting')
+                await runtime.poll()
+                assert touches == [100, 341, 700]
+            finally:
+                manager.active_job = None
+                await runtime.close()
+                await manager.close()
+    asyncio.run(scenario())
+
+
+def test_session_touch_is_a_no_op_off_windows():
+    from clara.windows_session import touch_input
+    assert touch_input() is False

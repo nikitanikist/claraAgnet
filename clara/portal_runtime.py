@@ -23,6 +23,7 @@ from .portal_quiescence import observe_quiescence
 from .portal_results import PortalResults
 from .portal_session import PortalSession
 from .portal_transport import PortalRejected, PortalUnavailable
+from .windows_session import KEEPALIVE_S, touch_input
 
 
 CLAIM_RETRY_S = 30
@@ -45,6 +46,7 @@ class PortalRuntime:
         # Transport-clock timers: next unclaimed-hold claim retry, last idle heartbeat.
         self._claim_retry_at = None
         self._presence_at, self._presence_interval = None, PRESENCE_INTERVAL_S
+        self._keepalive_at, self.touch = None, touch_input
 
     def pending(self):
         return self.store.one('''SELECT * FROM portal_v1_cycles WHERE namespace=?
@@ -87,7 +89,27 @@ class PortalRuntime:
         state = await self.tick()
         if state in {'held', 'claim_unknown'}:
             await self._presence()
+        self._keep_session_alive()
         return state
+
+    def _keep_session_alive(self):
+        """Remote Desktop Services counts only input as activity, and a locked client sends none.
+
+        A zero-net mouse move every few minutes keeps the dedicated session from being
+        disconnected for inactivity while Clara is idle, held, or waiting for a person's
+        answer. It is skipped while a task executes so it never interleaves with Clara's
+        own desktop actions."""
+        job = self.store.job(self.manager.active_job) if self.manager.active_job else None
+        if job and job['status'] != 'waiting':
+            return
+        now = self.transport.clock()
+        if self._keepalive_at is not None and now - self._keepalive_at < KEEPALIVE_S:
+            return
+        self._keepalive_at = now
+        try:
+            self.touch()
+        except Exception:
+            pass  # Presence on the desktop is best effort; it never changes state.
 
     async def _presence(self):
         """A held worker sends nothing else, and quiesce replays do not count as
