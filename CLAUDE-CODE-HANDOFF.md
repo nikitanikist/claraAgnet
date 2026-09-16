@@ -160,11 +160,11 @@ The authoritative detailed record is `CONTEXT.md`. These are last verified obser
 
 | Surface | State at handover (updated 16 Sep 2026; `CONTEXT.md` has the detail) |
 | --- | --- |
-| Clara integration source | `dbd4b4e` on `feat/clearhouse-portal-v1`; 386 tests pass |
-| Windows installed code | `b7eb0bf`; `ef167b1` (source-copy re-check by original, finish-check text in the portal reason) and `dbd4b4e` (stage names on checkpoint events) still need installation |
+| Clara integration source | `d35ac99` on `feat/clearhouse-portal-v1`; 395 tests pass |
+| Windows installed code | `d35ac99` (16 Sep 05:35 UTC); `windows_handoff.qualified` is still `false` in `portal.json` |
 | Portal database | Lovable migration `20260915190732`: late quiescence reports for cancelled or reviewed attempts are superseded and never re-hold the worker |
-| Test frontend | v4.0 published; a Lovable redesign of the Clara workspace (plan approved 15 Sep 22:48 UTC) may have landed since; check the Lovable message list |
-| TEST5 | All outputs exist and are bound; portal `needs_review` after attempt 3 because of the source-copy hash check fixed in `ef167b1`; install, then Review and continue |
+| Test frontend | v4.1 published (Clara workspace redesign, Lovable commit `f8a61b4f`); 4 pre-existing security-scan findings remain in Lovable's Security view |
+| TEST5 | **Ready to Email** (attempt 6, 16 Sep 05:42 UTC) for T Super Admin, no email sent; the post-completion worker hold was reviewed and released by SQL; see `CONTEXT.md` for the open qualification/WhatsApp decision |
 | TEST3 / TEST4 | Cancelled on 15 Sep by user decision; outputs preserved, do not recover |
 
 ### TEST4 confirmed blockers

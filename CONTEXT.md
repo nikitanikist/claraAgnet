@@ -22,11 +22,11 @@ The user has limited assistant and Lovable credit; keep changes focused on obser
 
 | Surface | Last verified state |
 | --- | --- |
-| Clara GitHub integration branch | `dbd4b4e6bd826e27eb0b181f310944f12f1d3155` (16 Sep 2026); 386 tests pass |
-| Windows installed Clara | `b7eb0bfb182724d87e77d7dc5d57740d2a79796d` (installed 16 Sep ~02:08 IST). `ef167b1` (source-copy re-check by original, finish-check text in the portal reason) and `dbd4b4e` (stage names on checkpoint events) are **pushed, not installed**: the Mac locked and the RDP session dropped before they could be installed |
+| Clara GitHub integration branch | `d35ac9905c07e7e8d9b11d4dc198b3baba8df0e3` (16 Sep 2026); 395 tests pass, 4 skipped |
+| Windows installed Clara | `d35ac9905c07e7e8d9b11d4dc198b3baba8df0e3` (installed 16 Sep 05:35 UTC / 11:05 IST; single `python` process, autostart re-enabled). Every commit below is installed. `%LOCALAPPDATA%\Clara\portal.json` still has `windows_handoff.qualified: false` |
 | Portal database | Lovable migration `20260915190732` (late quiescence reports for cancelled/reviewed attempts are superseded, no re-hold); `clara-quiesce` and `clara-result` redeployed |
-| Test frontend | v4.0 published (Review and continue for needs_review, "Held for review" mood). A Lovable build for the Clara workspace redesign ("Clara workspace: live agent experience", plan approved 15 Sep 22:48 UTC) was in progress when this file was written; check `.lovable/plan.md` and the Lovable message list before assuming it landed |
-| TEST5 | Portal job `80bb13ae-2506-44a1-b5fd-700945d9abe4` in `needs_review` after attempt 3 (fence 17): all outputs exist and were bound by `record_portal_delivery`; the local finish check still failed on the source-copy hash (fixed in `ef167b1`). Next: install, Review and continue (attempt 4), expect `completed_prepared` and Ready to Email for T Super Admin `69af37fd-…` |
+| Test frontend | v4.1 published (Lovable commit `f8a61b4f`, 15 Sep 22:54 UTC): the Clara workspace redesign (fixed-height shell, Live indicator, grouped activity stream, stage chips, one-click answers, outputs-first details). Verified in Chrome after clearing a stale service worker; staff browsers may need a refresh. Lovable reports 4 pre-existing security-scan findings (Security view) that are not Clara's |
+| TEST5 | **Ready to Email, 16 Sep 05:42 UTC (attempt 6, fence 20).** Job `80bb13ae-2506-44a1-b5fd-700945d9abe4` is `completed_prepared`, handoff `ready_to_email`, result revision 5; form `…0005` is `ready_to_email`, `assigned_to` = reviewer = T Super Admin `69af37fd-…`, email draft prepared, no email sent; manifest = 2 PandaDoc links + 1 OneDrive folder, 6 link-only document rows. First end-to-end success of the T1 flow through Clara. The post-completion worker hold was released by SQL (see below) |
 
 Clara commits pushed on 15/16 September, in order:
 
@@ -35,8 +35,12 @@ Clara commits pushed on 15/16 September, in order:
 - `0508ade`: `record_portal_delivery` no longer demands the reservation key on the page; exact identity vocabulary in the tool description, task prompt, skill and error messages; 20-minute readback window. Installed.
 - `c6a3023`: executor reaper. After any task ends, the desktop Python ends the Claude CLI and its MCP bridges left under the task (applications are never touched) and records an `executors_reaped` event. Installed.
 - `b7eb0bf`: review fixes: URL-only spelling tolerance with token boundaries, values may be proven across several fresh Chrome readbacks, `external_key` must equal the canonical key. Installed.
-- `ef167b1`: source-copy evidence is re-checked against the untouched original (path + hash recorded at copy time) instead of the TaxPrep working copy; the portal `needs_review_reason` carries the local finish-check sentence. **Not installed.**
-- `dbd4b4e`: checkpoint events carry `meta.stage`/`meta.status` and the message `Saved workflow progress: <stage> <status>.` **Not installed.**
+- `ef167b1`: source-copy evidence is re-checked against the untouched original (path + hash recorded at copy time) instead of the TaxPrep working copy; the portal `needs_review_reason` carries the local finish-check sentence. Installed.
+- `dbd4b4e`: checkpoint events carry `meta.stage`/`meta.status` and the message `Saved workflow progress: <stage> <status>.` Installed.
+- `2bbcc65`, `44382f1`: Remote Desktop keep-alive (a zero-net mouse move every 4 minutes while idle, held or waiting; never during a task) after the RDS idle limit disconnected the session at 02:48 UTC. Installed.
+- `19128cf`: processes of a new Windows logon are review items, not in-flight work. Installed.
+- `6a061f4`, `68879e2`: delivery proof looked up by portal job; a restarted worker is never counted as unfinished work of a finished attempt. Installed.
+- `d35ac99`: **record delivery again in the attempt that hands off.** The portal's `validateLinkOnlyT1` accepts only OneDrive readbacks observed at or after the current attempt's `started_at` (and at most 12 h old); attempt 5 handed off attempt 3's record and was refused as `onedrive_evidence_stale`. The handoff gate now uses only the current attempt's own `portal_delivery` proof (plus a 12 h age guard), and the task prompt, tool description, `prepare_resume` and the starter skill tell Clara to re-read the folder, files and packets and call `record_portal_delivery` again on a continued attempt. Installed.
 
 The next assistant must check for later commits and live changes instead of assuming these revisions remain current. Do not use generic older update instructions that pull `main` for this integration worker.
 
@@ -55,15 +59,20 @@ The next assistant must check for later commits and live changes instead of assu
 - Server-to-Mac clipboard/file export is not allowed directly. If a transfer is necessary, the user authorized the existing WhatsApp **Clear House Agent project** group and native Mac WhatsApp route. Do not send secrets or client documents to GitHub.
 - Uploaded transcripts/maps are reference material. The improved TaxPrep map/guide takes precedence over errors in the older transcript. Actual visible form layout takes precedence over a historical fixed page number.
 
-## TEST5: outputs complete, one code fix away from Ready to Email
+## TEST5: Ready to Email reached on attempt 6
 
 Fixture `ZZ TEST 5` (form `00000000-0000-4023-8473-000000000005`, job `80bb13ae-2506-44a1-b5fd-700945d9abe4`, conversation `90364591-84ed-45f7-a965-3230bcd5d364`), assigned by T Super Admin on 15 Sep 19:22 UTC with TEST4's instructions adapted.
 
 - Attempt 1 (fence 15): printing, verification, OneDrive folder `CLARA-TEST5-23473-2025-Erica-Carlos-20260916-0105` and both PandaDoc packets completed in about 22 minutes. It then looped for 11 minutes on `record_portal_delivery` because the canonical reservation key never appears on a page (fixed in `0508ade`/`b7eb0bf`). The user stopped it; the stop left the Claude CLI, node and python bridge processes alive, which the observer reported as in-flight for ever (fixed in `c6a3023`; 14 leaked `claude.exe` from earlier runs were also killed by hand).
 - Attempt 2 (fence 16): asked "Continue with incomplete usage information?" (answered through `clara_record_answer`), then failed within 20 seconds: the server's native Claude login had hit its 5-hour session limit ("resets 4am Asia/Kolkata"). Clara has no API fallback; a heavy day can stall the worker for hours. Discuss the plan or an API key fallback with the user.
-- Attempt 3 (fence 17, after the limit reset): recorded delivery on the first call, saved the signature, delivery and review checkpoints, published the handoff and reported. The local finish check still returned incomplete because it re-hashed the source-copy evidence against the TaxPrep working copy (the same as TEST4's first blocker); the portal therefore shows `needs_review` with a generic reason and the form is still `pending`. `ef167b1` fixes both the check and the reason text.
+- Attempt 3 (fence 17): recorded delivery on the first call and saved every checkpoint, but the local finish check re-hashed the source copy against the TaxPrep working copy (fixed in `ef167b1`).
+- Attempt 4 (fence 18): verified in 54 s without recording delivery; the handoff gate found no proof for that attempt (`6a061f4` made it look up the portal job, which turned out to be wrong, see attempt 5).
+- Attempt 5 (fence 19): handed off attempt 3's delivery record; the portal refused it: `onedrive_evidence_stale`, "Clara's OneDrive check is too old to rely on". The staff messages posted for attempts 4 and 5 had told Clara not to re-record. Fixed in `d35ac99`.
+- Attempt 6 (fence 20, 05:38–05:42 UTC, build `d35ac99`): the staff message alone re-queued the job (`clara_enqueue_staff_message` returned `queued_continuation`); Clara re-read the folder, files and packets, called `record_portal_delivery` once, saved the checkpoints and finished. Portal: `completed_prepared`, form `ready_to_email` assigned to T Super Admin, email draft prepared, nothing sent.
 
-Recovery path: install `dbd4b4e` at idle, post a short reuse message in the conversation, run Review and continue (or `clara_continue_job` with every unknown resolved, as done for attempts 1 and 2), and let attempt 4 finish. Expected result: outcome `completed_prepared`, form `ready_to_email` assigned to T Super Admin, three manifest artifacts (two PandaDoc, one OneDrive folder). Outputs and reservations must not be recreated.
+After completion the worker went on **recovery hold** with seven unconfirmed observations: `windows-handoff-not-qualified` (configuration), `windows-baseline-applications-open` and `windows-baseline-task-application-running` (a Chrome window and a TaxPrep process that were already open when the task started), three Chrome helper processes, and `external-desktop-state-unconfirmed`. This is the documented behaviour while qualification is off (docs/WINDOWS-WORKER-HANDOFF.md). The Chrome window is the **operator's own WhatsApp Web browser** in the `clara.agent` session, used for Mac↔server file transfer; do not close it without the user. Because `clara_continue_job` rejects a `completed_prepared` job and `Release-ClaraPortalHold.ps1` refuses while `chrome.exe` runs, the hold was cleared by SQL at 05:51 UTC: attempt 6's `quiescence_report` received a `reconciliation` record (so the worker's later reports are `superseded`), both locks were released, the worker set idle, and server event 899 records the review. The worker heartbeats idle with no hold and no open locks.
+
+**Open decision for the user:** with WhatsApp Web open in Clara's Windows session, `qualified: true` would refuse to start tasks ("Windows is not ready for an automatic handoff") and `qualified: false` holds the worker after every closeout. Recommended: move WhatsApp Web out of the `clara.agent` session (another account or the Mac), close the leftover TaxPrep instance, set `windows_handoff.qualified: true` in `portal.json`, restart Clara, and run the documented two-task queue test with test closeouts.
 
 ## TEST3 and TEST4: cancelled
 
@@ -109,10 +118,10 @@ On the original Mac, detailed private notes are at `~/Downloads/Clearhouse-Lovab
 
 ## Next actions, in order
 
-1. Unlock the Mac, reopen the Windows App session "Clearhouse Clara.agent", and install `dbd4b4e` at idle: `.\Set-ClaraAutostart.ps1 -Disable`, `Stop-ScheduledTask -TaskName Clara-S-1-5-21-1046630959-3975722937-3647023733-1650`, stop the Clara python process, `.\Update-ClaraPortalTest.ps1 -Revision dbd4b4e6bd826e27eb0b181f310944f12f1d3155`, `.\Set-ClaraAutostart.ps1 -Start`, then check `%LOCALAPPDATA%\Clara\logs\automatic-start.log` and that exactly one `python` and no stray `claude`/`node` processes run.
-2. Post a short reuse message in the TEST5 conversation (outputs exist, do not recreate, record delivery and finish), then Review and continue. Watch `clara_events`; attempt 4 should end within a few minutes with `completed_prepared`.
-3. Verify the Ready to Email receipt: form `ready_to_email`, `assigned_to` = T Super Admin, manifest with the OneDrive folder and both PandaDoc links, no email sent. Confirm the worker returns to idle without a hold and claims the next job.
-4. Review the Lovable redesign build (tests, preview at 2560 and 375 px, publish) and report to the user; do not start new Lovable work without a plan-mode round.
+1. Decide where WhatsApp Web lives (see the TEST5 section). Then, at idle, close leftover task applications in the `clara.agent` session, set `windows_handoff.qualified: true` in `%LOCALAPPDATA%\Clara\portal.json`, and restart Clara (`.\Set-ClaraAutostart.ps1 -Disable`, `Stop-ScheduledTask -TaskName Clara-S-1-5-21-1046630959-3975722937-3647023733-1650`, stop the python process, `.\Set-ClaraAutostart.ps1 -Start`).
+2. Run the documented two-task queue test (docs/WINDOWS-WORKER-HANDOFF.md, "Connected acceptance still required", step 3) with two test closeouts. Expect: the second stays queued until the first quiesces automatically; each ends in Ready to Email for its assigner; the worker returns to idle without a hold.
+3. Ask IT to relax the RDS idle/disconnect session limits for `clara.agent`; the 4-minute keep-alive is a mitigation, not a policy.
+4. Decide on a model fallback for the server's Claude login (the 5-hour session window killed attempt 2); `fallback_model` is `None`.
 5. Keep this file, `CLAUDE-CODE-HANDOFF.md` and memory current with installed revisions and verified behaviour.
 
 Deferred: ProFile, extra workers, unrelated feature expansion. Do not invent completion-time estimates.
