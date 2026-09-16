@@ -557,3 +557,52 @@ def test_general_requests_ignore_windows_helpers_too(tmp_path):
         clock[0] = 4
         assert (await observer.observe(jid))['complete']
     asyncio.run(scenario())
+
+
+def test_processes_born_after_the_task_ended_are_not_its_leftovers():
+    """A request that finished cannot have started a program minutes later."""
+    baseline = crowded()
+    current = copy.deepcopy(baseline)
+    ended = 1000.0
+    # Clara's own leftover: started while she worked, its launcher since reaped.
+    current['processes'].append({'pid': 60, 'created': 900, 'name': 'T1Txp.exe', 'parent': 777})
+    # A child that leftover spawned after the task ended is still hers.
+    current['processes'].append({'pid': 61, 'created': 1400, 'name': 'AcroRd32.exe', 'parent': 60,
+                                 'parent_created': 900})
+    # Something unrelated that appeared long afterwards, launcher already gone.
+    current['processes'].append({'pid': 62, 'created': 1500, 'name': 'Updater.exe', 'parent': 888})
+    # And its own child, equally unrelated.
+    current['processes'].append({'pid': 63, 'created': 1600, 'name': 'Helper.exe', 'parent': 62,
+                                 'parent_created': 1500})
+    started = {p['pid'] for p in task_started_processes(current, baseline, ended)}
+    assert started == {60, 61}
+    # Inside the grace, the end of a task and its last action are the same moment.
+    edge = copy.deepcopy(baseline)
+    edge['processes'].append({'pid': 64, 'created': ended + 5, 'name': 'T1Txp.exe', 'parent': 777})
+    assert 64 in {p['pid'] for p in task_started_processes(edge, baseline, ended)}
+    # While the task is still running nothing is excluded by time.
+    assert {p['pid'] for p in task_started_processes(current, baseline, None)} == {60, 61, 62, 63}
+
+
+def test_finished_general_request_is_released_despite_a_later_unrelated_process(tmp_path):
+    """The exact Softros case: a background program appeared an hour after the request."""
+    store, jid = general_task(tmp_path)
+    current, clock = crowded(), [0]
+    observer = WindowsHandoff(store, exclusive=True, probe=lambda: copy.deepcopy(current), clock=lambda: clock[0])
+
+    async def scenario():
+        assert await observer.begin(jid) == []
+        ended = store.job(jid)['finished']
+        assert (await observer.observe_general(jid))['in_flight'] == ['windows-settling']
+        clock[0] = 4
+        assert (await observer.observe_general(jid))['complete']
+        # An invisible program whose launcher has exited turns up an hour later.
+        current['processes'].append({'pid': 103796, 'created': ended + 3600, 'name': 'Updater.exe',
+                                     'parent': 424242})
+        report = await observer.observe_general(jid)
+        assert report['in_flight'] == [] and report['complete']
+        # Something Clara started during the request still holds the worker.
+        current['processes'].append({'pid': 103797, 'created': ended - 60, 'name': 'Messenger.exe',
+                                     'parent': 424243})
+        assert f"windows-process:103797:{ended - 60}" in (await observer.observe_general(jid))['in_flight']
+    asyncio.run(scenario())

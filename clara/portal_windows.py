@@ -135,6 +135,9 @@ WINDOWS_HELPERS = {'ctfmon.exe', 'tabtip.exe', 'tabtip32.exe', 'textinputhost.ex
                    'fontdrvhost.exe', 'dwm.exe', 'audiodg.exe'}
 TASK_APPLICATIONS = {'chrome.exe', 'msedge.exe', 't1txp.exe', 'profile.exe', 'winword.exe', 'excel.exe',
                      'acrord32.exe', 'acrobat.exe'}
+# A task's own last actions and the moment its end is recorded are not the same
+# instant. Only this much later still counts as started by the task itself.
+AFTER_TASK_GRACE_S = 10
 
 
 def baseline_issues(snapshot):
@@ -172,7 +175,7 @@ def own_launch_chain(process, current):
     return process['pid'] in ancestors or (parent in ancestors and parent != controller)
 
 
-def task_started_processes(current, baseline):
+def task_started_processes(current, baseline, ended=None):
     """Processes that appeared after the baseline and are attributable to the task.
 
     A leftover is something Clara started that is still running. A new process
@@ -189,6 +192,13 @@ def task_started_processes(current, baseline):
     be read, has already exited, or lives outside this session stays attributed
     to the task, so nothing Clara launched can be waved through once its
     launcher is gone.
+
+    `ended` is when the task itself finished. Work Clara left behind was
+    started while she was working: a program that first appeared minutes or
+    hours after she stopped belongs to whatever started it then, even when its
+    own launcher has since exited and cannot be read. Such a process counts
+    only as the descendant of one of her real leftovers, which keeps a leftover
+    that spawns children after the fact fully visible.
     """
     before = {process_key(p) for p in baseline.get('processes', [])}
     by_pid = {p['pid']: p for p in current['processes']}
@@ -221,7 +231,27 @@ def task_started_processes(current, baseline):
             if row['pid'] in foreign or process_key(row) in before:
                 foreign.add(p['pid'])
                 settled = False
-    return [p for p in fresh if p['pid'] not in foreign]
+
+    # Nothing created after the task ended is its leftover unless it descends
+    # from one. The grace absorbs the moment between the last thing Clara did
+    # and the recorded end of the task.
+    late = set()
+    if ended is not None:
+        cutoff = ended + AFTER_TASK_GRACE_S
+        late = {p['pid'] for p in fresh if p['pid'] not in foreign and p['created'] > cutoff}
+        settled = False
+        while not settled:
+            settled = True
+            for p in fresh:
+                if p['pid'] not in late:
+                    continue
+                row = parent_of(p)
+                if row is None or process_key(row) in before:
+                    continue
+                if row['pid'] not in foreign and row['pid'] not in late:
+                    late.discard(p['pid'])
+                    settled = False
+    return [p for p in fresh if p['pid'] not in foreign and p['pid'] not in late]
 
 
 class WindowsHandoff:
@@ -354,7 +384,7 @@ class WindowsHandoff:
             # not execution still in flight.
             executors = {'python.exe', 'pythonw.exe', 'node.exe', 'claude.exe',
                          'powershell.exe', 'pwsh.exe', 'cmd.exe', 'wscript.exe', 'cscript.exe'}
-            for p in task_started_processes(current, baseline):
+            for p in task_started_processes(current, baseline, self.store.job(jid)['finished']):
                 if p.get('name', '').casefold() in WINDOWS_HELPERS:
                     continue
                 if interrupted and restarted and own_launch_chain(p, current):
@@ -416,7 +446,7 @@ class WindowsHandoff:
             visible = set(current.get('ui_process_ids', [])) | {w['pid'] for w in current['windows']}
             controllers = {'python.exe', 'pythonw.exe', 'node.exe', 'claude.exe', 'powershell.exe',
                            'pwsh.exe', 'cmd.exe', 'wscript.exe', 'cscript.exe'}
-            for p in task_started_processes(current, baseline):
+            for p in task_started_processes(current, baseline, self.store.job(jid)['finished']):
                 if p.get('name', '').casefold() in WINDOWS_HELPERS:
                     continue
                 if restarted and own_launch_chain(p, current):

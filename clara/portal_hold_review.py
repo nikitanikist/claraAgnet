@@ -73,7 +73,7 @@ def reviewed_operations(store, namespace, identity, jid, mappings):
     return resolved
 
 
-def check_desktop(snapshot, baseline=None):
+def check_desktop(snapshot, baseline=None, ended=None):
     validate_snapshot(snapshot)
     if snapshot['print_jobs']:
         raise ValueError('Settle printing before review.')
@@ -84,7 +84,7 @@ def check_desktop(snapshot, baseline=None):
     executors = {'claude.exe', 'node.exe', 'python.exe', 'pythonw.exe',
                  'chrome.exe', 'msedge.exe', 't1txp.exe', 'profile.exe',
                  'winword.exe', 'excel.exe', 'acrord32.exe', 'acrobat.exe'}
-    candidates = task_started_processes(snapshot, baseline) if baseline else snapshot['processes']
+    candidates = task_started_processes(snapshot, baseline, ended) if baseline else snapshot['processes']
     if any(p.get('name', '').casefold() in executors and p['pid'] not in snapshot['ancestors']
            for p in candidates):
         raise ValueError('A separate model or controller process still needs review.')
@@ -109,11 +109,12 @@ async def release(config, identity, mappings, note, *, probe=native_snapshot, pa
         raise ValueError('Unfinished tools, attachments or other actions still require review.')
     saved = store.one('SELECT snapshot FROM portal_windows_baselines WHERE job_id=?', (jid,))
     baseline = json.loads(saved['snapshot']) if saved else None
+    ended = store.job(jid)['finished']
     first = await probe()
-    check_desktop(first, baseline)
+    check_desktop(first, baseline, ended)
     await pause(3)
     second = await probe()
-    check_desktop(second, baseline)
+    check_desktop(second, baseline, ended)
     if (any(first[k] != second[k] for k in ('owner', 'session', 'controller')) or
             abs(first['boot'] - second['boot']) > 2):
         raise ValueError('The observed desktop changed; inspect it again.')
