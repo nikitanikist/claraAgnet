@@ -93,7 +93,10 @@ This was measured on the first real package (Laureen, 16 September 2026, confirm
 2. Zoom into just that field and its line together. A full-page screenshot cannot show a few pixels of error; a close view can.
 3. Read the gap between the **bottom edge of the field** and the printed line. That edge is what decides where the signature lands.
 4. If the bottom sits below the line, move the field up by the gap you just saw. If it sits above the line, move it down. Change one field at a time and re-zoom after each move, so every correction is judged on what is actually on screen rather than on what you intended.
-5. Stop when the bottom edge meets the line, and no part of the box covers the caption beneath it.
+5. Stop when the bottom edge meets the line, within a pixel or two at the magnification you are looking at, and no part of the box covers the caption beneath it.
+6. Before leaving the field, confirm it belongs to the member it is meant for. The editor shows the assignee on the selected field. A perfectly placed signature assigned to the spouse is still wrong, and on a couple that is an easy mistake to make.
+
+Do not work out the correction by arithmetic on the zoomed image. Judge it the way a person would, by how far the edge sits from the line in the view in front of you, then look again. Each pass lands closer than the last, so an imperfect first correction costs one more look rather than compounding.
 
 Move the field that is already there; never drop a second one on top to fix the first. If the editor nudges a selected field with the arrow keys, prefer that for the last small correction and confirm from the zoom that it really moved, since a keystroke that does nothing looks the same as one that did. If four corrections have not settled it, stop and ask rather than nudging indefinitely: something about the field or the page is not what you think.
 
