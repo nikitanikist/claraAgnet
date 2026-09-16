@@ -12,6 +12,7 @@ the task is no longer running.
 import asyncio
 import base64
 import ctypes
+import hashlib
 import io
 import json
 import os
@@ -117,6 +118,13 @@ class PreviewLoop:
         self.sent = 0
         self.final_sent = False
         self.stopped = False
+        # A session that draws nothing (locked, disconnected) fails or blanks every
+        # grab; each failed Windows grab also leaks a screen-sized bitmap inside
+        # Pillow. Failed captures therefore back off on their own, up to 30 s,
+        # while probes keep the watch state fresh.
+        self.blank_failures = 0
+        self.capture_blocked_until = None
+        self.last_key_digest = None
 
     def _latest_event_id(self):
         row = self.store.one('SELECT max(id) AS id FROM events WHERE job_id=?', (self.local_job_id,))
@@ -141,11 +149,21 @@ class PreviewLoop:
                 actions.append(('local-' + str(row['id']), tool, label, data.get('stage')))
         return actions
 
+    def _capture_allowed(self):
+        return self.capture_blocked_until is None or self.clock() >= self.capture_blocked_until
+
     async def _capture(self):
-        image = await asyncio.to_thread(self.grab)
-        if image is None:
+        if not self._capture_allowed():
             return None
-        return await asyncio.to_thread(self.encode, image)
+        image = await asyncio.to_thread(self.grab)
+        frame = await asyncio.to_thread(self.encode, image) if image is not None else None
+        if frame is None:
+            self.blank_failures += 1
+            wait = min(MAX_BACKOFF_S, PROBE_INTERVAL_S * 2 ** (self.blank_failures - 1))
+            self.capture_blocked_until = self.clock() + wait
+            return None
+        self.blank_failures, self.capture_blocked_until = 0, None
+        return frame
 
     async def _send(self, kind, frame=None, *, event_uid=None, stage=None, label=None):
         self.seq += 1
@@ -179,27 +197,32 @@ class PreviewLoop:
                 self.final_sent = True
             return status
         self.final_sent = False
-        for event_uid, tool, label, stage in self._new_actions():
-            if self.key_frames >= KEY_FRAME_CAP and tool != 'save_checkpoint':
-                continue
-            frame = await self._capture()
-            if frame is None:
-                continue
-            await self._send('key', frame, event_uid=event_uid, stage=stage, label=label)
-            self.key_frames += 1
         now = self.clock()
-        if self.wanted:
-            if self.last_live is None or now - self.last_live >= LIVE_INTERVAL_S:
-                self.last_live = now
-                frame = await self._capture()
-                if frame is not None:
-                    await self._send('live', frame)
-                elif self.last_probe is None or now - self.last_probe >= PROBE_INTERVAL_S:
-                    # Nothing rendered (locked or disconnected session): keep the
-                    # watch fresh at the slow cadence instead of every 2 s.
-                    self.last_probe = now
-                    await self._send('probe')
-        elif self.last_probe is None or now - self.last_probe >= self.next_after:
+        # One grab per tick serves both purposes. Actions that landed in the same
+        # tick share that grab: the frame shows the screen right after the last
+        # of them, and is attributed to that last action (a best-effort replay,
+        # never a claim to show every intermediate state).
+        actions = [a for a in self._new_actions()
+                   if self.key_frames < KEY_FRAME_CAP or a[1] == 'save_checkpoint']
+        live_due = self.wanted and (self.last_live is None or now - self.last_live >= LIVE_INTERVAL_S)
+        frame = await self._capture() if (actions or live_due) else None
+        if actions and frame is not None:
+            digest = hashlib.sha1(frame[0].encode('ascii')).hexdigest()
+            if digest != self.last_key_digest:  # an unchanged screen earns no second key frame
+                event_uid, tool, label, stage = actions[-1]
+                await self._send('key', frame, event_uid=event_uid, stage=stage, label=label)
+                self.key_frames += 1
+                self.last_key_digest = digest
+        if live_due:
+            self.last_live = now
+            if frame is not None:
+                await self._send('live', frame)
+            elif self.last_probe is None or now - self.last_probe >= PROBE_INTERVAL_S:
+                # Nothing rendered (locked or disconnected session): keep the
+                # watch fresh at the slow cadence instead of every 2 s.
+                self.last_probe = now
+                await self._send('probe')
+        elif not self.wanted and (self.last_probe is None or now - self.last_probe >= self.next_after):
             self.last_probe = now
             await self._send('probe')
         return status

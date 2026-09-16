@@ -93,27 +93,132 @@ def test_live_frames_flow_only_while_someone_watches_and_probes_otherwise(tmp_pa
 def test_key_frames_follow_visible_actions_regardless_of_watching_with_a_cap(tmp_path):
     store, jid, identity, cid = running_task(tmp_path)
     portal, clock = Portal(wanted=False), [100.0]
-    loop, _ = loop_for(store, jid, identity, portal, clock)
+    screen = [(40, 120, 90)]
+    loop, _ = loop_for(store, jid, identity, portal, clock, grab=lambda: picture(color=screen[0]))
     async def scenario():
         await loop._tick()
         store.event(cid, jid, 'tool', {'id': 't1', 'name': 'mcp__windows__Screenshot', 'input': '{}'})   # read-only: no frame
         store.event(cid, jid, 'tool', {'id': 't2', 'name': 'mcp__windows__Click', 'input': '{"x": 1}'})
         store.event(cid, jid, 'tool_done', {'id': 't2', 'name': 'mcp__windows__Click'})
         store.event(cid, jid, 'checkpoint', {'stage': 'documents', 'status': 'verified'})
+        clock[0] += LIVE_INTERVAL_S
         await loop._tick()
         keys = [p for p in portal.sent if p['kind'] == 'key']
-        assert [k['label'] for k in keys] == ['Click', 'Saved progress: documents']
-        assert keys[0]['activity_event_uid'].startswith('local-') and keys[1]['stage'] == 'documents'
-        assert all('jpeg_base64' in k for k in keys)
+        # Actions that land in one tick share one grab, attributed to the last of them.
+        assert [k['label'] for k in keys] == ['Saved progress: documents'] and keys[0]['stage'] == 'documents'
+        assert keys[0]['activity_event_uid'].startswith('local-') and 'jpeg_base64' in keys[0]
+        store.event(cid, jid, 'tool', {'id': 't3', 'name': 'mcp__windows__Type', 'input': '{}'})
+        clock[0] += LIVE_INTERVAL_S
+        await loop._tick()
+        assert len([p for p in portal.sent if p['kind'] == 'key']) == 1, 'an unchanged screen earns no second key frame'
+        screen[0] = (200, 30, 30)
+        store.event(cid, jid, 'tool', {'id': 't4', 'name': 'mcp__windows__Type', 'input': '{}'})
+        clock[0] += LIVE_INTERVAL_S
+        await loop._tick()
+        keys = [p for p in portal.sent if p['kind'] == 'key']
+        assert [k['label'] for k in keys] == ['Saved progress: documents', 'Type']
         loop.key_frames = KEY_FRAME_CAP
-        store.event(cid, jid, 'tool', {'id': 't3', 'name': 'mcp__chrome__click', 'input': '{}'})
+        screen[0] = (30, 30, 200)
+        store.event(cid, jid, 'tool', {'id': 't5', 'name': 'mcp__chrome__click', 'input': '{}'})
+        clock[0] += LIVE_INTERVAL_S
+        await loop._tick()
+        assert len([p for p in portal.sent if p['kind'] == 'key']) == 2, 'beyond the cap ordinary actions earn no frame'
         store.event(cid, jid, 'checkpoint', {'stage': 'delivery', 'status': 'verified'})
-        clock[0] += PROBE_INTERVAL_S
+        clock[0] += LIVE_INTERVAL_S
         await loop._tick()
         keys = [p for p in portal.sent if p['kind'] == 'key']
-        assert [k['label'] for k in keys][-1] == 'Saved progress: delivery', 'beyond the cap only checkpoints earn a frame'
-        assert len(keys) == 3
+        assert keys[-1]['label'] == 'Saved progress: delivery', 'checkpoints still earn a frame beyond the cap'
     asyncio.run(scenario())
+
+
+def test_one_grab_per_tick_serves_both_the_key_frame_and_the_live_frame(tmp_path):
+    store, jid, identity, cid = running_task(tmp_path)
+    portal, clock = Portal(wanted=True), [100.0]
+    grabs = []
+    def grab():
+        grabs.append(1)
+        return picture()
+    loop, _ = loop_for(store, jid, identity, portal, clock, grab=grab)
+    async def scenario():
+        await loop._tick()                      # probe: learns that someone watches
+        store.event(cid, jid, 'tool', {'id': 't1', 'name': 'mcp__windows__Click', 'input': '{}'})
+        clock[0] += LIVE_INTERVAL_S
+        await loop._tick()
+        assert [p['kind'] for p in portal.sent] == ['probe', 'key', 'live'] and len(grabs) == 1
+        assert portal.sent[1]['jpeg_base64'] == portal.sent[2]['jpeg_base64']
+    asyncio.run(scenario())
+
+
+def test_failed_captures_back_off_while_probes_keep_the_watch_fresh(tmp_path):
+    store, jid, identity, cid = running_task(tmp_path)
+    portal, clock = Portal(wanted=True), [100.0]
+    grabs = []
+    def grab():
+        grabs.append(clock[0])
+        return None                            # a disconnected session: Windows draws nothing
+    loop, _ = loop_for(store, jid, identity, portal, clock, grab=grab)
+    async def scenario():
+        await loop._tick()                      # probe only
+        clock[0] += LIVE_INTERVAL_S
+        await loop._tick()                      # first grab fails: captures blocked for 10 s
+        assert len(grabs) == 1 and loop.capture_blocked_until == clock[0] + PROBE_INTERVAL_S
+        for _ in range(4):
+            clock[0] += LIVE_INTERVAL_S
+            store.event(cid, jid, 'tool', {'id': 'x' + str(clock[0]), 'name': 'mcp__windows__Click', 'input': '{}'})
+            await loop._tick()
+        assert len(grabs) == 1, 'no grab while blocked, not even for key frames'
+        clock[0] += LIVE_INTERVAL_S
+        await loop._tick()                      # 10 s later: one more try, then 20 s
+        assert len(grabs) == 2 and loop.capture_blocked_until == clock[0] + 2 * PROBE_INTERVAL_S
+        for _ in range(12):
+            clock[0] += LIVE_INTERVAL_S
+            await loop._tick()
+        assert len(grabs) == 3 and loop.blank_failures == 3
+        assert all(p['kind'] == 'probe' for p in portal.sent) and len(portal.sent) >= 3, 'probes continued throughout'
+        # The screen comes back: the next allowed grab succeeds and the backoff resets.
+        loop.grab = picture
+        clock[0] += 3 * PROBE_INTERVAL_S
+        await loop._tick()
+        assert portal.sent[-1]['kind'] == 'live' and loop.blank_failures == 0 and loop.capture_blocked_until is None
+    asyncio.run(scenario())
+
+
+def test_run_cycles_ticks_with_the_live_interval_and_resets_backoff_after_success(tmp_path):
+    store, jid, identity, _ = running_task(tmp_path)
+    portal, clock = Portal(wanted=True), [100.0]
+    loop, sleeps = loop_for(store, jid, identity, portal, clock)
+    ticks = []
+    original = loop._tick
+    async def tick():
+        ticks.append(1)
+        n = len(ticks)
+        if n in {2, 3}:
+            raise RuntimeError('grab exploded')
+        if n == 5:
+            store.status(jid, 'completed')
+        return await original()
+    loop._tick = tick
+    asyncio.run(loop.run())
+    # tick 1 ok → 2 s; failures → 2, 4; tick 4 ok resets the backoff → 2 s; tick 5 ends the task.
+    assert sleeps == [LIVE_INTERVAL_S, 2, 4, LIVE_INTERVAL_S] and loop.backoff == 0
+    loop2, sleeps2 = loop_for(store, jid, identity, portal, clock)
+    store.status(jid, 'running')
+    count = []
+    async def always_fail():
+        count.append(1)
+        if len(count) > 6:
+            store.status(jid, 'failed')
+            return 'failed'
+        raise RuntimeError('still broken')
+    loop2._tick = always_fail
+    asyncio.run(loop2.run())
+    assert sleeps2 == [2, 4, 8, 16, 30, 30], 'the backoff ceiling is 30 s'
+
+
+def test_desktop_capture_is_windows_only(monkeypatch):
+    from clara import portal_preview
+    monkeypatch.setattr(portal_preview.os, 'name', 'posix')
+    assert portal_preview.grab_desktop() is None
 
 
 def test_visible_action_classification():

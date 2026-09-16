@@ -194,18 +194,23 @@ review. Local-only workflows retain their existing Workflow review screen.
   (a super admin has the Live desktop card open in a visible tab), then a `live` JPEG frame
   every 2 s (1280 px wide, quality 62, at most 400 000 base64 characters) until the reply says
   `wanted: false`;
-- sends one `key` frame at the start of every visible action (Windows bridge or Chrome tool that
-  is not read-only) and at every checkpoint, regardless of watching, capped at 120 per attempt
-  (checkpoints still earn a frame beyond the cap), tagged with the action's `local-<id>` event
-  uid, stage and a short label;
+- sends one `key` frame per tick in which a visible action (Windows bridge or Chrome tool that is
+  not read-only) or a checkpoint was recorded, regardless of watching, capped at 120 per attempt
+  (checkpoints still earn a frame beyond the cap). One grab per tick serves the key frame and the
+  live frame; actions that landed in the same tick share it and the frame is attributed to the
+  last of them (a best-effort replay, never every intermediate state); an unchanged screen earns
+  no second key frame. The frame carries the action's `local-<id>` event uid, stage and a short
+  label. That uid is an opaque join key: the frame can reach the portal before the `clara-events`
+  row it refers to, so the portal must store it without checking that the event exists yet;
 - sends one final `live` frame when the job pauses for a question, then nothing until it resumes;
 - stops on its own when the job leaves `running`/`waiting`, so the end-of-task observer never sees
   a capture in progress.
 
 Frames are captured inside the worker process with Pillow (`ImageGrab.grab(all_screens=True)`),
 never by launching a helper: a helper process would count as Clara's unfinished work. Black
-frames (a locked or disconnected session draws nothing) are discarded and the loop keeps probing
-at the slow cadence. Every failure except a lost lease backs off (2, 4, 8 … 30 s; 60 s when the
+or failed frames (a locked or disconnected session draws nothing, and a failed Windows grab leaks
+a bitmap inside Pillow) are discarded and captures back off on their own (10, 20, 30 s) while the
+loop keeps probing at the slow cadence. Every failure except a lost lease backs off (2, 4, 8 … 30 s; 60 s when the
 portal is unavailable or lacks the function) and never stops or cancels the task; `fenced`,
 `lease_expired`, `unauthorized` and `forbidden` end the loop because the control loops already
 handle the task. The whole dedicated desktop is captured, so that desktop must stay Clara's.

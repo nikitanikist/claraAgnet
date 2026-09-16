@@ -1,5 +1,6 @@
 """Relay scoped chat and concise activity with durable, repeatable event IDs."""
 from dataclasses import asdict
+import re
 from datetime import datetime, timezone
 import json
 
@@ -19,10 +20,11 @@ def check_binding(store, namespace, identity, local_job_id):
 # label comes from a fixed allowlist; the tool's input is only searched for
 # those names and is never forwarded, so window titles, file paths, command
 # text and client data stay on the worker.
-APP_HINTS = (('t1txp', 'TaxPrep'), ('taxprep', 'TaxPrep'), ('profile', 'ProFile'), ('pandadoc', 'PandaDoc'),
-             ('sharepoint', 'OneDrive'), ('onedrive', 'OneDrive'), ('1drv', 'OneDrive'), ('acrord32', 'Acrobat'),
-             ('acrobat', 'Acrobat'), ('winword', 'Word'), ('excel', 'Excel'), ('explorer', 'Explorer'),
-             ('chrome', 'Chrome'), ('msedge', 'Edge'))
+APP_HINTS = ((r'\bt1txp\b|\btaxprep\b', 'TaxPrep'), (r'\bpandadoc\b', 'PandaDoc'),
+             (r'\bsharepoint\b|\bonedrive\b|\b1drv\b', 'OneDrive'), (r'\bacrord32\b|\bacrobat\b', 'Acrobat'),
+             (r'\bwinword\b', 'Word'), (r'\bexcel\.exe\b|\bmicrosoft excel\b', 'Excel'),
+             (r'\bmsedge\b|\bmicrosoft edge\b', 'Edge'), (r'\bchrome\b', 'Chrome'),
+             (r'\bprofile\.exe\b|\bintuit profile\b', 'ProFile'), (r'\bexplorer\.exe\b|\bfile explorer\b', 'Explorer'))
 
 
 def tool_surface(name):
@@ -35,16 +37,21 @@ def tool_surface(name):
 
 
 def app_hint(name, raw_input):
-    """An allowlisted application name for the action, or None."""
+    """An allowlisted application name for the action, or None.
+
+    Program and site names are matched as whole words (or executable names), so
+    ordinary typed text such as "client profile" or "excellent" never becomes a
+    label; a browser page is labelled by its site, otherwise by the browser.
+    """
     text = (raw_input if isinstance(raw_input, str) else '').casefold()[:4000]
     if name.startswith('mcp__chrome__'):
-        for needle, label in APP_HINTS:
-            if label in {'PandaDoc', 'OneDrive'} and needle in text:
+        for pattern, label in APP_HINTS:
+            if label in {'PandaDoc', 'OneDrive'} and re.search(pattern, text):
                 return label
         return 'Chrome'
     if name.startswith('mcp__windows__'):
-        for needle, label in APP_HINTS:
-            if needle in text:
+        for pattern, label in APP_HINTS:
+            if re.search(pattern, text):
                 return label
     return None
 

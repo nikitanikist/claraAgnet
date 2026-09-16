@@ -47,6 +47,8 @@ def test_stop_is_delivered_while_chat_receipt_is_blocked(tmp_path):
             if op == 'clara-command-ack':
                 acked.append(json.loads(request.content))
                 return wire({'command_id': 1, 'recorded': True, 'server_time': '2026-09-14T00:00:00Z'})
+            if op == 'clara-preview':
+                return wire(CONTRACT.document['fixtures'][op]['response'])
             raise AssertionError(op)
         async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
             transport = PortalTransport(BASE, lambda: 'test-key', client=client, clock=lambda: 100)
@@ -96,9 +98,27 @@ def test_local_completion_keeps_connection_and_reservation_for_result_delivery(t
             session.start()
             job = await session.wait_for_execution()
             assert job['status'] == 'completed'
-            assert not session.closed and all(not t.done() for t in session.tasks)
+            await asyncio.sleep(0)
+            control, preview = session.tasks[:4], session.tasks[4]
+            assert not session.closed and all(not t.done() for t in control)
+            assert preview.done(), 'the live desktop loop ends with the task; the control loops stay for result delivery'
             prepared.lease.assert_active()
             await session.close()
             assert store.job(prepared.local_job_id)['status'] == 'completed'
             assert manager.execution_reservation == 'portal'
+    asyncio.run(scenario())
+
+
+def test_a_session_can_run_without_the_preview_loop(tmp_path):
+    async def scenario():
+        store, manager, prepared = environment(tmp_path)
+        async def handle(request):
+            await asyncio.Event().wait()
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+            session = PortalSession(store, manager, PortalTransport(BASE, lambda: 'test-key', client=client),
+                                    PortalJournal(store, BASE), prepared, preview=False)
+            session.start()
+            assert len(session.tasks) == 4
+            await session.close()
+            assert all(t.done() for t in session.tasks)
     asyncio.run(scenario())
