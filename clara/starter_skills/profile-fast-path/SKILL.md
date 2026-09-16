@@ -56,7 +56,7 @@ Never modify `Options -> Environment` or `Options -> Form Selection`: shared con
 4. Identify the exact new file this run produced against the pre-build listing. Never rely on "newest file" alone; a wrong pick is another client's return.
 5. COPY (never cut) it to the package folder. Verify it arrived and opens. Only then remove your own source file from the output folder.
 6. Never delete or move any other file in that output folder; other runs and other clients own them.
-7. Rename to `{Year} T1 {FirstName}.pdf`.
+7. Rename to `{Year} T1 - {Full name}.pdf`, for example `2025 T1 - Patrick Anderson.pdf`.
 
 This route may print one member or all (unverified): check the printed PDF for every assigned member; if one is missing, switch member (see Members) and repeat.
 
@@ -66,13 +66,13 @@ This route may print one member or all (unverified): check the printed PDF for e
 2. Read the window title: it must name the intended member and the T183 as the form.
 3. Confirm BOTH "Clearhouse LLP" AND "Q2629" appear on the form. Either missing: abort and escalate; do not print.
 4. Press `F12`, or hover `789,71` and click only if the tooltip identifies the green print-to-PDF printer (the plain printer at `757,71` is NOT it).
-5. Choose the package folder. REPLACE the pre-filled file name with `{Year} T1 {FirstName} T183.pdf`. Read back the full path before Save; verify the PDF exists and opens.
+5. Choose the package folder. REPLACE the pre-filled file name with `{Year} T183 - {Full name}.pdf`. Read back the full path before Save; verify the PDF exists and opens.
 
 ## Print engagement letter
 
 1. Type `engage` in the Search box; the letter is not usually already open.
 2. PROVE from the window title that the engagement letter is the form in focus (`... {Member} - Engagement letter`). `F12` and the green printer print whatever is focused; an unnavigated search would print the previous form under the wrong name. If you cannot prove it, abort.
-3. `F12` or the confirmed green printer; package folder; replace the name with `{Year} T1 {FirstName} engagement letter.pdf`; verify.
+3. `F12` or the confirmed green printer; package folder; replace the name with `{Year} Engagement Letter - {Full name}.pdf`; verify.
 
 ## Conditional extra forms and naming
 
@@ -80,8 +80,8 @@ Open the printed T1 PDF. Read its bookmarks (the more reliable signal) and the c
 
 Naming (same as TaxPrep, one exception):
 
-- Package folder `{Year} T1 Package`; client copy `{Year} T1 {FirstName}`; T183 `{Year} T1 {FirstName} T183`; engagement letter `{Year} T1 {FirstName} engagement letter`.
-- Instalments `{ReturnYear+1} Instalments - {person}` (a 2025 return gives `2026 Instalments`): the ONLY output whose year is not the return year; do not "correct" it. Per person: print and name only for the member whose return requires instalments (Jeff yes, Janice no).
+- The firm's convention is year, document name, space hyphen space, then the client's full name (Laureen, 16 September 2026): client copy `{Year} T1 - {Full name}`; T183 `{Year} T183 - {Full name}`; engagement letter `{Year} Engagement Letter - {Full name}`; T1135 `{Year} T1135 - {Full name}`. The full name is the member's name as recorded on this closeout, never the first name alone. Package folder `{Year} T1 Package`.
+- Instalments `{ReturnYear+1} Instalments - {Full name}` (a 2025 return gives `2026 Instalments`): the ONLY output whose year is not the return year; do not "correct" it. Per person: print and name only for the member whose return requires instalments (Jeff yes, Janice no).
 
 Never write a file without the client name in it.
 
@@ -116,7 +116,7 @@ The family-member dropdown (needs a `.25T` with a dependant); A3 (the Verify sca
 
 ## Package and handoff
 
-Use the assigned naming convention, normally `{Year} T1 {FirstName}.pdf`, `{Year} T1 {FirstName} T183.pdf`, `{Year} T1 {FirstName} engagement letter.pdf`, plus `{ReturnYear+1} Instalments - {person}.pdf` and any T1135 or other conditional form the printed return requires, all in `{Year} T1 Package`. Resolve any same-first-name collision explicitly. Keep the raw printed PDFs separately and inspect the final letter and signature pages. Required additional forms come from this closeout's printed return, not another family's.
+Use the firm's naming convention: `{Year} T1 - {Full name}.pdf`, `{Year} T183 - {Full name}.pdf`, `{Year} Engagement Letter - {Full name}.pdf`, plus `{ReturnYear+1} Instalments - {Full name}.pdf` and any T1135 or other conditional form the printed return requires, all in `{Year} T1 Package`. The full name is the member's name as recorded on this closeout, which also settles any same-name collision. Keep the raw printed PDFs separately and inspect the final letter and signature pages. Required additional forms come from this closeout's printed return, not another family's.
 
 Verify the complete package together after printing, retaining member/type/path/hash evidence. Use the existing signature and OneDrive delivery skills and portal checkpoints; PDF verification does not permit skipping the remaining workflow. For a portal closeout, reserve each PandaDoc packet and the OneDrive folder with `reserve_external_write` using the assignment's canonical system, operation and key triples shown in the task (`pandadoc create_signature_packet closeout:<form>:pandadoc:<member_id>`, `storage create_folder closeout:<form>:storage:folder`), never another operation name, a title or a timestamp; `record_portal_delivery` reconciles those reservations. Its `files` records use the assignment's `member_id` values, `document_type` exactly `client_copy`, `t183` or `engagement_letter` (and `instalments` or `t1135` for the extra forms; verify those with `verify_output` types `instalments` and `t1135` first), and the assignment `tax_year`; each observation must be a Chrome readback from this task (at most 20 minutes old) showing the folder ID, file ID, exact file name and exact byte size (read item details or the storage API), and each packet observation must show the PandaDoc URL, document ID, member name and email. The canonical keys are bound by the reservations, not by page text. On a continued attempt, read the folder, its files and each packet again and call `record_portal_delivery` again before finishing: the portal accepts only readbacks from the attempt that hands off, and recording again creates nothing remotely. PDFs go to OneDrive (instalments and T1135 included); the portal receives its folder link and each member's PandaDoc link for Ready to Email. Return the closeout to the exact staff account that assigned it to Clara: Amit's assignment returns to Amit, and a super admin's assignment returns to that super admin. Use the recorded assignment identity, never the OneDrive login or a fixed reviewer name. Laureen handles invoicing; she is not the default Ready to Email owner. The receiving staff member reviews the draft and handles sending. Clara does not send the email.
 
