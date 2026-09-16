@@ -196,3 +196,27 @@ def test_review_ignores_programs_that_were_open_before_the_task():
     value['processes'].append({'pid': 13, 'created': 301., 'name': 't1txp.exe', 'parent': 7})
     with pytest.raises(ValueError):
         review.check_desktop(value, baseline)
+
+
+def test_release_uses_the_tasks_saved_baseline_to_ignore_preexisting_programs(tmp_path, monkeypatch):
+    config, store, job, identity = package(tmp_path)
+    base = snapshot()
+    base['processes'] += [{'pid': 8, 'created': 102., 'name': 'chrome.exe', 'parent': 3},
+                          {'pid': 9, 'created': 103., 'name': 't1txp.exe', 'parent': 3}]
+    store.execute('INSERT INTO portal_windows_baselines VALUES(?,?)', (job['id'], json.dumps(base)))
+    def handler(request):
+        return wire({**CONTRACT.document['fixtures']['clara-quiesce']['response'], 'quiescent': True, 'recovery_hold': False})
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            monkeypatch.setattr(review, 'PortalTransport', lambda base, provider: PortalTransport(base, lambda: 'test', client=client))
+            async def probe():
+                value = snapshot()
+                value['processes'] += [{'pid': 8, 'created': 102., 'name': 'chrome.exe', 'parent': 3},
+                                       {'pid': 9, 'created': 103., 'name': 't1txp.exe', 'parent': 3},
+                                       {'pid': 12, 'created': 300., 'name': 'chrome.exe', 'parent': 8, 'parent_created': 102.}]
+                return value
+            async def pause(seconds): pass
+            result = await review.release(config, identity, {}, 'Operator checked completed outputs; the open browser and TaxPrep predate the task.', probe=probe, pause=pause)
+            assert result['released']
+    asyncio.run(scenario())
+    assert store.one('SELECT state FROM portal_v1_cycles')['state'] == 'reconciled'

@@ -107,12 +107,22 @@ def snapshot(controller_pid):
             # exclude other console hosts or the controller's task children.
             if own_probe_console(process, os.getpid(), observer_created, os.environ['SystemRoot']):
                 continue
+            created = process.create_time()
+            # Windows keeps a dead creator's pid on its children and reuses the
+            # pid freely, so a parent counts only while a process with that pid
+            # and an earlier creation time still exists (psutil's own rule);
+            # otherwise the parentage is unknown and the process stays the task's.
+            parent, parent_created = 0, None
             try:
-                parent = int(process.ppid())
+                found = process.parent()
+                if found is not None and found.create_time() <= created:
+                    parent, parent_created = int(found.pid), found.create_time()
             except (OSError, psutil.Error):
-                parent = 0  # Unknown parentage keeps the process attributed to the task.
-            result['processes'].append({'pid': pid, 'created': process.create_time(), 'name': process.name(),
-                                        'parent': parent})
+                parent, parent_created = 0, None
+            row = {'pid': pid, 'created': created, 'name': process.name(), 'parent': parent}
+            if parent:
+                row['parent_created'] = parent_created
+            result['processes'].append(row)
         except psutil.NoSuchProcess:
             continue
         except (OSError, psutil.AccessDenied):

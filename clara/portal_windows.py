@@ -110,6 +110,9 @@ def validate_snapshot(value):
             raise ValueError('A Windows process lacks its creation identity.')
         if 'parent' in process and (type(process['parent']) is not int or process['parent'] < 0):
             raise ValueError('A Windows process has an unreadable parent identity.')
+        if 'parent_created' in process and (type(process['parent_created']) not in {int, float}
+                                            or not math.isfinite(process['parent_created'])):
+            raise ValueError('A Windows process has an unreadable parent identity.')
     return value
 
 
@@ -155,15 +158,35 @@ def task_started_processes(current, baseline):
     A leftover is something Clara started that is still running. A new process
     is not hers when its parent (or that parent's parent, and so on) is a
     program that was already running before the task and is neither the
-    worker's own launch chain nor the Windows shell: the helpers a pre-existing
-    browser or chat client spawns for itself are that program's business.
-    A process whose parent cannot be read, has already exited, or lives outside
-    this session stays attributed to the task, so nothing Clara launched can be
-    waved through once its launcher is gone.
+    worker's own launch chain nor the Windows shell (every Explorer process):
+    the helpers a pre-existing browser or chat client spawns for itself are
+    that program's business.
+
+    A parent is identified, not merely named by pid: Windows leaves a dead
+    creator's pid on its children and hands that pid to the next process, so a
+    parent row counts only when its creation time matches the recorded parent
+    identity, or at least precedes the child's. A process whose parent cannot
+    be read, has already exited, or lives outside this session stays attributed
+    to the task, so nothing Clara launched can be waved through once its
+    launcher is gone.
     """
     before = {process_key(p) for p in baseline.get('processes', [])}
     by_pid = {p['pid']: p for p in current['processes']}
     own = set(current.get('ancestors', [])) | {current.get('shell_pid', 0)}
+    own |= {p['pid'] for p in current['processes'] if str(p.get('name', '')).casefold() == 'explorer.exe'}
+
+    def parent_of(p):
+        parent = p.get('parent') or 0
+        row = by_pid.get(parent) if parent else None
+        if row is None:
+            return None
+        stamp = p.get('parent_created')
+        if stamp is not None and abs(row['created'] - stamp) > 0.01:
+            return None  # the pid was reused; the real parent is gone
+        if stamp is None and row['created'] > p['created']:
+            return None  # a parent is always created before its child
+        return row
+
     fresh = [p for p in current['processes'] if process_key(p) not in before]
     foreign, settled = set(), False
     while not settled:
@@ -172,8 +195,10 @@ def task_started_processes(current, baseline):
             parent = p.get('parent') or 0
             if p['pid'] in foreign or not parent or parent in own:
                 continue
-            row = by_pid.get(parent)
-            if parent in foreign or (row is not None and process_key(row) in before):
+            row = parent_of(p)
+            if row is None:
+                continue
+            if row['pid'] in foreign or process_key(row) in before:
                 foreign.add(p['pid'])
                 settled = False
     return [p for p in fresh if p['pid'] not in foreign]

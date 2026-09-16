@@ -214,7 +214,7 @@ def test_boot_estimate_jitter_does_not_change_exact_controller_identity(tmp_path
     asyncio.run(scenario())
 
 
-def test_shell_helpers_require_actual_shell_pid_and_explorer_folders_still_block():
+def test_shell_helpers_require_actual_shell_pid_and_explorer_folders_are_notes():
     current = sample()
     current['shell_pid'] = 20
     current['windows'] += [{'handle': 88, 'pid': 20, 'class': 'ThumbnailDeviceHelperWnd'},
@@ -420,6 +420,18 @@ def test_task_started_processes_ignores_pid_reuse_and_unreadable_parents():
     old = {'processes': [{'pid': p['pid'], 'created': p['created'], 'name': p['name']} for p in baseline['processes']]}
     assert {p['pid'] for p in task_started_processes(current, old)} == {40, 80, 81}
     assert task_started_processes(current, {'baseline_issues': ['windows-baseline-unavailable']}) == current['processes']
+    # Clara's launcher (pid 500) started TaxPrep and Acrobat, then was reaped; the operator's chat client
+    # spawned a helper that received pid 500 afterwards. The stale pid must not make her apps foreign.
+    current['processes'] += [{'pid': 70, 'created': 310, 'name': 'T1Txp.exe', 'parent': 500},
+                             {'pid': 71, 'created': 311, 'name': 'AcroRd32.exe', 'parent': 500, 'parent_created': 305},
+                             {'pid': 500, 'created': 400, 'name': 'Messenger.exe', 'parent': 42, 'parent_created': 152}]
+    started = {p['pid'] for p in task_started_processes(current, baseline)}
+    assert {70, 71} <= started and 500 not in started
+    # Folder windows in a second Explorer process are still the shell: what Clara opens from them is hers.
+    current['processes'] += [{'pid': 21, 'created': 91, 'name': 'explorer.exe', 'parent': 20, 'parent_created': 90},
+                             {'pid': 90, 'created': 600, 'name': 'AcroRd32.exe', 'parent': 21, 'parent_created': 91}]
+    baseline['processes'].append({'pid': 21, 'created': 91, 'name': 'explorer.exe', 'parent': 20})
+    assert 90 in {p['pid'] for p in task_started_processes(current, baseline)}
 
 
 def test_qualified_start_is_not_blocked_by_programs_someone_else_left_open(tmp_path):
@@ -447,3 +459,37 @@ def test_qualified_start_is_not_blocked_by_programs_someone_else_left_open(tmp_p
             await manager.execute(store.job(jid2))
     asyncio.run(blocked())
     assert ran == [jid], "Clara's own active printing still blocks a qualified start"
+
+
+@pytest.mark.parametrize('parent,ok', [(0, True), (20, True), (None, False), (-1, False), (2.0, False), (True, False), ('20', False)])
+def test_snapshot_parent_identity_is_a_non_negative_int_when_present(parent, ok):
+    value = sample()
+    validate_snapshot(copy.deepcopy(value))  # older probes report no parent at all
+    value['processes'][0]['parent'] = parent
+    if ok:
+        validate_snapshot(value)
+    else:
+        with pytest.raises(ValueError, match='parent identity'):
+            validate_snapshot(value)
+    value['processes'][0].update(parent=20, parent_created=float('nan'))
+    with pytest.raises(ValueError, match='parent identity'):
+        validate_snapshot(value)
+
+
+def test_general_completion_ignores_hidden_helpers_of_preexisting_programs_but_not_claras(tmp_path):
+    store, jid = general_task(tmp_path)
+    current, clock = crowded(), [0]
+    observer = WindowsHandoff(store, exclusive=True, probe=lambda: copy.deepcopy(current), clock=lambda: clock[0])
+    async def scenario():
+        assert await observer.begin(jid) == []
+        # Hidden helpers of the operator's browser and chat client appear while Clara works.
+        current['processes'] += [{'pid': 60, 'created': 300, 'name': 'chrome.exe', 'parent': 40, 'parent_created': 150},
+                                 {'pid': 61, 'created': 301, 'name': 'Messenger.exe', 'parent': 42, 'parent_created': 152}]
+        assert (await observer.observe(jid))['in_flight'] == ['windows-settling']
+        clock[0] = 4
+        assert (await observer.observe(jid))['complete']
+        # A hidden process under Clara's own launch chain is still her unfinished work.
+        current['processes'].append({'pid': 62, 'created': 302, 'name': 'python.exe', 'parent': 10, 'parent_created': 110})
+        report = await observer.observe(jid)
+        assert report['in_flight'] == ['windows-process:62:302'] and not report['complete']
+    asyncio.run(scenario())

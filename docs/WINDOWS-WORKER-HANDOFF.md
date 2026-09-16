@@ -8,9 +8,7 @@ executor and all tool calls must finish, external operation reservations and
 attachments must settle, and fresh observations must show the same unlocked
 dedicated Windows session with no printing. Existing application windows may
 remain open. A newly opened visible application may be the requested result;
-its presence alone does not reserve the computer forever. Newly observed
-background processes and script/model controllers still require review, even
-when they have a window. Three seconds of settled observations are required.
+its presence alone does not reserve the computer forever. Newly observed background processes the task started (see "What counts as a leftover" below) and script/model controllers still require review, even when they have a window. Three seconds of settled observations are required.
 
 This does not qualify the separate TaxPrep handoff or release an interrupted
 attempt. The original baseline and result receipt remain unchanged. General
@@ -24,7 +22,7 @@ Before a portal model task starts, Clara saves a read-only baseline from the sep
 
 Some RDP systems omit process owner SIDs from WTS enumeration. The probe attempts a limited token query and still tracks a process by PID and creation time when its SID stays unavailable; it never ignores a process based on its name. Missing creation identity remains an observation error. Diagnostic metadata identifies unresolved owners and window sizes. Zero-size shell helper windows are excluded from the visible app list; their processes remain tracked.
 
-ThumbnailDeviceHelperWnd and EdgeUiInputTopWndClass are also shell surfaces only when owned by the process returned by GetShellWindow. Ordinary File Explorer folder windows still block a clean baseline. The Windows boot-time estimate may jitter by up to two seconds; account, session and the controller's PID plus exact creation time must still match. New process identities are always tracked.
+ThumbnailDeviceHelperWnd and EdgeUiInputTopWndClass are also shell surfaces only when owned by the process returned by GetShellWindow. Ordinary File Explorer folder windows are recorded as pre-existing application windows (a baseline note), not a blocker. The Windows boot-time estimate may jitter by up to two seconds; account, session and the controller's PID plus exact creation time must still match. New process identities are always tracked.
 
 After result reporting, WindowsHandoff takes fresh observations. Automatic release requires all of the following:
 
@@ -33,7 +31,7 @@ After result reporting, WindowsHandoff takes fresh observations. Automatic relea
 - The same Windows account, session, boot and controller process remain. A reused PID with a different creation time is a different process.
 - Every process the task started and every new visible window has gone, and all configured queues were readable with no remaining current-account print job. Paused, retained or failed print jobs are not treated as finished.
 
-**What counts as a leftover.** A leftover is something Clara started during the task that is still running or open when she finishes: a process that did not exist at the baseline and is attributable to the task, a visible window that did not exist at the baseline, or a print job of her account. A new process is *not* hers when its parent, or that parent's parent, is a program that was already running before the task and is neither the worker's own launch chain nor the Windows shell: the helper processes a pre-existing browser or chat client spawns for itself are that program's business (`task_started_processes` in `clara/portal_windows.py`). A process whose parent cannot be read, has exited, or lives outside the session stays attributed to the task, so nothing Clara launched is waved through once its launcher is gone. New windows are always reviewed, even inside a pre-existing program, because Clara may have opened them.
+**What counts as a leftover.** A leftover is something Clara started during the task that is still running or open when she finishes: a process that did not exist at the baseline and is attributable to the task, a visible window that did not exist at the baseline, or a print job of her account. A new process is *not* hers when its parent, or that parent's parent, is a program that was already running before the task and is neither the worker's own launch chain nor the Windows shell: the helper processes a pre-existing browser or chat client spawns for itself are that program's business (`task_started_processes` in `clara/portal_windows.py`). A parent is identified by pid and creation time (Windows leaves a dead creator's pid on its children and reuses it), so a process whose parent cannot be read, has exited, or lives outside the session stays attributed to the task and nothing Clara launched is waved through once its launcher is gone. New windows are always reviewed, even inside a pre-existing program, because Clara may have opened them.
 - A successful T1 TaxPrep preparation result for this exact attempt has an acknowledged portal receipt. General desktop tasks and interrupted/failed tasks still require review.
 - Two clear observations are separated by at least three seconds. Any activity or incomplete observation resets that settling interval.
 - The existing executor, tool, external-operation and attachment checks are also clear, and the portal returns its release receipt. Windows observations cannot clear another unresolved operation.
