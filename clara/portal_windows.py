@@ -135,6 +135,15 @@ WINDOWS_HELPERS = {'ctfmon.exe', 'tabtip.exe', 'tabtip32.exe', 'textinputhost.ex
                    'fontdrvhost.exe', 'dwm.exe', 'audiodg.exe'}
 TASK_APPLICATIONS = {'chrome.exe', 'msedge.exe', 't1txp.exe', 'profile.exe', 'winword.exe', 'excel.exe',
                      'acrord32.exe', 'acrobat.exe'}
+# The tax applications start their own background updaters when they launch.
+# They are the vendor's housekeeping, not Clara's work: she never starts one
+# deliberately, it carries no client data, and it keeps running after the
+# application closes. Observed on the live machine: launching ProFile spawned
+# Intuit.PCG.ProFile.AutoUpdate, which then held the worker for review after a
+# closeout that had otherwise finished cleanly. Their presence says nothing
+# about whether a task finished, so they are never a leftover.
+VENDOR_SERVICES = {'intuit.pcg.profile.autoupdate.exe', 'profileupdate.exe',
+                   'cchupdate.exe', 'taxprepupdate.exe'}
 # A task's own last actions and the moment its end is recorded are not the same
 # instant. Only this much later still counts as started by the task itself.
 AFTER_TASK_GRACE_S = 10
@@ -385,7 +394,7 @@ class WindowsHandoff:
             executors = {'python.exe', 'pythonw.exe', 'node.exe', 'claude.exe',
                          'powershell.exe', 'pwsh.exe', 'cmd.exe', 'wscript.exe', 'cscript.exe'}
             for p in task_started_processes(current, baseline, self.store.job(jid)['finished']):
-                if p.get('name', '').casefold() in WINDOWS_HELPERS:
+                if p.get('name', '').casefold() in WINDOWS_HELPERS | VENDOR_SERVICES:
                     continue
                 if interrupted and restarted and own_launch_chain(p, current):
                     continue
@@ -447,7 +456,7 @@ class WindowsHandoff:
             controllers = {'python.exe', 'pythonw.exe', 'node.exe', 'claude.exe', 'powershell.exe',
                            'pwsh.exe', 'cmd.exe', 'wscript.exe', 'cscript.exe'}
             for p in task_started_processes(current, baseline, self.store.job(jid)['finished']):
-                if p.get('name', '').casefold() in WINDOWS_HELPERS:
+                if p.get('name', '').casefold() in WINDOWS_HELPERS | VENDOR_SERVICES:
                     continue
                 if restarted and own_launch_chain(p, current):
                     continue

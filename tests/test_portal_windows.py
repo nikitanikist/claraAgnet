@@ -606,3 +606,25 @@ def test_finished_general_request_is_released_despite_a_later_unrelated_process(
                                      'parent': 424243})
         assert f"windows-process:103797:{ended - 60}" in (await observer.observe_general(jid))['in_flight']
     asyncio.run(scenario())
+
+
+def test_a_tax_application_s_own_updater_is_not_a_leftover(tmp_path):
+    """Launching ProFile spawns Intuit's updater; it held the worker after a clean run."""
+    store, jid = general_task(tmp_path)
+    current, clock = crowded(), [0]
+    observer = WindowsHandoff(store, exclusive=True, probe=lambda: copy.deepcopy(current), clock=lambda: clock[0])
+
+    async def scenario():
+        assert await observer.begin(jid) == []
+        assert (await observer.observe_general(jid))['in_flight'] == ['windows-settling']
+        clock[0] = 4
+        assert (await observer.observe_general(jid))['complete']
+        # ProFile starts its own background updater when Clara launches it.
+        current['processes'].append({'pid': 9520, 'created': 400, 'parent': 777,
+                                     'name': 'Intuit.PCG.ProFile.AutoUpdate.exe'})
+        report = await observer.observe_general(jid)
+        assert report['in_flight'] == [] and report['complete'], 'the vendor updater must not hold the worker'
+        # Anything Clara really left running still does.
+        current['processes'].append({'pid': 9521, 'created': 401, 'parent': 777, 'name': 'ProFile.exe'})
+        assert 'windows-process:9521:401' in (await observer.observe_general(jid))['in_flight']
+    asyncio.run(scenario())
