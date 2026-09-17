@@ -68,6 +68,15 @@ For Diagnostics, follow the task's approved printing rule. Retain the dialog evi
 
 ## Package and handoff
 
+**The package folder sits beside the return, on the firm's own drive.** The closeout's File Path names the folder the return came from, for example `E:\CH Client Files\T\Trimaxx - Vikram Karwal\Personal Tax\2025`. The finished package belongs in `{that folder}\{Year} T1 Package`. Create that folder if it is not already there, and use it if it is.
+
+Print into your own workspace and verify every PDF there first, exactly as you do now. Then copy the verified files into that package folder. Your file tools can only write inside your workspace, so use a shell command for this one copy, and check each file arrived at the right size before moving on: a copy you have not read back is not a delivery.
+
+This is the copy the preparer opens to review your work, and it is what a reviewer goes looking for when they ask where the package is. **OneDrive comes after it and is unchanged** - the same verified files go up to the client's share, which is what the client receives.
+
+If the closeout has no File Path, or the folder it names does not exist, stop and ask. Never invent a location for a client's documents, and never delete or overwrite anything in that folder except a file you produced in this run.
+
+
 The firm's naming convention is **year, document name, space hyphen space, then the client's full name** (Laureen, 16 September 2026):
 
 - client copy `{Year} T1 - {Full name}.pdf`, for example `2025 T1 - Erica Rocchi.pdf`
