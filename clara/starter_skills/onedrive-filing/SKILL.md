@@ -83,7 +83,7 @@ CH Clients Share
 
 So **search the way Laureen does: one name at a time.** A surname is usually the most distinctive. Searching the full couple string as the closeout writes it is the one approach that reliably finds nothing, because almost no folder is spelled that way. Search one member's surname, then the other's, then a first name, and the company name if the client is also a corporate client, since a person may be filed under the company's letter. Read the results with your eyes rather than matching strings: you are looking for the folder that is plainly this client.
 
-Let the E drive settle what the name should look like. The client is already filed there, and Laureen's rule for the letter bucket is to go by that filing.
+The E drive filing is a useful hint for what to search for, since the client is already filed there under some form of their name or their company's. It does not tell you where the client-share folder is: only the search does.
 
 | What the searches found | What to do |
 |---|---|
