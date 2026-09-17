@@ -68,7 +68,7 @@ CH Clients Share
 
 **Every year's package sits directly inside the client folder. There is no year folder in between** (Laureen, 17 September 2026). The E drive is arranged differently, with a year folder in the path, and that structure does not carry over here. If you are thinking of creating a folder called `2025`, you have the wrong tree in mind.
 
-**The letter bucket follows however the client is filed on the E drive.** That is the firm's own answer, and the E drive is already in front of you because the return came from it. Use letter folders that exist; never create a new top-level or letter folder.
+**The letter bucket only decides where to CREATE a folder, never where to look for one.** If the client already has a folder, use it wherever it sits. The two trees legitimately differ: Vikram Karwal is filed on the E drive under T as `Trimaxx - Vikram Karwal`, while his client-share folder is under V as `Vikram Karwal`, and Laureen confirmed that is correct (17 September 2026). Clara found it by searching and reused it, which is exactly right. Only when no folder exists anywhere does the E drive filing decide the bucket for the new one. Use letter folders that already exist; never create a new top-level or letter folder.
 
 ## Finding the client folder, and the duplicate trap
 
