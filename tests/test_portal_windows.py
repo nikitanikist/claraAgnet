@@ -650,3 +650,26 @@ def test_a_folder_window_profile_opens_is_the_shell_not_a_leftover(tmp_path):
         current['windows'].append({'handle': 1115007, 'pid': 42, 'class': 'AcrobatSDIWindow'})
         assert 'windows-window:1115007:42' in (await observer.observe(jid))['unknown']
     asyncio.run(scenario())
+
+
+def test_a_window_opened_after_the_task_ended_is_not_its_leftover(tmp_path):
+    """An operator opened a console hours later; it held a finished closeout."""
+    store, jid = task(tmp_path)
+    current, clock = crowded(), [0]
+    observer = WindowsHandoff(store, exclusive=True, qualified=True, probe=lambda: copy.deepcopy(current), clock=lambda: clock[0])
+
+    async def scenario():
+        assert await observer.begin(jid) == []
+        assert (await observer.observe(jid))['in_flight'] == ['windows-settling']
+        clock[0] = 4
+        assert (await observer.observe(jid))['complete']
+        ended = store.job(jid)['finished']
+        # Somebody opens PowerShell and a viewer long after the task finished.
+        current['processes'].append({'pid': 101048, 'created': ended + 3600, 'name': 'powershell.exe', 'parent': 424242})
+        current['windows'].append({'handle': 1049252, 'pid': 101048, 'class': 'ConsoleWindowClass'})
+        report = await observer.observe(jid)
+        assert report['unknown'] == [] and report['complete'], 'a later window must not hold the worker'
+        # A window of a program that predates the end of the task still counts.
+        current['windows'].append({'handle': 458816, 'pid': 40, 'class': 'Chrome_WidgetWin_1'})
+        assert 'windows-window:458816:40' in (await observer.observe(jid))['unknown']
+    asyncio.run(scenario())

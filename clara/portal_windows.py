@@ -407,7 +407,20 @@ class WindowsHandoff:
             # not execution still in flight.
             executors = {'python.exe', 'pythonw.exe', 'node.exe', 'claude.exe',
                          'powershell.exe', 'pwsh.exe', 'cmd.exe', 'wscript.exe', 'cscript.exe'}
-            for p in task_started_processes(current, baseline, self.store.job(jid)['finished']):
+            ended = self.store.job(jid)['finished']
+            attributed = task_started_processes(current, baseline, ended)
+            # A window belongs to whoever owns it. Once a task has ended, a
+            # program someone opens afterwards is theirs, and so are its
+            # windows: an operator opening a console or a folder an hour later
+            # must not hold the worker for a task that finished before it
+            # existed. Only windows of processes that predate the end of the
+            # task, or that the task itself started, are reviewable.
+            late_windows = set()
+            if ended is not None:
+                started = {row['pid'] for row in attributed}
+                late_windows = {row['pid'] for row in current['processes']
+                                if row['created'] > ended + AFTER_TASK_GRACE_S and row['pid'] not in started}
+            for p in attributed:
                 if p.get('name', '').casefold() in WINDOWS_HELPERS | VENDOR_SERVICES:
                     continue
                 if interrupted and restarted and own_launch_chain(p, current):
@@ -422,6 +435,8 @@ class WindowsHandoff:
                 if window_key(w) in windows or shell_surface(current, w):
                     continue
                 if interrupted and w['pid'] in current['ancestors'] and w['class'] in CONSOLE_CLASSES:
+                    continue
+                if w['pid'] in late_windows:
                     continue
                 (unknown if interrupted else running).append(f"windows-window:{w['handle']}:{w['pid']}")
             running.extend(f"windows-print:{p['queue']}:{p['id']}" for p in current['print_jobs'])
