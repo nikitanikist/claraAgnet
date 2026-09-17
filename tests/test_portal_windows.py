@@ -628,3 +628,25 @@ def test_a_tax_application_s_own_updater_is_not_a_leftover(tmp_path):
         current['processes'].append({'pid': 9521, 'created': 401, 'parent': 777, 'name': 'ProFile.exe'})
         assert 'windows-process:9521:401' in (await observer.observe_general(jid))['in_flight']
     asyncio.run(scenario())
+
+
+def test_a_folder_window_profile_opens_is_the_shell_not_a_leftover(tmp_path):
+    """Building a PDF pops open a folder; it held the worker after a clean run."""
+    store, jid = task(tmp_path)
+    current, clock = crowded(), [0]
+    observer = WindowsHandoff(store, exclusive=True, qualified=True, probe=lambda: copy.deepcopy(current), clock=lambda: clock[0])
+
+    async def scenario():
+        assert await observer.begin(jid) == []
+        assert (await observer.observe(jid))['in_flight'] == ['windows-settling']
+        clock[0] = 4
+        assert (await observer.observe(jid))['complete']
+        # ProFile opened a folder window showing where it wrote the PDF. The
+        # shell itself predates the task; only the folder view is new.
+        current['windows'].append({'handle': 1115006, 'pid': 20, 'class': 'CabinetWClass'})
+        report = await observer.observe(jid)
+        assert report['unknown'] == [] and report['complete'], 'a folder window must not hold the worker'
+        # An application window Clara left open is still reviewed.
+        current['windows'].append({'handle': 1115007, 'pid': 42, 'class': 'AcrobatSDIWindow'})
+        assert 'windows-window:1115007:42' in (await observer.observe(jid))['unknown']
+    asyncio.run(scenario())

@@ -24,9 +24,23 @@ SHELL_HELPER_CLASSES = {'ThumbnailDeviceHelperWnd', 'EdgeUiInputTopWndClass'}
 
 
 def shell_surface(snapshot, window):
-    return (window['class'] in SHELL_CLASSES or
-            (window['class'] in SHELL_HELPER_CLASSES and snapshot.get('shell_pid', 0) > 0
-             and window['pid'] == snapshot['shell_pid']))
+    """The Windows shell's own surfaces: the desktop, the taskbar, folder windows.
+
+    Every window Explorer owns is the shell, including an ordinary folder view.
+    A folder window is not an application holding this task's work: nothing runs
+    in it and nothing is unsaved. The leftover rules already treat Explorer
+    processes as the shell, and a folder open before the task is only a baseline
+    note, so a folder opened during it is no more of a blocker. ProFile pops one
+    open every time it builds a PDF, which held the worker after a closeout that
+    had otherwise finished cleanly.
+    """
+    if window['class'] in SHELL_CLASSES:
+        return True
+    if (window['class'] in SHELL_HELPER_CLASSES and snapshot.get('shell_pid', 0) > 0
+            and window['pid'] == snapshot['shell_pid']):
+        return True
+    return any(p['pid'] == window['pid'] and str(p.get('name', '')).casefold() == 'explorer.exe'
+               for p in snapshot.get('processes', []))
 
 
 def same_execution_session(current, baseline):
