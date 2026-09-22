@@ -139,6 +139,41 @@ def window_key(row):
     return (row['handle'], row['pid'], row['class'])
 
 
+def owning_process(snapshot, window):
+    """The process row that owns a window, or None when it cannot be read."""
+    for p in snapshot.get('processes', []):
+        if p['pid'] == window['pid']:
+            return p
+    return None
+
+
+def window_counts(snapshot):
+    """How many windows of each class each process is showing."""
+    counts = {}
+    for w in snapshot.get('windows', []):
+        key = (w['pid'], w['class'])
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def window_ref(snapshot, window):
+    """A reference to a window that survives the window being recreated.
+
+    A handle is reassigned whenever a program recreates its window, so a
+    handle-based reference changes under a reviewer's feet: the portal requires
+    a reconciliation to resolve exactly the references it currently holds, and
+    by the time a person reads the list and presses the button the handle has
+    moved on. The review is then refused, permanently, and every later job
+    queues behind it. The owning program is the stable identity and is the right
+    granularity for a review anyway: a person judges the application, not a
+    window handle.
+    """
+    owner = owning_process(snapshot, window)
+    if owner is None:
+        return f"windows-window:{window['handle']}:{window['pid']}"
+    return f"windows-window:{owner['pid']}:{owner['created']}"
+
+
 # Windows starts these for itself as a side effect of ordinary use (typing opens
 # ctfmon and the touch-keyboard hosts; consoles get a conhost; hosted apps get
 # a broker). They are never a task's unfinished work and never a leftover.
@@ -430,15 +465,28 @@ class WindowsHandoff:
                     unknown.append(ref)
                 else:
                     running.append(ref)
-            windows = {window_key(w) for w in baseline.get('windows', [])}
+            # A handle is not an identity. A program that recreates its own
+            # window gets a fresh handle, and comparing handles alone read an
+            # untouched chat client as a brand-new window on every observation:
+            # Softros LAN Messenger redraws itself every couple of minutes, which
+            # held the worker over a program nobody had touched. Counting tells
+            # the two cases apart that the handle cannot. A program that redrew
+            # its window still shows the same number of windows of that class; a
+            # program that gained one shows more. So a new window Clara opened in
+            # the operator's own browser is still reviewed, while the same chat
+            # window redrawn under a new handle is not.
+            before = window_counts(baseline)
+            seen = {}
             for w in current['windows']:
-                if window_key(w) in windows or shell_surface(current, w):
+                key = (w['pid'], w['class'])
+                seen[key] = seen.get(key, 0) + 1
+                if seen[key] <= before.get(key, 0) or shell_surface(current, w):
                     continue
                 if interrupted and w['pid'] in current['ancestors'] and w['class'] in CONSOLE_CLASSES:
                     continue
                 if w['pid'] in late_windows:
                     continue
-                (unknown if interrupted else running).append(f"windows-window:{w['handle']}:{w['pid']}")
+                (unknown if interrupted else running).append(window_ref(current, w))
             running.extend(f"windows-print:{p['queue']}:{p['id']}" for p in current['print_jobs'])
         except Exception:
             unknown.append('windows-observation-unavailable')

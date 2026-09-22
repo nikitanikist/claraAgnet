@@ -62,7 +62,7 @@ def test_quiet_success_requires_fresh_observations_and_an_unchanged_saved_baseli
 
 @pytest.mark.parametrize('change,expected', [
     (lambda s: s['processes'].append({'pid': 9, 'created': 999, 'name': 'other.exe'}), 'windows-process:9:999'),
-    (lambda s: s['windows'].append({'handle': 88, 'pid': 10, 'class': 'Dialog'}), 'windows-window:88:10'),
+    (lambda s: s['windows'].append({'handle': 88, 'pid': 10, 'class': 'Dialog'}), 'windows-window:10:110'),
     (lambda s: s.update(session=4), 'windows-session-or-controller-changed'),
     (lambda s: s.update(controller=[10, 999]), 'windows-session-or-controller-changed'),
     (lambda s: s.update(owner='b' * 64), 'windows-session-or-controller-changed'),
@@ -159,7 +159,7 @@ def test_failed_restart_reviews_apps_without_counting_current_worker_as_old_exec
         assert not report['complete']
         # The console host (pid 31) is one of the helpers Windows starts for itself: never a leftover.
         expected = {'windows-process:30:230',
-                    'windows-window:30:30', 'windows-session-or-controller-changed', 'windows-handoff-not-qualified'}
+                    'windows-window:30:230', 'windows-session-or-controller-changed', 'windows-handoff-not-qualified'}
         if status not in {'needs_review', 'completed'}:
             expected.add('windows-interrupted-task-needs-review')  # a finished model turn is reviewed by the portal instead
         assert expected <= set(report['unknown'])
@@ -403,7 +403,7 @@ def test_programs_open_before_the_task_and_their_helpers_are_not_claras_leftover
         current['processes'].pop()
         # A new window in a pre-existing program is still reviewed: Clara may have opened it.
         current['windows'].append({'handle': 90, 'pid': 40, 'class': 'Chrome_WidgetWin_1'})
-        assert 'windows-window:90:40' in (await observer.observe(jid))['unknown']
+        assert 'windows-window:40:150' in (await observer.observe(jid))['unknown']
     asyncio.run(scenario())
 
 
@@ -648,7 +648,7 @@ def test_a_folder_window_profile_opens_is_the_shell_not_a_leftover(tmp_path):
         assert report['unknown'] == [] and report['complete'], 'a folder window must not hold the worker'
         # An application window Clara left open is still reviewed.
         current['windows'].append({'handle': 1115007, 'pid': 42, 'class': 'AcrobatSDIWindow'})
-        assert 'windows-window:1115007:42' in (await observer.observe(jid))['unknown']
+        assert 'windows-window:42:152' in (await observer.observe(jid))['unknown']
     asyncio.run(scenario())
 
 
@@ -671,5 +671,64 @@ def test_a_window_opened_after_the_task_ended_is_not_its_leftover(tmp_path):
         assert report['unknown'] == [] and report['complete'], 'a later window must not hold the worker'
         # A window of a program that predates the end of the task still counts.
         current['windows'].append({'handle': 458816, 'pid': 40, 'class': 'Chrome_WidgetWin_1'})
-        assert 'windows-window:458816:40' in (await observer.observe(jid))['unknown']
+        assert 'windows-window:40:150' in (await observer.observe(jid))['unknown']
+    asyncio.run(scenario())
+
+
+def test_a_chat_client_redrawing_its_window_is_not_a_leftover(tmp_path):
+    """Softros LAN Messenger recreates its window every couple of minutes.
+
+    Comparing handles alone read each redraw as a brand-new window, so an
+    untouched chat client held the worker after a closeout that had otherwise
+    finished cleanly, and every later assignment queued behind it.
+    """
+    store, jid = task(tmp_path)
+    current, clock = crowded(), [0]
+    observer = WindowsHandoff(store, exclusive=True, qualified=True,
+                              probe=lambda: copy.deepcopy(current), clock=lambda: clock[0])
+
+    async def scenario():
+        assert await observer.begin(jid) == []
+        assert (await observer.observe(jid))['in_flight'] == ['windows-settling']
+        clock[0] = 4
+        assert (await observer.observe(jid))['complete']
+        # The chat client replaces its own window: same program, new handle.
+        for handle in (328432, 984132, 1704820):
+            current['windows'] = [w for w in current['windows'] if w['pid'] != 42]
+            current['windows'].append({'handle': handle, 'pid': 42, 'class': 'TSoftrosLANMessenger'})
+            report = await observer.observe(jid)
+            assert report['unknown'] == [] and report['complete'], \
+                'a chat client redrawing its own window must not hold the worker'
+        # It gaining a second window is a different thing, and is still reviewed.
+        current['windows'].append({'handle': 2200000, 'pid': 42, 'class': 'TSoftrosLANMessenger'})
+        assert 'windows-window:42:152' in (await observer.observe(jid))['unknown']
+    asyncio.run(scenario())
+
+
+def test_a_window_reference_survives_the_window_being_recreated(tmp_path):
+    """A review must still resolve the reference it was shown.
+
+    The portal refuses a reconciliation that does not resolve exactly the
+    references it currently holds. While a reference carried the window handle,
+    a program that redrew itself changed the reference between the review being
+    shown and being submitted, the reconciliation was refused, and the hold
+    could never be cleared by a person at all.
+    """
+    store, jid = task(tmp_path)
+    current, clock = crowded(), [0]
+    observer = WindowsHandoff(store, exclusive=True, qualified=True,
+                              probe=lambda: copy.deepcopy(current), clock=lambda: clock[0])
+
+    async def scenario():
+        assert await observer.begin(jid) == []
+        assert (await observer.observe(jid))['in_flight'] == ['windows-settling']
+        clock[0] = 4
+        assert (await observer.observe(jid))['complete']
+        # Clara left an application window open, and it is redrawn between observations.
+        current['windows'].append({'handle': 500, 'pid': 40, 'class': 'AcrobatSDIWindow'})
+        shown = (await observer.observe(jid))['unknown']
+        current['windows'] = [w for w in current['windows'] if w['class'] != 'AcrobatSDIWindow']
+        current['windows'].append({'handle': 900123, 'pid': 40, 'class': 'AcrobatSDIWindow'})
+        assert (await observer.observe(jid))['unknown'] == shown, \
+            'the reference a reviewer was shown must still be the one they can resolve'
     asyncio.run(scenario())
