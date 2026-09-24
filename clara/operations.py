@@ -69,7 +69,19 @@ class Operations:
         have ruled out for good (a delivery refused on a member name left exactly that situation).
         """
         for row in self.store.rows("SELECT * FROM evidence WHERE job_id=? AND kind='remote_record' AND verified=1",(job['id'],)):
-            if proof_matches(op,decode(row,'payload')):
+            proof=decode(row,'payload')
+            if not proof_matches(op,proof):
+                continue
+            # Every Chrome look behind the proof must come after the reservation. The proof row is
+            # written when delivery is recorded, but the looks can be older: one taken of last
+            # year's packet before this write was even reserved cannot show what this write did.
+            p=proof['payload']
+            ids=[i for i in (p.get('observation_ids') or [p.get('observation_id')]) if isinstance(i,str) and i]
+            if not ids:
+                continue
+            looks=self.store.rows('SELECT created FROM evidence WHERE job_id=? AND id IN (%s)'%','.join('?'*len(set(ids))),
+                                  (job['id'],*set(ids)))
+            if len(looks)==len(set(ids)) and min(r['created'] for r in looks)>=op['updated']:
                 return True
         return False
 

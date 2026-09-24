@@ -400,12 +400,15 @@ class WindowsHandoff:
           needs_review, which is why its receipt cannot stand on its own and
           the local status above is the guard that matters.
 
-        - None of the client-facing writes that have no reservation of their
-          own failed. A OneDrive upload that errored may or may not have
-          landed; that is a write whose outcome is unknown, and a person looks
-          at the folder before Clara is freed. Routine failed clicks and
-          commands are not in this set: they happen in most closeouts and are
-          not writes to the client's files.
+        - No OneDrive upload failed. An upload that errored may or may not
+          have landed, and uploads are the one write to a client's files with
+          no reservation behind them, so a person looks at the folder before
+          Clara is freed. This deliberately covers failed uploads only. A
+          failed click can also touch a client folder - a "replace this file?"
+          prompt, a sharing setting - but failed clicks and commands happen in
+          most closeouts, and holding on every one would lock the worker after
+          nearly every hand-off. Those are left to the reviewer, who opens the
+          folder from the card before anything is sent.
 
         This only excuses the two receipt markers. Leftover windows and
         processes, printing, executors, a changed session, an unreturned tool

@@ -276,6 +276,16 @@ def test_sharp_s_and_upper_case_escapes_still_match_an_encoded_page(tmp_path):
     assert record_delivery(config, store, job, args)['storage_evidence_id']
 
 
+def _look_after(store, ops, *observation_ids):
+    """Date the reservations just before Clara's Chrome looks: she reserved, made, then read back.
+
+    A look cannot be moved into the future instead - freshness rightly refuses one.
+    """
+    first = min(store.one('SELECT created FROM evidence WHERE id=?', (e,))['created'] for e in observation_ids)
+    for o in ops:
+        store.execute('UPDATE operations SET created=?, updated=? WHERE id=?', (first - 1, first - 1, o['id']))
+
+
 @pytest.mark.parametrize('recipient_matches', [True, False])
 def test_a_refused_delivery_notes_what_it_read_back_without_closing_any_door(tmp_path, recipient_matches):
     """The delivery record can be refused after the packet and folder exist.
@@ -297,6 +307,8 @@ def test_a_refused_delivery_notes_what_it_read_back_without_closing_any_door(tmp
     packet = ops.reserve(job, 'pandadoc', 'create_signature_packet', keys['pandadoc']['m1'], {})
     folder = ops.reserve(job, 'storage', 'create_folder', keys['storage']['folder'], {})
     drifted = ops.reserve(job, 'pandadoc', 'create_signature_packet', 'John Smith T1 2024 - packet (v2)', {})
+    # Clara reads the packet and folder back after making them, the order a real run has.
+    _look_after(store, (packet, folder), args['pandadoc'][0]['observation_id'], args['folder']['observation_id'])
     # The name check failed on the PDF, so its proof no longer counts as verified.
     store.execute('UPDATE evidence SET verified=0 WHERE id=?', (args['document_evidence_ids'][0],))
     if not recipient_matches:
@@ -344,3 +356,23 @@ def test_a_person_can_still_have_a_refused_packet_made_again(tmp_path):
     assert ops.confirm_absence(packet['id'], 'Checked PandaDoc: the wrong-name packet was deleted.')['state'] == 'not_created'
     again = ops.reserve(job, 'pandadoc', 'create_signature_packet', keys['pandadoc']['m1'], {})
     assert again['execute_allowed'] is True
+
+
+def test_a_look_taken_before_the_reservation_does_not_make_the_write_known(tmp_path):
+    """Clara looks at an existing packet, then reserves and tries to make a new one,
+    and the create times out. Her earlier look shows a packet - but not whatever this
+    write did - so the write stays unknown and still holds her computer.
+    """
+    from clara.portal_quiescence import observe_quiescence
+    config, store, job, lease, args = delivery(tmp_path)  # the looks are taken here, first
+    claim = json.loads(store.one('SELECT claim_json FROM portal_v1_attempts WHERE local_job_id=?', (job['id'],))['claim_json'])
+    keys = closeout_reservation_keys(claim)
+    ops = Operations(store)
+    packet = ops.reserve(job, 'pandadoc', 'create_signature_packet', keys['pandadoc']['m1'], {})
+    store.execute('UPDATE evidence SET verified=0 WHERE id=?', (args['document_evidence_ids'][0],))
+    with pytest.raises(ValueError):
+        record_delivery(config, store, job, args)
+    op = store.one('SELECT * FROM operations WHERE id=?', (packet['id'],))
+    assert ops.read_back(job, op) is False
+    idle = type('Idle', (), {'active_job': None, 'pending': {}, 'queue': asyncio.Queue()})()
+    assert 'operation:' + packet['id'] in observe_quiescence(store, idle, BASE, lease.identity, job['id'])['unknown']
