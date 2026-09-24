@@ -193,6 +193,9 @@ TASK_APPLICATIONS = {'chrome.exe', 'msedge.exe', 't1txp.exe', 'profile.exe', 'wi
 # about whether a task finished, so they are never a leftover.
 VENDOR_SERVICES = {'intuit.pcg.profile.autoupdate.exe', 'profileupdate.exe',
                    'cchupdate.exe', 'taxprepupdate.exe'}
+# Writes to a client's files that have no reservation of their own. If one of
+# these reported a failure, nobody knows whether it landed.
+UNRESERVED_CLIENT_WRITES = {'upload_file'}
 # A task's own last actions and the moment its end is recorded are not the same
 # instant. Only this much later still counts as started by the task itself.
 AFTER_TASK_GRACE_S = 10
@@ -359,20 +362,70 @@ class WindowsHandoff:
                 and receipt.get('job_state') == 'completed_prepared'
                 and receipt.get('handoff', {}).get('status') == 'not_applicable')
 
-    def prepared_closeout(self, jid):
+    def _closeout_result(self, jid):
+        """The portal's acknowledgement of this closeout attempt's result, or None."""
         binding = self.store.one('SELECT * FROM portal_v1_attempts WHERE local_job_id=?', (jid,))
         if not binding:
-            return False
+            return None
         claim = json.loads(binding['claim_json'])
         permission = SOFTWARE_PERMISSIONS.get((claim.get('closeout') or {}).get('software'))
         if claim['kind'] != 'closeout' or permission is None or permission not in claim['scope']['permissions']:
-            return False
-        result = self.store.one('''SELECT payload,receipt FROM portal_v1_outbox WHERE namespace=? AND external_job_id=?
+            return None
+        return self.store.one('''SELECT payload,receipt FROM portal_v1_outbox WHERE namespace=? AND external_job_id=?
             AND worker_id=? AND attempt_no=? AND fence_token=? AND operation='clara-result'
             AND request_key=? AND acknowledged IS NOT NULL''',
             (binding['namespace'], binding['external_job_id'], binding['worker_id'], binding['attempt_no'],
              binding['fence_token'], 'result-' + jid))
+
+    def prepared_closeout(self, jid):
+        result = self._closeout_result(jid)
         return bool(result and json.loads(result['payload']).get('outcome') == 'completed_prepared')
+
+    def finished_review_handoff(self, jid):
+        """A closeout Clara finished and handed to a person, acknowledged as such.
+
+        Needs review means Clara's part is done and a person has the last word.
+        It must not hold her computer and queue every later closeout behind a
+        decision that is someone else's to make: a closeout whose member name
+        did not match the return held the worker this way, with nothing
+        running, after Clara had finished and reported everything she made.
+
+        Three facts together identify it, and none is enough alone:
+
+        - The model run ended with a normal result. Only that path writes
+          completed, needs_review or incomplete; a crash, a stop, a cancel, a
+          lost lease or a restart writes failed, cancelled or interrupted.
+        - The portal recorded the hand-off as needs_review, with the execution
+          finished. The portal also files interrupted and cancelled runs under
+          needs_review, which is why its receipt cannot stand on its own and
+          the local status above is the guard that matters.
+
+        - None of the client-facing writes that have no reservation of their
+          own failed. A OneDrive upload that errored may or may not have
+          landed; that is a write whose outcome is unknown, and a person looks
+          at the folder before Clara is freed. Routine failed clicks and
+          commands are not in this set: they happen in most closeouts and are
+          not writes to the client's files.
+
+        This only excuses the two receipt markers. Leftover windows and
+        processes, printing, executors, a changed session, an unreturned tool
+        call and every reserved write not confirmed or read back in this
+        attempt still hold as before.
+        """
+        job = self.store.job(jid)
+        if not job or job['status'] not in {'completed', 'needs_review', 'incomplete'} or not job['finished']:
+            return False
+        for row in self.store.rows("SELECT data FROM events WHERE job_id=? AND kind='tool_done'", (jid,)):
+            data = json.loads(row['data'])
+            if data.get('failed') and str(data.get('name', '')).rsplit('__', 1)[-1] in UNRESERVED_CLIENT_WRITES:
+                return False
+        result = self._closeout_result(jid)
+        if not result:
+            return False
+        payload, receipt = json.loads(result['payload']), json.loads(result['receipt'] or '{}')
+        return (payload.get('outcome') == 'needs_review' and receipt.get('result_recorded') is True
+                and receipt.get('execution') == 'finished' and receipt.get('job_state') == 'needs_review'
+                and (receipt.get('handoff') or {}).get('status') == 'needs_review')
 
     async def take(self):
         result = self.probe()
@@ -492,9 +545,12 @@ class WindowsHandoff:
             unknown.append('windows-observation-unavailable')
         # No automatic reconciliation of an interrupted or failed task, even
         # if its applications disappeared. Its side effects still need review.
-        if self.store.job(jid)['status'] not in {'completed', 'needs_review'}:
+        # A closeout Clara finished and handed to a person is neither: it is
+        # released like a prepared one, on the same clean desktop.
+        handed_off = self.finished_review_handoff(jid)
+        if self.store.job(jid)['status'] not in {'completed', 'needs_review'} and not handed_off:
             unknown.append('windows-interrupted-task-needs-review')
-        if not self.prepared_closeout(jid):
+        if not self.prepared_closeout(jid) and not handed_off:
             unknown.append('windows-prepared-closeout-receipt-required')
         if unknown or running:
             self.clear_since.pop(jid, None)

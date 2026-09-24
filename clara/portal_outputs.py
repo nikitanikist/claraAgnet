@@ -131,6 +131,56 @@ def _observation(store, job, eid, values, what='record', urls=()):
     return primary, used
 
 
+def _record_remotes(config, store, job, claim, keys, packet_proofs, folder, folder_id, folder_url,
+                    folder_observation, folder_seen, uploaded):
+    """Write the packet and folder remote_record proofs from their fresh Chrome readbacks.
+
+    uploaded is None when the delivery record was refused: the folder itself was
+    read back, but its files are not bound to it, and the proof says so.
+    """
+    wf = Workflows(store, config)
+    signing = []
+    for packet, member, observation, seen in packet_proofs:
+        signing.append(wf.evidence(job, 'remote_record', packet['remote_id'], {
+            'system': 'pandadoc', 'remote_id': packet['remote_id'], 'url': packet['url'],
+            'client_name': member['member_name'], 'external_key': packet['external_key'],
+            'reservation_key': keys['pandadoc'][member['member_id']],
+            'reservation_operation': CLOSEOUT_OPERATIONS['pandadoc'],
+            'observation_id': observation['id'], 'observation_ids': seen,
+            'case_key': claim['closeout']['closeout_form_id'],
+            'coverage': 'Worker-observed packet and recipient; portal verification still required.'}, True)['id'])
+    storage = {'system': 'storage', 'remote_id': folder_id, 'url': folder_url,
+               'external_key': folder['external_key'], 'reservation_key': keys['storage']['folder'],
+               'reservation_operation': CLOSEOUT_OPERATIONS['storage'],
+               'observation_id': folder_observation['id'], 'observation_ids': folder_seen,
+               'case_key': claim['closeout']['closeout_form_id']}
+    if uploaded is None:
+        storage['coverage'] = ('Folder observed in Chrome. The delivery record was refused, so the files in it are '
+                               'not bound to this closeout and nothing was recorded as delivered.')
+    else:
+        storage['uploaded'] = uploaded
+        storage['coverage'] = 'Worker-observed Chrome records; not independent OneDrive API verification.'
+    return signing, wf.evidence(job, 'remote_record', folder_id, storage, True)
+
+
+def _reconcile_reservations(store, job, keys, packet_proofs, signing, storage_id):
+    """Confirm only the reservations under a canonical (system, operation, key) triple, by these proofs."""
+    delivered = {('pandadoc', CLOSEOUT_OPERATIONS['pandadoc'], keys['pandadoc'][member['member_id']]): eid
+                 for (_, member, _, _), eid in zip(packet_proofs, signing)}
+    delivered[('storage', CLOSEOUT_OPERATIONS['storage'], keys['storage']['folder'])] = storage_id
+    ops, reconciled, unresolved = Operations(store), [], []
+    for op in store.rows("SELECT id,system,operation,external_key FROM operations WHERE scope_key=? AND state='uncertain' ORDER BY created",
+                         (job_scope(store, job),)):
+        eid = delivered.get((op['system'], op['operation'], op['external_key']))
+        try:
+            if eid:
+                ops.reconcile(job, op['id'], eid, auto='record_portal_delivery')
+        except ValueError:
+            eid = None  # The proofs stand; the reservation stays uncertain for the model to inspect.
+        (reconciled if eid else unresolved).append(op['id'])
+    return reconciled, unresolved
+
+
 def record_delivery(config, store, job, args):
     row = store.one('SELECT * FROM portal_v1_attempts WHERE local_job_id=?', (job['id'],))
     if not row:
@@ -139,7 +189,6 @@ def record_delivery(config, store, job, args):
     if claim['kind'] != 'closeout':
         raise ValueError('Assign an eligible T1 closeout before recording delivery outputs.')
     identity = AttemptIdentity(row['external_job_id'], row['worker_id'], row['attempt_no'], row['fence_token'])
-    documents = collect_documents(config, store, row['namespace'], identity, job['id'], args['document_evidence_ids'])
     members = {m['member_id']: m for m in claim['closeout']['members']}
     keys = closeout_reservation_keys(claim)
     packets, files = args['pandadoc'], args['files']
@@ -159,13 +208,13 @@ def record_delivery(config, store, job, args):
         raise ValueError('pandadoc needs exactly one packet, each with a distinct remote_id, per member_id ('
                          + ', '.join(sorted(members)) + '); received member_id: '
                          + (', '.join(p['member_id'] for p in packets) or 'none') + '.')
-    expected = {(d.member_id, d.document_type, d.tax_year): d for d in documents}
-    received = [(f['member_id'], f['document_type'], f['tax_year']) for f in files]
-    if sorted(received) != sorted(expected) or len({f['remote_file_id'] for f in files}) != len(files):
-        raise ValueError('files needs exactly these member_id/document_type/tax_year records, each with a distinct '
-                         'remote_file_id: ' + ', '.join('/'.join(k) for k in sorted(expected))
-                         + '; received: ' + (', '.join('/'.join(k) for k in received) or 'none') + '.')
 
+    # The packet and the folder are bound to their reservations by fresh Chrome
+    # readbacks alone; neither depends on the documents. So bind them first. A
+    # package whose documents cannot be recorded - a member name the return
+    # prints differently from the closeout, say - still leaves a packet and a
+    # folder Clara really made. Left unconfirmed, they held the worker on
+    # writes she could see, and every later closeout queued behind them.
     artifacts, packet_proofs = [], []
     for packet in packets:
         member = members[packet['member_id']]
@@ -190,18 +239,41 @@ def record_delivery(config, store, job, args):
     folder_id, folder_url = _text(folder['remote_id']), _remote_url(folder['url'], 'storage')
     folder_observation, folder_seen = _observation(store, job, folder['observation_id'], [folder_url, folder_id],
                                                    'OneDrive folder', urls=(folder_url,))
-    uploaded = []
-    for file in files:
-        doc = expected[(file['member_id'], file['document_type'], file['tax_year'])]
-        file_id = _text(file['remote_file_id'])
-        observation, seen = _observation(store, job, file['observation_id'],
-                                         [folder_id, file_id, doc.file.name, len(doc.file.data)], 'OneDrive file')
-        uploaded.append({'member_id': doc.member_id, 'document_type': doc.document_type,
-                         'tax_year': doc.tax_year, 'file_name': doc.file.name,
-                         'bytes': len(doc.file.data), 'sha256': doc.file.sha256,
-                         'remote_file_id': file_id, 'folder_id': folder_id,
-                         'observed_at': datetime.fromtimestamp(observation['created'], timezone.utc).isoformat(),
-                         'observation_id': observation['id'], 'observation_ids': seen})
+
+    try:
+        documents = collect_documents(config, store, row['namespace'], identity, job['id'], args['document_evidence_ids'])
+        expected = {(d.member_id, d.document_type, d.tax_year): d for d in documents}
+        received = [(f['member_id'], f['document_type'], f['tax_year']) for f in files]
+        if sorted(received) != sorted(expected) or len({f['remote_file_id'] for f in files}) != len(files):
+            raise ValueError('files needs exactly these member_id/document_type/tax_year records, each with a distinct '
+                             'remote_file_id: ' + ', '.join('/'.join(k) for k in sorted(expected))
+                             + '; received: ' + (', '.join('/'.join(k) for k in received) or 'none') + '.')
+        uploaded = []
+        for file in files:
+            doc = expected[(file['member_id'], file['document_type'], file['tax_year'])]
+            file_id = _text(file['remote_file_id'])
+            observation, seen = _observation(store, job, file['observation_id'],
+                                             [folder_id, file_id, doc.file.name, len(doc.file.data)], 'OneDrive file')
+            uploaded.append({'member_id': doc.member_id, 'document_type': doc.document_type,
+                             'tax_year': doc.tax_year, 'file_name': doc.file.name,
+                             'bytes': len(doc.file.data), 'sha256': doc.file.sha256,
+                             'remote_file_id': file_id, 'folder_id': folder_id,
+                             'observed_at': datetime.fromtimestamp(observation['created'], timezone.utc).isoformat(),
+                             'observation_id': observation['id'], 'observation_ids': seen})
+    except ValueError as error:
+        # Refused: record what Clara really read back, but nothing as delivered.
+        # No portal_delivery proof is written, so no path to Ready to Email
+        # opens. The reservations are deliberately NOT confirmed: the packet may
+        # carry the very name that failed, and a person who fixes the cause must
+        # still be able to record it absent and have it made again. The
+        # readbacks alone tell a hold that these writes are known.
+        _record_remotes(config, store, job, claim, keys, packet_proofs, folder, folder_id,
+                        folder_url, folder_observation, folder_seen, None)
+        raise ValueError(str(error) + ' Nothing was recorded as a delivery. The PandaDoc packet and OneDrive '
+                         'folder you just read back are noted as seen, so they do not hold your computer; they are '
+                         'not confirmed, because they may carry what failed. If the cause is something only a '
+                         'person can settle, hand the closeout off as needs-review.') from error
+
     artifacts.append({'kind': 'onedrive_folder', 'remote_id': folder_id, 'url': folder_url,
                       'verification': 'worker_observed',
                       'observed_at': datetime.fromtimestamp(folder_observation['created'], timezone.utc).isoformat(),
@@ -209,41 +281,12 @@ def record_delivery(config, store, job, args):
                                    'coverage': 'Remote names, sizes and IDs observed in Chrome; hashes identify local source PDFs.'}})
 
     # The complete set passed. These proofs support checkpoints, not approval.
-    wf = Workflows(store, config)
-    signing = []
-    for packet, member, observation, seen in packet_proofs:
-        signing.append(wf.evidence(job, 'remote_record', packet['remote_id'], {
-            'system': 'pandadoc', 'remote_id': packet['remote_id'], 'url': packet['url'],
-            'client_name': member['member_name'], 'external_key': packet['external_key'],
-            'reservation_key': keys['pandadoc'][member['member_id']],
-            'reservation_operation': CLOSEOUT_OPERATIONS['pandadoc'],
-            'observation_id': observation['id'], 'observation_ids': seen,
-            'case_key': claim['closeout']['closeout_form_id'],
-            'coverage': 'Worker-observed packet and recipient; portal verification still required.'}, True)['id'])
-    storage = wf.evidence(job, 'remote_record', folder_id, {
-        'system': 'storage', 'remote_id': folder_id, 'url': folder_url,
-        'external_key': folder['external_key'], 'reservation_key': keys['storage']['folder'],
-        'reservation_operation': CLOSEOUT_OPERATIONS['storage'],
-        'observation_id': folder_observation['id'], 'observation_ids': folder_seen,
-        'case_key': claim['closeout']['closeout_form_id'], 'uploaded': uploaded,
-        'coverage': 'Worker-observed Chrome records; not independent OneDrive API verification.'}, True)
-    proof = wf.evidence(job, 'portal_delivery', identity.job_id, {
+    signing, storage = _record_remotes(config, store, job, claim, keys, packet_proofs, folder, folder_id,
+                                       folder_url, folder_observation, folder_seen, uploaded)
+    proof = Workflows(store, config).evidence(job, 'portal_delivery', identity.job_id, {
         'attempt_no': identity.attempt_no, 'fence_token': identity.fence_token,
         'document_evidence_ids': args['document_evidence_ids'], 'artifacts': artifacts}, True)
-    # Only reservations under a canonical (system, operation, key) triple are confirmed by this delivery's own proofs.
-    delivered = {('pandadoc', CLOSEOUT_OPERATIONS['pandadoc'], keys['pandadoc'][member['member_id']]): eid
-                 for (_, member, _, _), eid in zip(packet_proofs, signing)}
-    delivered[('storage', CLOSEOUT_OPERATIONS['storage'], keys['storage']['folder'])] = storage['id']
-    ops, reconciled, unresolved = Operations(store), [], []
-    for op in store.rows("SELECT id,system,operation,external_key FROM operations WHERE scope_key=? AND state='uncertain' ORDER BY created",
-                         (job_scope(store, job),)):
-        eid = delivered.get((op['system'], op['operation'], op['external_key']))
-        try:
-            if eid:
-                ops.reconcile(job, op['id'], eid, auto='record_portal_delivery')
-        except ValueError:
-            eid = None  # The delivery proofs stand; the reservation stays uncertain for the model to inspect.
-        (reconciled if eid else unresolved).append(op['id'])
+    reconciled, unresolved = _reconcile_reservations(store, job, keys, packet_proofs, signing, storage['id'])
     leftover = (' Uncertain reservations remain (' + ', '.join(unresolved) +
                 '): inspect their remote state before finishing.') if unresolved else ''
     return {'delivery_evidence_id': proof['id'], 'signature_evidence_ids': signing,

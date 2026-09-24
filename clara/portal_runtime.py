@@ -28,6 +28,9 @@ from .windows_session import KEEPALIVE_S, touch_input
 
 CLAIM_RETRY_S = 30
 PRESENCE_INTERVAL_S, PRESENCE_MIN_S, PRESENCE_MAX_S = 60, 10, 120
+# The Windows observer needs a clean desktop to stay clean for 3 s before it
+# calls it quiet. A little longer than that, so a second look can settle it.
+SETTLE_RECHECK_S = 3.1
 RUNTIME_LOG_BYTES = 5 * 1024 * 1024
 # Quoted strings holding a separator, absolute POSIX paths, Windows drive and UNC paths.
 # Bare paths run to the end of the line: a client folder may contain spaces, and
@@ -47,6 +50,7 @@ class PortalRuntime:
         self._claim_retry_at = None
         self._presence_at, self._presence_interval = None, PRESENCE_INTERVAL_S
         self._keepalive_at, self.touch = None, touch_input
+        self.settle_recheck_s = SETTLE_RECHECK_S
 
     def pending(self):
         return self.store.one('''SELECT * FROM portal_v1_cycles WHERE namespace=?
@@ -348,6 +352,15 @@ class PortalRuntime:
             if ('external-desktop-state-unconfirmed' in report['unknown'] and
                     self.manager.windows_handoff is not None):
                 activity = await self.manager.windows_handoff.observe(prepared.local_job_id)
+                # A clean desktop's first quiet look only starts its settling
+                # window, so a finished closeout reported "not quiet" once and
+                # held the worker for a poll - flashing "held for review" and a
+                # review prompt over work that was done. Look again, in full,
+                # once the window has passed. Anything that appears meanwhile
+                # still counts; the settling item is never simply dropped.
+                if not activity['unknown'] and activity['in_flight'] == ['windows-settling']:
+                    await asyncio.sleep(self.settle_recheck_s)
+                    activity = await self.manager.windows_handoff.observe(prepared.local_job_id)
                 report['in_flight'] = sorted(set(report['in_flight'] + activity['in_flight']))
                 report['unknown'] = sorted(set(report['unknown'] + activity['unknown']))
                 if activity['complete']:

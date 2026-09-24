@@ -732,3 +732,125 @@ def test_a_window_reference_survives_the_window_being_recreated(tmp_path):
         assert (await observer.observe(jid))['unknown'] == shown, \
             'the reference a reviewer was shown must still be the one they can resolve'
     asyncio.run(scenario())
+
+
+NEEDS_REVIEW_RECEIPT = {'accepted': True, 'replay': False, 'receipt_id': '00000000-0000-4000-8000-000000000001',
+                        'execution': 'finished', 'result_recorded': True, 'job_state': 'needs_review',
+                        'handoff': {'attempted': False, 'status': 'needs_review', 'reason': None},
+                        'server_time': '2026-09-25T00:00:00Z'}
+
+
+def handed_off(tmp_path, status='incomplete', outcome='needs_review', receipt=None, acknowledge=True):
+    """A closeout Clara finished and handed to a person, as the portal acknowledges it."""
+    config, store, claim, lease = setup(tmp_path)
+    jid = PortalBindings(store, BASE, WORKER).persist_claim(claim, 'Prepare this T1')['local_job_id']
+    store.status(jid, status)
+    journal = PortalJournal(store, BASE)
+    row = journal.stage(lease.identity, 'clara-result', 'result-' + jid, {**asdict(lease.identity), 'outcome': outcome})
+    if acknowledge:
+        journal.acknowledge(row['id'], NEEDS_REVIEW_RECEIPT if receipt is None else receipt)
+    return store, jid
+
+
+@pytest.mark.parametrize('status', ['incomplete', 'needs_review', 'completed'])
+def test_a_finished_needs_review_closeout_on_a_clean_desktop_is_released(tmp_path, status):
+    """A closeout that needs a person must not hold Clara's computer.
+
+    Claudia Natale Buonaguro's closeout ended in Needs review only because the
+    return printed her name without "Buonaguro". Clara had finished and reported
+    everything she made, nothing was running, and still every later closeout
+    queued behind it until someone cleared the hold by hand.
+    """
+    store, jid = handed_off(tmp_path, status)
+    current, clock = sample(), [0]
+    observer = WindowsHandoff(store, exclusive=True, qualified=True, probe=lambda: copy.deepcopy(current), clock=lambda: clock[0])
+    async def scenario():
+        await observer.begin(jid)
+        assert observer.finished_review_handoff(jid) is True
+        first = await observer.observe(jid)
+        assert first['unknown'] == [] and first['in_flight'] == ['windows-settling']
+        clock[0] = 4
+        assert (await observer.observe(jid))['complete']
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('case', ['interrupted', 'failed', 'cancelled', 'stopped-receipt', 'failed-outcome',
+                                  'unacknowledged', 'result-not-recorded', 'execution-unfinished'])
+def test_a_needs_review_receipt_never_releases_a_run_that_did_not_finish(tmp_path, case):
+    """The portal files interrupted and cancelled runs under needs_review too.
+
+    So its receipt alone cannot tell a finished hand-off from a crash: the local
+    status must show the model run ended normally, and the portal must have
+    recorded exactly this hand-off.
+    """
+    kwargs = {'interrupted': {'status': 'interrupted'}, 'failed': {'status': 'failed'},
+              'cancelled': {'status': 'cancelled'},
+              'stopped-receipt': {'receipt': {**NEEDS_REVIEW_RECEIPT, 'job_state': 'stopped'}},
+              'failed-outcome': {'outcome': 'failed'},
+              'unacknowledged': {'acknowledge': False},
+              'result-not-recorded': {'receipt': {**NEEDS_REVIEW_RECEIPT, 'result_recorded': False}},
+              'execution-unfinished': {'receipt': {k: v for k, v in NEEDS_REVIEW_RECEIPT.items() if k != 'execution'}},
+              }[case]
+    store, jid = handed_off(tmp_path, **kwargs)
+    current, clock = sample(), [0]
+    observer = WindowsHandoff(store, exclusive=True, qualified=True, probe=lambda: copy.deepcopy(current), clock=lambda: clock[0])
+    async def scenario():
+        await observer.begin(jid)
+        assert observer.finished_review_handoff(jid) is False
+        clock[0] = 4
+        await observer.observe(jid)
+        report = await observer.observe(jid)
+        assert not report['complete']
+        assert 'windows-prepared-closeout-receipt-required' in report['unknown']
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('leftover, expected', [
+    (lambda s: s['windows'].append({'handle': 88, 'pid': 10, 'class': 'Dialog'}), 'windows-window:10:110'),
+    (lambda s: s['print_jobs'].append({'queue': 'printer', 'id': 7, 'status': 0}), 'windows-print:printer:7'),
+])
+def test_a_finished_hand_off_still_holds_on_anything_left_on_the_desktop(tmp_path, leftover, expected):
+    """Only the two receipt markers are excused. A window left open or a print
+    still spooling is unfinished work on Clara's computer, hand-off or not."""
+    store, jid = handed_off(tmp_path)
+    current, clock = sample(), [0]
+    observer = WindowsHandoff(store, exclusive=True, qualified=True, probe=lambda: copy.deepcopy(current), clock=lambda: clock[0])
+    async def scenario():
+        await observer.begin(jid)
+        leftover(current)
+        clock[0] = 4
+        await observer.observe(jid)
+        report = await observer.observe(jid)
+        assert not report['complete'] and expected in report['in_flight'] + report['unknown']
+    asyncio.run(scenario())
+
+
+def test_a_finished_hand_off_on_an_unqualified_session_still_holds(tmp_path):
+    store, jid = handed_off(tmp_path)
+    current, clock = sample(), [0]
+    observer = WindowsHandoff(store, exclusive=False, qualified=True, probe=lambda: copy.deepcopy(current), clock=lambda: clock[0])
+    async def scenario():
+        await observer.begin(jid)
+        clock[0] = 4
+        await observer.observe(jid)
+        report = await observer.observe(jid)
+        assert not report['complete'] and 'windows-handoff-not-qualified' in report['unknown']
+    asyncio.run(scenario())
+
+
+def test_a_failed_upload_keeps_a_finished_hand_off_held(tmp_path):
+    """A OneDrive upload that errored may or may not have landed.
+
+    Uploads are the one write to a client's files with no reservation behind them,
+    so a failed one is an outcome nobody knows. A person looks at the folder before
+    Clara is freed. Routine failed clicks and commands do not count: they happen in
+    most closeouts and are not writes to client files.
+    """
+    store, jid = handed_off(tmp_path)
+    job = store.job(jid)
+    store.event(job['conversation_id'], jid, 'tool_done', {'id': 'c1', 'name': 'mcp__chrome__click', 'failed': True})
+    store.event(job['conversation_id'], jid, 'tool_done', {'id': 'r1', 'name': 'mcp__clara__run_command', 'failed': True})
+    observer = WindowsHandoff(store, exclusive=True, qualified=True, probe=sample)
+    assert observer.finished_review_handoff(jid) is True, 'routine failures do not hold a finished hand-off'
+    store.event(job['conversation_id'], jid, 'tool_done', {'id': 'u1', 'name': 'mcp__chrome__upload_file', 'failed': True})
+    assert observer.finished_review_handoff(jid) is False

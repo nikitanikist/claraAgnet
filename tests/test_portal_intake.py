@@ -148,3 +148,19 @@ def test_task_prompt_requires_delivery_to_be_recorded_by_the_attempt_that_hands_
     third, _ = task_prompt({**claim, 'attempt_no': 3}, [])
     assert ('This is attempt 3 of this closeout: before finishing, read the folder, its files and each packet '
             'again in Chrome and record delivery again.') in third
+
+
+def test_a_closeout_hand_off_leads_with_its_links_and_general_chats_are_not_told_to(tmp_path):
+    """A refused delivery once left the card with a packet ID and a folder name.
+
+    The reviewer needs links she can open, first, before any detail that could push
+    them past the result summary's length. General requests are not closeouts and
+    must not be told to hunt for PandaDoc or OneDrive links nobody asked for.
+    """
+    config, store, claim, _ = setup(tmp_path)
+    prompt = task_prompt(claim, [])[0]
+    assert 'START your final message with the links' in prompt
+    assert 'https://app.pandadoc.com/a/#/documents/<document id>' in prompt
+    assert 'token=' in prompt and 'noted as seen' in prompt
+    general = task_prompt({**claim, 'kind': 'general', 'closeout': None, 'required_outputs': []}, [])[0]
+    assert 'START your final message with the links' not in general and 'app.pandadoc.com' not in general

@@ -55,6 +55,18 @@ def task_prompt(claim, messages, source_files=None):
                         'The portal accepts only OneDrive and PandaDoc readbacks made during the attempt that '
                         'hands off, so call record_portal_delivery in this attempt even if an earlier attempt '
                         'recorded delivery; recording again creates nothing remotely. ')
+        reservations += (
+            'If record_portal_delivery is refused for a reason only a person can settle - a member name the '
+            'return prints differently from the closeout, for example - do not work around the check and never '
+            'change the member you verify documents against. Read its answer: only when it says the packet and '
+            'folder were noted as seen do they stop holding your computer; otherwise they are still unconfirmed, '
+            'so read them again in Chrome, and say so in the hand-off if you cannot. Then hand off as needs-review. '
+            'Whether or not delivery was recorded, START your final message with the links, one per line and not '
+            'inside backticks: each PandaDoc packet as https://app.pandadoc.com/a/#/documents/<document id> and '
+            'the OneDrive package folder as the full https link shown in Chrome - never only an ID or a folder '
+            'name. Next, one plain sentence on what the reviewer must decide; any detail after that. Never paste a '
+            'PandaDoc signing link (one containing token=), and never say files are attached: a portal closeout '
+            'carries links, not files. ')
         if claim.get('attempt_no', 1) > 1:
             reservations += ('This is attempt ' + str(claim['attempt_no']) + ' of this closeout: before finishing, '
                              'read the folder, its files and each packet again in Chrome and record delivery again. ')

@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 import json
 
+from .operations import Operations
 from .knowledge import job_scope
 from .portal_progress import check_binding
 
@@ -53,10 +54,13 @@ def observe_quiescence(store, manager, namespace, identity, local_job_id):
         # detached process stopped. The future Windows observer/recovery flow
         # must settle this reference using fresh external state before release.
         unknown.add('external-desktop-state-unconfirmed')
-    operations = store.rows('SELECT id,state FROM operations WHERE scope_key=?', (job_scope(store, job),))
-    for op in operations:
+    # An uncertain reservation stays unknown unless this attempt read the write back: then it is
+    # known to exist even though nothing confirmed it, and it no longer needs a person to settle.
+    ledger = Operations(store)
+    for op in store.rows('SELECT * FROM operations WHERE scope_key=?', (job_scope(store, job),)):
         ref = 'operation:' + op['id']
-        (unknown if op['state'] == 'uncertain' else finished).add(ref)
+        settled = op['state'] != 'uncertain' or ledger.read_back(job, op)
+        (finished if settled else unknown).add(ref)
     uploads = store.rows('''SELECT file_id,state FROM portal_v1_uploads WHERE namespace=? AND
         external_job_id=? AND worker_id=? AND attempt_no=? AND fence_token=?''',
         (namespace, identity.job_id, identity.worker_id, identity.attempt_no, identity.fence_token))

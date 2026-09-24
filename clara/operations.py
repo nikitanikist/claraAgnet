@@ -6,6 +6,19 @@ from .knowledge import job_scope, decode
 from .workflows import canonical_hash
 
 
+def proof_matches(op,proof):
+    """Whether a remote_record proof binds this reserved write.
+
+    A proof matches by the observed on-page key, or by the canonical reservation key it was
+    recorded under together with the operation that key stands for, and it must be newer than
+    the reservation's last change.
+    """
+    p=proof['payload']
+    by_key=p.get('external_key')==op['external_key']
+    by_reservation=p.get('reservation_key')==op['external_key'] and p.get('reservation_operation')==op['operation']
+    return p.get('system')==op['system'] and (by_key or by_reservation) and proof['created']>=op['updated']
+
+
 class Operations:
     def __init__(self,store): self.store=store
 
@@ -41,15 +54,24 @@ class Operations:
         p=proof['payload']
         if op['state']=='confirmed' and json.loads(op['result'] or '{}').get('evidence_id')==evidence_id:
             return op
-        # A proof matches by the observed on-page key, or by the canonical reservation key it was
-        # recorded under together with the operation that key stands for.
-        by_key=p.get('external_key')==op['external_key']
-        by_reservation=p.get('reservation_key')==op['external_key'] and p.get('reservation_operation')==op['operation']
-        if p.get('system')!=op['system'] or not (by_key or by_reservation) or proof['created']<op['updated']:
+        if not proof_matches(op,proof):
             raise ValueError('Evidence does not match this reserved operation.')
         self.store.execute("UPDATE operations SET state='confirmed',remote_id=?,result=?,updated=? WHERE id=?",
                            (p['remote_id'],json.dumps({'evidence_id':evidence_id,**({'auto':auto} if auto else {})}),time.time(),oid))
         return self.store.one('SELECT * FROM operations WHERE id=?',(oid,))
+
+    def read_back(self,job,op):
+        """Whether this job holds a verified readback that binds this reserved write.
+
+        The write is then known to exist - Clara read it back - even though nothing confirmed it.
+        That is what a hold needs to know. It changes no state: the reservation stays uncertain, so
+        a person can still record it absent and have it made again, which confirming it would
+        have ruled out for good (a delivery refused on a member name left exactly that situation).
+        """
+        for row in self.store.rows("SELECT * FROM evidence WHERE job_id=? AND kind='remote_record' AND verified=1",(job['id'],)):
+            if proof_matches(op,decode(row,'payload')):
+                return True
+        return False
 
     def list(self,job):
         return self.store.rows('SELECT * FROM operations WHERE scope_key=? ORDER BY created DESC LIMIT 100',(job_scope(self.store,job),))

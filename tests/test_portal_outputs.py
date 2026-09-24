@@ -274,3 +274,73 @@ def test_sharp_s_and_upper_case_escapes_still_match_an_encoded_page(tmp_path):
     _set_text(store, args['folder']['observation_id'],
               'Title (https://example.sharepoint.com/personal/laureen/Documents/Stra%C3%9Fe%20%7B2024%7D) folder-001')
     assert record_delivery(config, store, job, args)['storage_evidence_id']
+
+
+@pytest.mark.parametrize('recipient_matches', [True, False])
+def test_a_refused_delivery_notes_what_it_read_back_without_closing_any_door(tmp_path, recipient_matches):
+    """The delivery record can be refused after the packet and folder exist.
+
+    Claudia Natale Buonaguro's return printed her name without "Buonaguro", so her
+    documents could not be recorded and the delivery was refused before it ever
+    looked at the packet or folder. Both stayed unknown and held her computer,
+    although Clara had made them and could read them back.
+
+    The readbacks now make them known, so they stop holding her. But they are NOT
+    confirmed: the packet may carry the name that failed, and once a person fixes
+    the name and deletes it, the closeout must still be able to make it again.
+    """
+    from clara.portal_quiescence import observe_quiescence
+    config, store, job, lease, args = delivery(tmp_path)
+    claim = json.loads(store.one('SELECT claim_json FROM portal_v1_attempts WHERE local_job_id=?', (job['id'],))['claim_json'])
+    keys = closeout_reservation_keys(claim)
+    ops = Operations(store)
+    packet = ops.reserve(job, 'pandadoc', 'create_signature_packet', keys['pandadoc']['m1'], {})
+    folder = ops.reserve(job, 'storage', 'create_folder', keys['storage']['folder'], {})
+    drifted = ops.reserve(job, 'pandadoc', 'create_signature_packet', 'John Smith T1 2024 - packet (v2)', {})
+    # The name check failed on the PDF, so its proof no longer counts as verified.
+    store.execute('UPDATE evidence SET verified=0 WHERE id=?', (args['document_evidence_ids'][0],))
+    if not recipient_matches:
+        eid = args['pandadoc'][0]['observation_id']
+        data = json.loads(store.one('SELECT payload FROM evidence WHERE id=?', (eid,))['payload'])
+        data['text'] = data['text'].replace('john@example.com', 'other@example.com')
+        store.execute('UPDATE evidence SET payload=? WHERE id=?', (json.dumps(data), eid))
+    with pytest.raises(ValueError) as refused:
+        record_delivery(config, store, job, args)
+    # Never delivered, whatever else happened: no path to Ready to Email opens.
+    assert store.rows("SELECT id FROM evidence WHERE kind='portal_delivery'") == []
+    state = lambda op: store.one('SELECT * FROM operations WHERE id=?', (op['id'],))
+    # Nothing is ever confirmed on a refusal.
+    assert state(packet)['state'] == state(folder)['state'] == state(drifted)['state'] == 'uncertain'
+    idle = type('Idle', (), {'active_job': None, 'pending': {}, 'queue': asyncio.Queue()})()
+    report = observe_quiescence(store, idle, BASE, lease.identity, job['id'])
+    if recipient_matches:
+        assert ops.read_back(job, state(packet)) and ops.read_back(job, state(folder))
+        assert 'operation:' + packet['id'] in report['finished'] and 'operation:' + folder['id'] in report['finished']
+        assert 'needs-review' in str(refused.value)
+        storage = [json.loads(r['payload']) for r in store.rows("SELECT payload FROM evidence WHERE kind='remote_record'")
+                   if json.loads(r['payload']).get('system') == 'storage']
+        assert len(storage) == 1 and 'uploaded' not in storage[0], 'the refused folder never claims its files'
+    else:
+        # A packet readback that does not match binds nothing, so nothing becomes known.
+        assert store.rows("SELECT id FROM evidence WHERE kind='remote_record'") == []
+        assert 'operation:' + packet['id'] in report['unknown'] and 'operation:' + folder['id'] in report['unknown']
+    assert 'operation:' + drifted['id'] in report['unknown'], 'only the canonical reservations are ever read back'
+
+
+def test_a_person_can_still_have_a_refused_packet_made_again(tmp_path):
+    """After a refused delivery, the reviewer fixes the name and deletes the packet.
+
+    The closeout must still be able to build a corrected one: recording the old
+    packet absent leaves one reviewed retry, exactly as before the refusal.
+    """
+    config, store, job, lease, args = delivery(tmp_path)
+    claim = json.loads(store.one('SELECT claim_json FROM portal_v1_attempts WHERE local_job_id=?', (job['id'],))['claim_json'])
+    keys = closeout_reservation_keys(claim)
+    ops = Operations(store)
+    packet = ops.reserve(job, 'pandadoc', 'create_signature_packet', keys['pandadoc']['m1'], {})
+    store.execute('UPDATE evidence SET verified=0 WHERE id=?', (args['document_evidence_ids'][0],))
+    with pytest.raises(ValueError):
+        record_delivery(config, store, job, args)
+    assert ops.confirm_absence(packet['id'], 'Checked PandaDoc: the wrong-name packet was deleted.')['state'] == 'not_created'
+    again = ops.reserve(job, 'pandadoc', 'create_signature_packet', keys['pandadoc']['m1'], {})
+    assert again['execute_allowed'] is True
